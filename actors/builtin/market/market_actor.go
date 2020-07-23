@@ -551,8 +551,10 @@ func (a Actor) CronTick(rt Runtime, params *adt.EmptyValue) *adt.EmptyValue {
 				builtin.RequireNoErr(rt, err, code, "failed to remove provider account")
 
 				// remove client account if escrow balance is now zero
-				err, code = msm.removeAccountIfNoBalance(deal.Client)
-				builtin.RequireNoErr(rt, err, code, "failed to remove client account")
+				if deal.Provider != deal.Client {
+					err, code = msm.removeAccountIfNoBalance(deal.Client)
+					builtin.RequireNoErr(rt, err, code, "failed to remove client account")
+				}
 
 				return nil
 			}); err != nil {

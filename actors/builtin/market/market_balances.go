@@ -117,7 +117,12 @@ func (m *marketStateMutation) removeAccountIfNoBalance(addr addr.Address) (error
 		}
 		AssertMsg(prev.Equals(big.Zero()), "previous escrow balance should be zero")
 
-		// remove locked balance account
+		// We remove a zero balance locked account ONLY if the corresponding
+		// Escrow balance is zero.
+		// This is because Locked balance represents the "subset" of the Escrow funds
+		// that are locked and it is thus possible to have zero Locked balance but non-zero Escrow balance
+		// if no part of the Escrow funds have been locked.
+		// In that case, we want to keep the Locked account around.
 		bal, err, code = getBalance(m.lockedTable, addr)
 		if err != nil {
 			return xerrors.Errorf("failed to get locked balance: %w", err), code
