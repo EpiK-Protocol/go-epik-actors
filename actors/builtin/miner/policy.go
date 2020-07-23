@@ -10,6 +10,8 @@ import (
 	big "github.com/filecoin-project/specs-actors/actors/abi/big"
 	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
 	. "github.com/filecoin-project/specs-actors/actors/util"
+	"github.com/filecoin-project/specs-actors/actors/util/smoothing"
+
 )
 
 // The period over which all a miner's active sectors will be challenged.
@@ -157,8 +159,8 @@ func QAPowerForSector(size abi.SectorSize, sector *SectorOnChainInfo) abi.Storag
 }
 
 // Deposit per sector required at pre-commitment, refunded after the commitment is proven (else burned).
-func precommitDeposit(qaSectorPower abi.StoragePower, networkQAPower abi.StoragePower, baselinePower abi.StoragePower, networkTotalPledge, epochTargetReward, circulatingSupply abi.TokenAmount) abi.TokenAmount {
-	return InitialPledgeForPower(qaSectorPower, networkQAPower, baselinePower, networkTotalPledge, epochTargetReward, circulatingSupply)
+func precommitDeposit(qaSectorPower abi.StoragePower, baselinePower abi.StoragePower, networkTotalPledge abi.TokenAmount, rewardEstimate, networkQAPowerEstimate, circulatingSupplyEstimate *smoothing.FilterEstimate) abi.TokenAmount {
+	return InitialPledgeForPower(qaSectorPower, baselinePower, networkTotalPledge, rewardEstimate, networkQAPowerEstimate, circulatingSupplyEstimate.Estimate())
 }
 
 // Determine maximum number of deal miner's sector can hold

@@ -21,6 +21,7 @@ import (
 	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
 	. "github.com/filecoin-project/specs-actors/actors/util"
 	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/actors/util/smoothing"
 )
 
 type Runtime = vmr.Runtime
@@ -255,7 +256,7 @@ func (a Actor) SubmitWindowedPoSt(rt Runtime, params *SubmitWindowedPoStParams) 
 	// TODO: limit the length of proofs array https://github.com/filecoin-project/specs-actors/issues/416
 
 	// Get the total power/reward. We need these to compute penalties.
-	epochReward := requestCurrentEpochBlockReward(rt)
+	rewardStats := requestCurrentEpochBlockReward(rt)
 	pwrTotal := requestCurrentTotalPower(rt)
 
 	newFaultPowerTotal := NewPowerPairZero()
@@ -371,16 +372,16 @@ func (a Actor) SubmitWindowedPoSt(rt Runtime, params *SubmitWindowedPoStParams) 
 		// Penalize new skipped faults and retracted recoveries as undeclared faults.
 		// These pay a higher fee than faults declared before the deadline challenge window opened.
 		undeclaredPenaltyPower := newFaultPowerTotal.Add(retractedRecoveryPowerTotal)
-		undeclaredPenaltyTarget := PledgePenaltyForUndeclaredFault(epochReward, pwrTotal.QualityAdjPower, undeclaredPenaltyPower.QA)
+		undeclaredPenaltyTarget := PledgePenaltyForUndeclaredFault(rewardStats.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, undeclaredPenaltyPower.QA)
 		// Subtract the "ongoing" fault fee from the amount charged now, since it will be charged at
 		// the end-of-deadline cron.
-		undeclaredPenaltyTarget = big.Sub(undeclaredPenaltyTarget, PledgePenaltyForDeclaredFault(epochReward, pwrTotal.QualityAdjPower, undeclaredPenaltyPower.QA))
+		undeclaredPenaltyTarget = big.Sub(undeclaredPenaltyTarget, PledgePenaltyForDeclaredFault(rewardStats.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, undeclaredPenaltyPower.QA))
 
 		// Penalize recoveries as declared faults (a lower fee than the undeclared, above).
 		// It sounds odd, but because faults are penalized in arrears, at the _end_ of the faulty period, we must
 		// penalize recovered sectors here because they won't be penalized by the end-of-deadline cron for the
 		// immediately-prior faulty period.
-		declaredPenaltyTarget := PledgePenaltyForDeclaredFault(epochReward, pwrTotal.QualityAdjPower, recoveredPowerTotal.QA)
+		declaredPenaltyTarget := PledgePenaltyForDeclaredFault(rewardStats.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, recoveredPowerTotal.QA)
 
 		// Note: We could delay this charge until end of deadline, but that would require more accounting state.
 		totalPenaltyTarget := big.Add(undeclaredPenaltyTarget, declaredPenaltyTarget)
@@ -458,10 +459,9 @@ func (a Actor) PreCommitSector(rt Runtime, params *SectorPreCommitInfo) *adt.Emp
 	}
 
 	// gather information from other actors
-	baselinePower, epochReward := requestCurrentEpochBaselinePowerAndReward(rt)
+	rewardStats := requestCurrentEpochBlockReward(rt)
 	pwrTotal := requestCurrentTotalPower(rt)
 	dealWeight := requestDealWeight(rt, params.DealIDs, rt.CurrEpoch(), params.Expiration)
-	circulatingSupply := rt.TotalFilCircSupply()
 
 	store := adt.AsStore(rt)
 	var st State
@@ -505,7 +505,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *SectorPreCommitInfo) *adt.Emp
 
 		sectorWeight := QAPowerForWeight(info.SectorSize, duration, dealWeight.DealWeight, dealWeight.VerifiedDealWeight)
 		depositReq := big.Max(
-			precommitDeposit(sectorWeight, pwrTotal.QualityAdjPower, baselinePower, pwrTotal.PledgeCollateral, epochReward, circulatingSupply),
+			precommitDeposit(sectorWeight, rewardStats.ThisEpochBaselinePower, pwrTotal.PledgeCollateral, rewardStats.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, rewardStats.ThisEpochCirculatingSupplySmoothed),
 			depositMinimum,
 		)
 		if availableBalance.LessThan(depositReq) {
@@ -1532,8 +1532,8 @@ func processEarlyTerminations(rt Runtime) (more bool) {
 	// TODO: We're using the current power+epoch reward. Technically, we
 	// should use the power/reward at the time of termination.
 	// https://github.com/filecoin-project/specs-actors/pull/648
-	epochReward := requestCurrentEpochBlockReward(rt)
-	pwrTotal := requestCurrentTotalPower(rt).QualityAdjPower
+	rewardStats := requestCurrentEpochBlockReward(rt)
+	pwrTotal := requestCurrentTotalPower(rt)
 
 	var (
 		result           TerminationResult
@@ -1571,7 +1571,7 @@ func processEarlyTerminations(rt Runtime) (more bool) {
 				params.DealIDs = append(params.DealIDs, sector.DealIDs...)
 				pledge = big.Add(pledge, sector.InitialPledge)
 			}
-			penalty = big.Add(penalty, terminationPenalty(info.SectorSize, epoch, epochReward, pwrTotal, sectors))
+			penalty = big.Add(penalty, terminationPenalty(info.SectorSize, epoch, rewardStats.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, sectors))
 			dealsToTerminate = append(dealsToTerminate, params)
 
 			return nil
@@ -1690,9 +1690,9 @@ func handleProvingDeadline(rt Runtime) {
 			}
 
 			// Unlock sector penalty for all undeclared faults.
-			penaltyTarget := PledgePenaltyForUndeclaredFault(epochReward, pwrTotal.QualityAdjPower, penalizePowerTotal)
+			penaltyTarget := PledgePenaltyForUndeclaredFault(epochReward.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, penalizePowerTotal)
 			// Subtract the "ongoing" fault fee from the amount charged now, since it will be added on just below.
-			penaltyTarget = big.Sub(penaltyTarget, PledgePenaltyForDeclaredFault(epochReward, pwrTotal.QualityAdjPower, penalizePowerTotal))
+			penaltyTarget = big.Sub(penaltyTarget, PledgePenaltyForDeclaredFault(epochReward.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, penalizePowerTotal))
 			penalty, err := st.UnlockUnvestedFunds(store, currEpoch, penaltyTarget)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to unlock penalty")
 			penaltyTotal = big.Add(penaltyTotal, penalty)
@@ -1704,7 +1704,7 @@ func handleProvingDeadline(rt Runtime) {
 			// Record faulty power for penalisation of ongoing faults, before popping expirations.
 			// This includes any power that was just faulted from missing a PoSt.
 			faultyPower := st.FaultyPower.QA
-			penaltyTarget := PledgePenaltyForDeclaredFault(epochReward, pwrTotal.QualityAdjPower, faultyPower)
+			penaltyTarget := PledgePenaltyForDeclaredFault(epochReward.ThisEpochRewardSmoothed, pwrTotal.SmoothQAPowerEstimate, faultyPower)
 			penalty, err := st.UnlockUnvestedFunds(store, currEpoch, penaltyTarget)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to unlock penalty")
 			penaltyTotal = big.Add(penaltyTotal, penalty)
@@ -2179,18 +2179,15 @@ func commitWorkerKeyChange(rt Runtime) *adt.EmptyValue {
 }
 
 // Requests the current epoch target block reward from the reward actor.
-func requestCurrentEpochBlockReward(rt Runtime) abi.TokenAmount {
-	_, rwd := requestCurrentEpochBaselinePowerAndReward(rt)
-	return rwd
-}
-
-func requestCurrentEpochBaselinePowerAndReward(rt Runtime) (abi.StoragePower, abi.TokenAmount) {
+// return value includes reward, smoothed estimate of reward, baseline power
+// and smoothed estimate of total circulating supply this epoch.
+func requestCurrentEpochBlockReward(rt Runtime) reward.ThisEpochRewardReturn {
 	rwret, code := rt.Send(builtin.RewardActorAddr, builtin.MethodsReward.ThisEpochReward, nil, big.Zero())
 	builtin.RequireSuccess(rt, code, "failed to check epoch baseline power")
 	var ret reward.ThisEpochRewardReturn
 	err := rwret.Into(&ret)
 	builtin.RequireNoErr(rt, err, exitcode.ErrSerialization, "failed to unmarshal target power value")
-	return ret.ThisEpochBaselinePower, ret.ThisEpochReward
+	return ret
 }
 
 // Requests the current network total power and pledge from the power actor.
@@ -2355,11 +2352,11 @@ func validateFRDeclarationPartition(key PartitionKey, partition *Partition, sect
 	return nil
 }
 
-func terminationPenalty(sectorSize abi.SectorSize, currEpoch abi.ChainEpoch, epochTargetReward abi.TokenAmount, networkQAPower abi.StoragePower, sectors []*SectorOnChainInfo) abi.TokenAmount {
+func terminationPenalty(sectorSize abi.SectorSize, currEpoch abi.ChainEpoch, rewardEstimate, networkQAPowerEstimate *smoothing.FilterEstimate, sectors []*SectorOnChainInfo) abi.TokenAmount {
 	totalFee := big.Zero()
 	for _, s := range sectors {
 		sectorPower := QAPowerForSector(sectorSize, s)
-		fee := PledgePenaltyForTermination(s.InitialPledge, currEpoch-s.Activation, epochTargetReward, networkQAPower, sectorPower)
+		fee := PledgePenaltyForTermination(s.InitialPledge, currEpoch-s.Activation, rewardEstimate, networkQAPowerEstimate, sectorPower)
 		totalFee = big.Add(fee, totalFee)
 	}
 	return totalFee
