@@ -139,6 +139,7 @@ const DealLimitDenominator = 134217728
 
 // PARAM_SPEC
 // Quality multiplier for CC sectors
+// Motivation: This ensures that a CC sector has quality 1
 var QualityBaseMultiplier = big.NewInt(10)
 
 // PARAM_SPEC
@@ -151,6 +152,7 @@ var VerifiedDealWeightMultiplier = big.NewInt(100)
 
 // PARAM_SPEC
 // Precision for Quality Adjusted power
+// Motivation: This guarantees that precision in all fraction calculations done on sector quality
 const SectorQualityPrecision = 20
 
 // DealWeight and VerifiedDealWeight are spacetime occupied by regular deals and verified deals in a sector.
