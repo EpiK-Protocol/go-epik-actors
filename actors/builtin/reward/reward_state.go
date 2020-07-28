@@ -170,7 +170,7 @@ var LnTwoDen, _ = big.FromString("10000000000000000000000000000")
 // into the rational representation of -ln(1/2) which was just loaded, to
 // produce the final, constant, rational representation of λ.
 var LambdaNum = big.Mul(big.NewInt(builtin.EpochDurationSeconds), LnTwoNum)
-var LambdaDen = big.Mul(big.NewInt(6*builtin.SecondsInYear), LnTwoDen)
+var LambdaDen = big.Mul(big.NewInt(8*builtin.SecondsInYear), LnTwoDen)
 
 // This function implements f(t) as described in the large comment block above,
 // with the important caveat that its return value must not be interpreted

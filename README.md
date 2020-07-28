@@ -1,11 +1,6 @@
-# Filecoin actors
-[![CircleCI](https://circleci.com/gh/filecoin-project/specs-actors.svg?style=svg)](https://circleci.com/gh/filecoin-project/specs-actors)
-[![codecov](https://codecov.io/gh/filecoin-project/specs-actors/branch/master/graph/badge.svg)](https://codecov.io/gh/filecoin-project/specs-actors)
+# EpiK actors
 
-This repo is the specification of the Filecoin builtin actors, in the form of executable code.
-
-This is a companion to the rest of the [Filecoin Specification](https://github.com/filecoin-project/specs), 
-but also directly usable by Go implementations of Filecoin.
+This repo is the specification of the EpiK builtin actors, in the form of executable code.
 
 ## Versioning
 
