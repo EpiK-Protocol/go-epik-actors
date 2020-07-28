@@ -65,8 +65,11 @@ func (a Actor) AwardBlockReward(rt vmr.Runtime, params *AwardBlockRewardParams) 
 	penalty := abi.NewTokenAmount(0)
 	var st State
 	rt.State().Readonly(&st)
+	//block reward 90% miner, 10% expert reward
 	blockReward := big.Div(st.LastPerEpochReward, big.NewInt(builtin.ExpectedLeadersPerEpoch))
-	totalReward := big.Add(blockReward, params.GasReward)
+	minerReward := big.Div(big.Mul(blockReward, big.NewInt(9)), big.NewInt(10))
+	expertReward := big.Div(blockReward, big.NewInt(10))
+	totalReward := big.Add(minerReward, params.GasReward)
 
 	// Cap the penalty at the total reward value.
 	penalty = big.Min(params.Penalty, totalReward)
@@ -77,8 +80,13 @@ func (a Actor) AwardBlockReward(rt vmr.Runtime, params *AwardBlockRewardParams) 
 	AssertMsg(big.Add(rewardPayable, penalty).LessThanEqual(priorBalance),
 		"reward payable %v + penalty %v exceeds balance %v", rewardPayable, penalty, priorBalance)
 
+	// miner reward
 	_, code := rt.Send(minerAddr, builtin.MethodsMiner.AddLockedFund, &rewardPayable, rewardPayable)
 	builtin.RequireSuccess(rt, code, "failed to send reward to miner: %s", minerAddr)
+
+	// expert reward
+	_, code = rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodsMiner.AddLockedFund, &expertReward, expertReward)
+	builtin.RequireSuccess(rt, code, "failed to send reward to expert")
 
 	// Burn the penalty amount.
 	_, code = rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, penalty)
