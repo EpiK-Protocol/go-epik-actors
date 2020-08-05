@@ -189,6 +189,7 @@ func main() {
 		miner.CronEventPayload{},
 		miner.FaultDeclaration{},
 		miner.RecoveryDeclaration{},
+		miner.RemoveSectorParams{},
 	); err != nil {
 		panic(err)
 	}

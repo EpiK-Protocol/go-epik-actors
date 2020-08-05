@@ -59,6 +59,7 @@ func (a Actor) Exports() []interface{} {
 		16:                        a.WithdrawBalance,
 		17:                        a.ConfirmSectorProofsValid,
 		18:                        a.ChangeMultiaddrs,
+		100:                       a.RemoveSector,
 	}
 }
 
@@ -439,13 +440,13 @@ func (a Actor) ProveCommitSector(rt Runtime, params *ProveCommitSectorParams) *a
 	}
 
 	svi := getVerifyInfo(rt, &SealVerifyStuff{
-		SealedCID:        precommit.Info.SealedCID,
-		InteractiveEpoch: precommit.PreCommitEpoch + PreCommitChallengeDelay,
-		SealRandEpoch:    precommit.Info.SealRandEpoch,
-		Proof:            params.Proof,
-		DealIDs:          precommit.Info.DealIDs,
-		SectorNumber:     precommit.Info.SectorNumber,
-		RegisteredSealProof:        precommit.Info.SealProof,
+		SealedCID:           precommit.Info.SealedCID,
+		InteractiveEpoch:    precommit.PreCommitEpoch + PreCommitChallengeDelay,
+		SealRandEpoch:       precommit.Info.SealRandEpoch,
+		Proof:               params.Proof,
+		DealIDs:             precommit.Info.DealIDs,
+		SectorNumber:        precommit.Info.SectorNumber,
+		RegisteredSealProof: precommit.Info.SealProof,
 	})
 
 	_, code := rt.Send(
@@ -654,6 +655,62 @@ func (a Actor) ExtendSectorExpiration(rt Runtime, params *ExtendSectorExpiration
 			rt.Abortf(exitcode.ErrIllegalState, "failed to update sector expiration %v, %v", sectorNo, err)
 		}
 		if err := st.AddSectorExpirations(store, params.NewExpiration, uint64(params.SectorNumber)); err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to update sector expiration %v, %v", sectorNo, err)
+		}
+
+		return nil
+	})
+
+	return nil
+}
+
+type RemoveSectorParams struct {
+	SectorNumber abi.SectorNumber
+}
+
+func (a Actor) RemoveSector(rt Runtime, params *RemoveSectorParams) *adt.EmptyValue {
+	var st State
+	rt.State().Readonly(&st)
+	rt.ValidateImmediateCallerIs(st.Info.Worker)
+
+	store := adt.AsStore(rt)
+	sectorNo := params.SectorNumber
+	sector, found, err := st.GetSector(store, sectorNo)
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalState, "failed to load sector %v: %v", sectorNo, err)
+	} else if !found {
+		rt.Abortf(exitcode.ErrNotFound, "no such sector %v", sectorNo)
+	}
+
+	oldExpiration := sector.Info.Expiration
+	storageWeightDescPrev := AsStorageWeightDesc(st.Info.SectorSize, sector)
+
+	storageWeightDescNew := *storageWeightDescPrev
+	storageWeightDescNew.Duration = 0
+
+	_, code := rt.Send(
+		builtin.StoragePowerActorAddr,
+		builtin.MethodsPower.OnSectorModifyWeightDesc,
+		&power.OnSectorModifyWeightDescParams{
+			PrevWeight: *storageWeightDescPrev,
+			NewWeight:  storageWeightDescNew,
+		},
+		abi.NewTokenAmount(0),
+	)
+	builtin.RequireSuccess(rt, code, "failed to modify sector weight")
+
+	// Store new sector expiry.
+	rt.State().Transaction(&st, func() interface{} {
+		sector.Info.Expiration = 0
+		if err := st.PutSector(store, sector); err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to update sector %v, %v", sectorNo, err)
+		}
+
+		// move expiration from old epoch to new
+		if err := st.RemoveSectorExpirations(store, oldExpiration, uint64(params.SectorNumber)); err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to update sector expiration %v, %v", sectorNo, err)
+		}
+		if err := st.AddSectorExpirations(store, 0, uint64(params.SectorNumber)); err != nil {
 			rt.Abortf(exitcode.ErrIllegalState, "failed to update sector expiration %v, %v", sectorNo, err)
 		}
 
