@@ -250,7 +250,7 @@ func (t *PublishStorageDealsParams) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{129}); err != nil {
+	if _, err := w.Write([]byte{130}); err != nil {
 		return err
 	}
 
@@ -267,6 +267,13 @@ func (t *PublishStorageDealsParams) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.RootCID (cid.Cid) (struct)
+
+	if err := cbg.WriteCid(w, t.RootCID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.RootCID: %w", err)
+	}
+
 	return nil
 }
 
@@ -281,7 +288,7 @@ func (t *PublishStorageDealsParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -314,6 +321,18 @@ func (t *PublishStorageDealsParams) UnmarshalCBOR(r io.Reader) error {
 		t.Deals[i] = v
 	}
 
+	// t.RootCID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.RootCID: %w", err)
+		}
+
+		t.RootCID = c
+
+	}
 	return nil
 }
 

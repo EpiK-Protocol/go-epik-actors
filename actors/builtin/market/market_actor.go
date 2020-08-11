@@ -2,6 +2,7 @@ package market
 
 import (
 	addr "github.com/filecoin-project/go-address"
+	cid "github.com/ipfs/go-cid"
 
 	cbg "github.com/whyrusleeping/cbor-gen"
 
@@ -139,6 +140,7 @@ func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *ad
 
 type PublishStorageDealsParams struct {
 	Deals []ClientDealProposal
+	RootCID	cid.Cid
 }
 
 type PublishStorageDealsReturn struct {
