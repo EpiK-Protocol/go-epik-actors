@@ -17,8 +17,9 @@ var (
 	StorageMarketActorAddr    = mustMakeAddress(5)
 	VerifiedRegistryActorAddr = mustMakeAddress(6)
 	// Distinguished AccountActor that is the destination of all burnt funds.
-	BurntFundsActorAddr  = mustMakeAddress(99)
-	ExpertFundsActorAddr = mustMakeAddress(1000)
+	BurntFundsActorAddr       = mustMakeAddress(99)
+	ExpertFundsActorAddr 	  = mustMakeAddress(1000)
+	RetrieveFundsActorAddr 	  = mustMakeAddress(1001)
 )
 
 const FirstNonSingletonActorId = 100

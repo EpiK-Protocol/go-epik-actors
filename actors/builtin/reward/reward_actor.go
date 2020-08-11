@@ -85,7 +85,7 @@ func (a Actor) AwardBlockReward(rt vmr.Runtime, params *AwardBlockRewardParams) 
 	builtin.RequireSuccess(rt, code, "failed to send reward to miner: %s", minerAddr)
 
 	// expert reward
-	_, code = rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodsMiner.AddLockedFund, &expertReward, expertReward)
+	_, code = rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodSend, &expertReward, expertReward)
 	builtin.RequireSuccess(rt, code, "failed to send reward to expert")
 
 	// Burn the penalty amount.
