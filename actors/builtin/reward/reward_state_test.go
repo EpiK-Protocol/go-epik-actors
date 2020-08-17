@@ -3,7 +3,7 @@ package reward
 import (
 	"testing"
 
-	"github.com/filecoin-project/specs-actors/actors/abi/big"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
 )
 
 // Minting function test vectors

@@ -10,16 +10,16 @@ import (
 	assert "github.com/stretchr/testify/assert"
 	require "github.com/stretchr/testify/require"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
-	initact "github.com/filecoin-project/specs-actors/actors/builtin/init"
-	power "github.com/filecoin-project/specs-actors/actors/builtin/power"
-	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
-	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
-	mock "github.com/filecoin-project/specs-actors/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/support/testing"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	initact "github.com/EpiK-Protocol/go-epik-actors/actors/builtin/init"
+	power "github.com/EpiK-Protocol/go-epik-actors/actors/builtin/power"
+	vmr "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
+	exitcode "github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
+	mock "github.com/EpiK-Protocol/go-epik-actors/support/mock"
+	tutil "github.com/EpiK-Protocol/go-epik-actors/support/testing"
 )
 
 func TestExports(t *testing.T) {

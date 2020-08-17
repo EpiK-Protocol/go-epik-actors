@@ -9,7 +9,7 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
-	runtime "github.com/filecoin-project/specs-actors/actors/runtime"
+	runtime "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
 )
 
 // Branching factor of the HAMT.

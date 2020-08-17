@@ -1,21 +1,21 @@
 package exported
 
 import (
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
 	cid "github.com/ipfs/go-cid"
 
-	"github.com/filecoin-project/specs-actors/actors/builtin/account"
-	"github.com/filecoin-project/specs-actors/actors/builtin/cron"
-	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
-	"github.com/filecoin-project/specs-actors/actors/builtin/market"
-	"github.com/filecoin-project/specs-actors/actors/builtin/miner"
-	"github.com/filecoin-project/specs-actors/actors/builtin/multisig"
-	"github.com/filecoin-project/specs-actors/actors/builtin/paych"
-	"github.com/filecoin-project/specs-actors/actors/builtin/power"
-	"github.com/filecoin-project/specs-actors/actors/builtin/reward"
-	"github.com/filecoin-project/specs-actors/actors/builtin/system"
-	"github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/account"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/cron"
+	init_ "github.com/EpiK-Protocol/go-epik-actors/actors/builtin/init"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/market"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/miner"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/multisig"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/paych"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/power"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/reward"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/system"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/verifreg"
 )
 
 var _ abi.Invokee = BuiltinActor{}

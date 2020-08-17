@@ -13,12 +13,12 @@ import (
 	cid "github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	"github.com/filecoin-project/specs-actors/actors/crypto"
-	runtime "github.com/filecoin-project/specs-actors/actors/runtime"
-	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	"github.com/filecoin-project/specs-actors/actors/util/adt"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/crypto"
+	runtime "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
+	exitcode "github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
 )
 
 // A mock runtime for unit testing of actors in isolation.

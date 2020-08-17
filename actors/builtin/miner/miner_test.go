@@ -15,16 +15,16 @@ import (
 	"github.com/stretchr/testify/require"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/abi/big"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
-	"github.com/filecoin-project/specs-actors/actors/builtin/market"
-	"github.com/filecoin-project/specs-actors/actors/builtin/miner"
-	"github.com/filecoin-project/specs-actors/actors/builtin/power"
-	"github.com/filecoin-project/specs-actors/actors/crypto"
-	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	"github.com/filecoin-project/specs-actors/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/support/testing"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/market"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/miner"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/power"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/crypto"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	"github.com/EpiK-Protocol/go-epik-actors/support/mock"
+	tutil "github.com/EpiK-Protocol/go-epik-actors/support/testing"
 )
 
 var testPid abi.PeerID
@@ -135,7 +135,7 @@ func TestControlAddresses(t *testing.T) {
 	})
 
 	// TODO: test changing worker (with delay), changing peer id
-	// https://github.com/filecoin-project/specs-actors/issues/479
+	// https://github.com/EpiK-Protocol/go-epik-actors/issues/479
 }
 
 // Test for sector precommitment and proving.
@@ -226,7 +226,7 @@ func TestCommitments(t *testing.T) {
 		// TODO: too early to prove sector
 		// TODO: seal rand epoch too old
 		// TODO: commitment expires before proof
-		// https://github.com/filecoin-project/specs-actors/issues/479
+		// https://github.com/EpiK-Protocol/go-epik-actors/issues/479
 
 		// Set the right epoch for all following tests
 		rt.SetEpoch(precommitEpoch + miner.PreCommitChallengeDelay + 1)
@@ -249,7 +249,7 @@ func TestCommitments(t *testing.T) {
 
 		// Invalid seal proof
 		/* TODO: how should this test work?
-		// https://github.com/filecoin-project/specs-actors/issues/479
+		// https://github.com/EpiK-Protocol/go-epik-actors/issues/479
 		rt.ExpectAbort(exitcode.ErrIllegalState, func() {
 			actor.proveCommitSector(rt, precommit, precommitEpoch, makeProveCommit(sectorNo), proveCommitConf{
 				verifySealErr: fmt.Errorf("for testing"),
@@ -705,7 +705,7 @@ func (h *actorHarness) submitWindowPost(rt *mock.Runtime, deadline *miner.Deadli
 
 	proofs := make([]abi.PoStProof, 1) // Number of proofs doesn't depend on partition count
 	for i := range proofs {
-		proofs[i].PoStProof  = registeredPoStProof
+		proofs[i].PoStProof = registeredPoStProof
 		proofs[i].ProofBytes = []byte(fmt.Sprintf("proof%d", i))
 	}
 	challengeRand := abi.SealRandomness([]byte{10, 11, 12, 13})
@@ -724,9 +724,9 @@ func (h *actorHarness) submitWindowPost(rt *mock.Runtime, deadline *miner.Deadli
 		proofInfos := make([]abi.SectorInfo, len(infos))
 		for i, ci := range infos {
 			proofInfos[i] = abi.SectorInfo{
-				SealProof:       ci.Info.SealProof,
-				SectorNumber:    ci.Info.SectorNumber,
-				SealedCID:       ci.Info.SealedCID,
+				SealProof:    ci.Info.SealProof,
+				SectorNumber: ci.Info.SectorNumber,
+				SealedCID:    ci.Info.SealedCID,
 			}
 		}
 
@@ -851,12 +851,12 @@ func makeProvingPeriodCronEventParams(t testing.TB, epoch abi.ChainEpoch) *power
 
 func makePreCommit(sectorNo abi.SectorNumber, challenge, expiration abi.ChainEpoch) *miner.SectorPreCommitInfo {
 	return &miner.SectorPreCommitInfo{
-		SealProof:       abi.RegisteredSealProof_StackedDrg2KiBV1,
-		SectorNumber:    sectorNo,
-		SealedCID:       tutil.MakeCID("commr"),
-		SealRandEpoch:   challenge,
-		DealIDs:         nil,
-		Expiration:      expiration,
+		SealProof:     abi.RegisteredSealProof_StackedDrg2KiBV1,
+		SectorNumber:  sectorNo,
+		SealedCID:     tutil.MakeCID("commr"),
+		SealRandEpoch: challenge,
+		DealIDs:       nil,
+		Expiration:    expiration,
 	}
 }
 

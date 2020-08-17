@@ -1,8 +1,8 @@
 package market
 
 import (
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
 )
 
 // DealUpdatesInterval is the number of blocks between payouts for deals

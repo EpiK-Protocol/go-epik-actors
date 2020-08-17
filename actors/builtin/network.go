@@ -7,7 +7,7 @@ import "fmt"
 // TODO: In lieu of a real configuration mechanism for this value, we'd like to make it a var so that implementations
 // can override it at runtime. Doing so requires changing all the static references to it in this repo to go through
 // late-binding function calls, or they'll see the "wrong" value.
-// https://github.com/filecoin-project/specs-actors/issues/353
+// https://github.com/EpiK-Protocol/go-epik-actors/issues/353
 const EpochDurationSeconds = 25
 const SecondsInHour = 3600
 const SecondsInDay = 86400

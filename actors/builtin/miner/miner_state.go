@@ -11,11 +11,11 @@ import (
 	errors "github.com/pkg/errors"
 	xerrors "golang.org/x/xerrors"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	power "github.com/filecoin-project/specs-actors/actors/builtin/power"
-	. "github.com/filecoin-project/specs-actors/actors/util"
-	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	power "github.com/EpiK-Protocol/go-epik-actors/actors/builtin/power"
+	. "github.com/EpiK-Protocol/go-epik-actors/actors/util"
+	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
 )
 
 // Balance of Miner Actor should be greater than or equal to
@@ -25,7 +25,7 @@ import (
 type State struct {
 	// Information not related to sectors.
 	// TODO: this should be a cid of the miner Info struct so it's not re-written when other fields change.
-	// https://github.com/filecoin-project/specs-actors/issues/422
+	// https://github.com/EpiK-Protocol/go-epik-actors/issues/422
 	Info MinerInfo
 
 	PreCommitDeposits abi.TokenAmount // Total funds locked as PreCommitDeposits

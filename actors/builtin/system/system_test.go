@@ -3,8 +3,8 @@ package system_test
 import (
 	"testing"
 
-	"github.com/filecoin-project/specs-actors/actors/builtin/system"
-	"github.com/filecoin-project/specs-actors/support/mock"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/system"
+	"github.com/EpiK-Protocol/go-epik-actors/support/mock"
 )
 
 func TestExports(t *testing.T) {

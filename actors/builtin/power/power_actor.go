@@ -9,14 +9,14 @@ import (
 	errors "github.com/pkg/errors"
 	xerrors "golang.org/x/xerrors"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
-	initact "github.com/filecoin-project/specs-actors/actors/builtin/init"
-	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
-	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	. "github.com/filecoin-project/specs-actors/actors/util"
-	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	initact "github.com/EpiK-Protocol/go-epik-actors/actors/builtin/init"
+	vmr "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
+	exitcode "github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	. "github.com/EpiK-Protocol/go-epik-actors/actors/util"
+	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
 )
 
 type Runtime = vmr.Runtime
@@ -217,7 +217,7 @@ func (a Actor) OnSectorProveCommit(rt Runtime, params *OnSectorProveCommitParams
 
 type OnSectorTerminateParams struct {
 	TerminationType SectorTermination
-	Weights         []SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/filecoin-project/specs-actors/issues/419
+	Weights         []SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/EpiK-Protocol/go-epik-actors/issues/419
 }
 
 func (a Actor) OnSectorTerminate(rt Runtime, params *OnSectorTerminateParams) *adt.EmptyValue {
@@ -238,7 +238,7 @@ func (a Actor) OnSectorTerminate(rt Runtime, params *OnSectorTerminateParams) *a
 }
 
 type OnFaultBeginParams struct {
-	Weights []SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/filecoin-project/specs-actors/issues/466
+	Weights []SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/EpiK-Protocol/go-epik-actors/issues/466
 }
 
 func (a Actor) OnFaultBegin(rt Runtime, params *OnFaultBeginParams) *adt.EmptyValue {
@@ -256,7 +256,7 @@ func (a Actor) OnFaultBegin(rt Runtime, params *OnFaultBeginParams) *adt.EmptyVa
 }
 
 type OnFaultEndParams struct {
-	Weights []SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/filecoin-project/specs-actors/issues/466
+	Weights []SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/EpiK-Protocol/go-epik-actors/issues/466
 }
 
 func (a Actor) OnFaultEnd(rt Runtime, params *OnFaultEndParams) *adt.EmptyValue {
@@ -276,7 +276,7 @@ func (a Actor) OnFaultEnd(rt Runtime, params *OnFaultEndParams) *adt.EmptyValue 
 }
 
 type OnSectorModifyWeightDescParams struct {
-	PrevWeight SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/filecoin-project/specs-actors/issues/466
+	PrevWeight SectorStorageWeightDesc // TODO: replace with power if it can be computed by miner, https://github.com/EpiK-Protocol/go-epik-actors/issues/466
 	NewWeight  SectorStorageWeightDesc
 }
 
@@ -401,7 +401,7 @@ func (a Actor) SubmitPoRepForBulkVerify(rt Runtime, sealInfo *abi.SealVerifyInfo
 	minerAddr := rt.Message().Caller()
 
 	// TODO: charge a LOT of gas
-	// https://github.com/filecoin-project/specs-actors/issues/442
+	// https://github.com/EpiK-Protocol/go-epik-actors/issues/442
 	var st State
 	rt.State().Transaction(&st, func() interface{} {
 		store := adt.AsStore(rt)

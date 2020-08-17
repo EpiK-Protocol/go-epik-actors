@@ -8,10 +8,10 @@ import (
 	cid "github.com/ipfs/go-cid"
 	errors "github.com/pkg/errors"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	. "github.com/filecoin-project/specs-actors/actors/util"
-	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	. "github.com/EpiK-Protocol/go-epik-actors/actors/util"
+	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
 )
 
 type State struct {

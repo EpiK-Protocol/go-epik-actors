@@ -3,13 +3,13 @@ package verifreg
 import (
 	addr "github.com/filecoin-project/go-address"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
-	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
-	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	. "github.com/filecoin-project/specs-actors/actors/util"
-	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	vmr "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
+	exitcode "github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	. "github.com/EpiK-Protocol/go-epik-actors/actors/util"
+	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
 )
 
 type Actor struct{}

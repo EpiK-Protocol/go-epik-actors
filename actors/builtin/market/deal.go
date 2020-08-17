@@ -4,9 +4,9 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	acrypto "github.com/filecoin-project/specs-actors/actors/crypto"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	acrypto "github.com/EpiK-Protocol/go-epik-actors/actors/crypto"
 )
 
 var PieceCIDPrefix = cid.Prefix{

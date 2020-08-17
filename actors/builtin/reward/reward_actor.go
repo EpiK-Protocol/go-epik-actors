@@ -3,13 +3,13 @@ package reward
 import (
 	"github.com/filecoin-project/go-address"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
-	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
-	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	. "github.com/filecoin-project/specs-actors/actors/util"
-	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	vmr "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
+	exitcode "github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	. "github.com/EpiK-Protocol/go-epik-actors/actors/util"
+	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
 )
 
 type Actor struct{}
@@ -28,7 +28,7 @@ var _ abi.Invokee = Actor{}
 func (a Actor) Constructor(rt vmr.Runtime, _ *adt.EmptyValue) *adt.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 	// TODO: the initial epoch reward should be set here based on the genesis storage power KPI.
-	// https://github.com/filecoin-project/specs-actors/issues/317
+	// https://github.com/EpiK-Protocol/go-epik-actors/issues/317
 	st := ConstructState()
 	rt.State().Create(st)
 	return nil
@@ -114,7 +114,7 @@ func (a Actor) computePerEpochReward(st *State, clockTime abi.ChainEpoch, networ
 
 	// TODO: this isn't actually counting emitted reward, but expected reward (which will generally over-estimate).
 	// It's difficult to extract this from the minting function in its current form.
-	// https://github.com/filecoin-project/specs-actors/issues/317
+	// https://github.com/EpiK-Protocol/go-epik-actors/issues/317
 	st.SimpleSupply = newSimpleSupply
 	st.BaselineSupply = newBaselineSupply
 

@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/abi/big"
-	"github.com/filecoin-project/specs-actors/actors/builtin/miner"
-	"github.com/filecoin-project/specs-actors/actors/util/adt"
-	"github.com/filecoin-project/specs-actors/support/ipld"
-	tutils "github.com/filecoin-project/specs-actors/support/testing"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/miner"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
+	"github.com/EpiK-Protocol/go-epik-actors/support/ipld"
+	tutils "github.com/EpiK-Protocol/go-epik-actors/support/testing"
 )
 
 func TestPrecommittedSectorsStore(t *testing.T) {
@@ -162,7 +162,7 @@ func TestNewSectorsBitField(t *testing.T) {
 		assert.Error(t, err)
 
 		// sanity check nothing was added
-		// For omission reason see: https://github.com/filecoin-project/specs-actors/issues/300
+		// For omission reason see: https://github.com/EpiK-Protocol/go-epik-actors/issues/300
 		//assert.Equal(t, uint64(0), actorHarness.getNewSectorCount())
 	})
 }
@@ -255,7 +255,7 @@ func TestSectorExpirationStore(t *testing.T) {
 func TestFaultStore(t *testing.T) {
 	fault1 := abi.ChainEpoch(10)
 	fault2 := abi.ChainEpoch(20)
-	sectorFaults := map[abi.ChainEpoch][]uint64 {
+	sectorFaults := map[abi.ChainEpoch][]uint64{
 		fault1: {1, 2, 3, 4, 5},
 		fault2: {6, 7, 8, 9, 10, 11},
 	}
@@ -1007,11 +1007,11 @@ const (
 // returns a unique SectorPreCommitInfo with each invocation with SectorNumber set to `sectorNo`.
 func newSectorPreCommitInfo(sectorNo abi.SectorNumber, sealed cid.Cid) *miner.SectorPreCommitInfo {
 	return &miner.SectorPreCommitInfo{
-		SealProof:       abi.RegisteredSealProof_StackedDrg32GiBV1,
-		SectorNumber:    sectorNo,
-		SealedCID:       sealed,
-		SealRandEpoch:   sectorSealRandEpochValue,
-		DealIDs:         nil,
-		Expiration:      sectorExpiration,
+		SealProof:     abi.RegisteredSealProof_StackedDrg32GiBV1,
+		SectorNumber:  sectorNo,
+		SealedCID:     sealed,
+		SealRandEpoch: sectorSealRandEpochValue,
+		DealIDs:       nil,
+		Expiration:    sectorExpiration,
 	}
 }

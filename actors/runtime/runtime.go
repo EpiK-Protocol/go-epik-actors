@@ -9,9 +9,9 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	crypto "github.com/filecoin-project/specs-actors/actors/crypto"
-	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	crypto "github.com/EpiK-Protocol/go-epik-actors/actors/crypto"
+	exitcode "github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
 )
 
 // Runtime is the VM's internal runtime object.

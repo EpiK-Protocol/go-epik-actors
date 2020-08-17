@@ -7,13 +7,13 @@ import (
 
 	addr "github.com/filecoin-project/go-address"
 
-	abi "github.com/filecoin-project/specs-actors/actors/abi"
-	big "github.com/filecoin-project/specs-actors/actors/abi/big"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
-	crypto "github.com/filecoin-project/specs-actors/actors/crypto"
-	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
-	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	crypto "github.com/EpiK-Protocol/go-epik-actors/actors/crypto"
+	vmr "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
 )
 
 // Maximum number of lanes in a channel.

@@ -1,4 +1,4 @@
-module github.com/filecoin-project/specs-actors
+module github.com/EpiK-Protocol/go-epik-actors
 
 go 1.13
 

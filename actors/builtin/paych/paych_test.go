@@ -12,15 +12,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/filecoin-project/specs-actors/actors/abi"
-	"github.com/filecoin-project/specs-actors/actors/abi/big"
-	"github.com/filecoin-project/specs-actors/actors/builtin"
-	. "github.com/filecoin-project/specs-actors/actors/builtin/paych"
-	"github.com/filecoin-project/specs-actors/actors/crypto"
-	"github.com/filecoin-project/specs-actors/actors/runtime"
-	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
-	"github.com/filecoin-project/specs-actors/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/support/testing"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	. "github.com/EpiK-Protocol/go-epik-actors/actors/builtin/paych"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/crypto"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
+	"github.com/EpiK-Protocol/go-epik-actors/support/mock"
+	tutil "github.com/EpiK-Protocol/go-epik-actors/support/testing"
 )
 
 func TestExports(t *testing.T) {

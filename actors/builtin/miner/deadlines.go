@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/filecoin-project/specs-actors/actors/abi"
+	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
 )
 
 // Deadline calculations with respect to a current epoch.
@@ -230,7 +230,7 @@ func AssignNewSectors(deadlines *Deadlines, partitionSize uint64, newSectors []u
 	// is probably overkill.
 	// A miner onboarding a monumental 1EiB of 32GiB sectors uniformly throughout a year will fill 40 partitions
 	// per proving period (40^2=1600). With 64GiB sectors, half that (20^2=400).
-	// TODO: randomize assignment among equally-full deadlines https://github.com/filecoin-project/specs-actors/issues/432
+	// TODO: randomize assignment among equally-full deadlines https://github.com/EpiK-Protocol/go-epik-actors/issues/432
 
 	dlIdxs := make([]uint64, WPoStPeriodDeadlines)
 	for i := range dlIdxs {
