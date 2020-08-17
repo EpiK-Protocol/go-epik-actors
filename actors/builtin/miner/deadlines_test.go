@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/miner"
+	"github.com/filecoin-project/specs-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/builtin/miner"
 )
 
 func TestProvingPeriodDeadlines(t *testing.T) {
@@ -510,7 +510,7 @@ func TestAssignNewSectors(t *testing.T) {
 	})
 	// TODO: a final test including partial and full partitions that exercises both filling the partials first,
 	// then prioritising the less full deadlines.
-	// https://github.com/EpiK-Protocol/go-epik-actors/issues/439
+	// https://github.com/filecoin-project/specs-actors/issues/439
 }
 
 //

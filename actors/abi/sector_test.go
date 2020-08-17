@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/abi"
 )
 
 func TestSectorSizeString(t *testing.T) {

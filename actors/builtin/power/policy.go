@@ -1,10 +1,10 @@
 package power
 
 import (
-	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	abi "github.com/filecoin-project/specs-actors/actors/abi"
+	big "github.com/filecoin-project/specs-actors/actors/abi/big"
 
-	. "github.com/EpiK-Protocol/go-epik-actors/actors/util"
+	. "github.com/filecoin-project/specs-actors/actors/util"
 )
 
 // Minimum number of registered miners for the minimum miner size limit to effectively limit consensus power.
@@ -46,7 +46,7 @@ func QAPowerForWeight(weight *SectorStorageWeightDesc) abi.StoragePower {
 func InitialPledgeForWeight(qapower abi.StoragePower, totqapower abi.StoragePower, circSupply abi.TokenAmount, totalPledge abi.TokenAmount, perEpochReward abi.TokenAmount) abi.TokenAmount {
 	// Details here are still subject to change.
 	// PARAM_FINISH
-	// https://github.com/EpiK-Protocol/go-epik-actors/issues/468
+	// https://github.com/filecoin-project/specs-actors/issues/468
 	_ = circSupply  // TODO: ce use this
 	_ = totalPledge // TODO: ce use this
 

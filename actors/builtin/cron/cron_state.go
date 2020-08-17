@@ -3,8 +3,8 @@ package cron
 import (
 	addr "github.com/filecoin-project/go-address"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	"github.com/filecoin-project/specs-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/builtin"
 )
 
 type State struct {

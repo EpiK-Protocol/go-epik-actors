@@ -8,11 +8,11 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	cbg "github.com/whyrusleeping/cbor-gen"
 
-	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
-	vmr "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
-	exitcode "github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
-	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
+	abi "github.com/filecoin-project/specs-actors/actors/abi"
+	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
+	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
+	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 type TxnID int64
@@ -139,7 +139,7 @@ func (a Actor) Propose(rt vmr.Runtime, params *ProposeParams) *cbg.CborInt {
 	a.approveTransaction(rt, txnID, emptyArray, false)
 
 	// Note: this ID may not be stable across chain re-orgs.
-	// https://github.com/EpiK-Protocol/go-epik-actors/issues/7
+	// https://github.com/filecoin-project/specs-actors/issues/7
 
 	v := cbg.CborInt(txnID)
 	return &v

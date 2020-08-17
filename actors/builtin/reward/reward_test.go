@@ -6,12 +6,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/builtin/reward"
-	"github.com/EpiK-Protocol/go-epik-actors/support/mock"
-	tutil "github.com/EpiK-Protocol/go-epik-actors/support/testing"
+	"github.com/filecoin-project/specs-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/abi/big"
+	"github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/filecoin-project/specs-actors/actors/builtin/reward"
+	"github.com/filecoin-project/specs-actors/support/mock"
+	tutil "github.com/filecoin-project/specs-actors/support/testing"
 )
 
 func TestExports(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
+	"github.com/filecoin-project/specs-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/abi/big"
 )
 
 // A specialization of a map of addresses to token amounts.

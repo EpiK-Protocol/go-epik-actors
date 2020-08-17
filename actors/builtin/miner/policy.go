@@ -5,9 +5,9 @@ import (
 
 	"github.com/ipfs/go-cid"
 
-	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	big "github.com/EpiK-Protocol/go-epik-actors/actors/abi/big"
-	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
+	abi "github.com/filecoin-project/specs-actors/actors/abi"
+	big "github.com/filecoin-project/specs-actors/actors/abi/big"
+	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
 )
 
 // The period over which all a miner's active sectors will be challenged.
@@ -32,7 +32,7 @@ func init() {
 // The maximum number of sectors that a miner can have simultaneously active.
 // This also bounds the number of faults that can be declared, etc.
 // TODO raise this number, carefully
-// https://github.com/EpiK-Protocol/go-epik-actors/issues/470
+// https://github.com/filecoin-project/specs-actors/issues/470
 const SectorsMax = 32 << 20 // PARAM_FINISH
 
 // The maximum number of proving partitions a miner can have simultaneously active.

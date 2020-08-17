@@ -1,10 +1,10 @@
 package cron
 
 import (
-	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
-	vmr "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
-	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
+	abi "github.com/filecoin-project/specs-actors/actors/abi"
+	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
+	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 // The cron actor is a built-in singleton that sends messages to other registered actors at the end of each epoch.

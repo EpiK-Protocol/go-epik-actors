@@ -6,8 +6,8 @@ import (
 	"github.com/minio/blake2b-simd"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	tutils "github.com/EpiK-Protocol/go-epik-actors/support/testing"
+	"github.com/filecoin-project/specs-actors/actors/abi"
+	tutils "github.com/filecoin-project/specs-actors/support/testing"
 )
 
 func TestAssignProvingPeriodBoundary(t *testing.T) {

@@ -7,11 +7,11 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/stretchr/testify/assert"
 
-	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
-	account "github.com/EpiK-Protocol/go-epik-actors/actors/builtin/account"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
-	mock "github.com/EpiK-Protocol/go-epik-actors/support/mock"
-	tutil "github.com/EpiK-Protocol/go-epik-actors/support/testing"
+	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	account "github.com/filecoin-project/specs-actors/actors/builtin/account"
+	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
+	mock "github.com/filecoin-project/specs-actors/support/mock"
+	tutil "github.com/filecoin-project/specs-actors/support/testing"
 )
 
 type constructorTestCase struct {

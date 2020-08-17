@@ -9,8 +9,8 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
+	"github.com/filecoin-project/specs-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 type SetMultimap struct {

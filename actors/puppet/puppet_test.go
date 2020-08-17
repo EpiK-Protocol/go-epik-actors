@@ -2,15 +2,14 @@ package puppet_test
 
 import (
 	"context"
-	"testing"
-
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/puppet"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
-	"github.com/EpiK-Protocol/go-epik-actors/actors/runtime/exitcode"
-	"github.com/EpiK-Protocol/go-epik-actors/support/mock"
-	tutil "github.com/EpiK-Protocol/go-epik-actors/support/testing"
+	"github.com/filecoin-project/specs-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/puppet"
+	"github.com/filecoin-project/specs-actors/actors/runtime"
+	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
+	"github.com/filecoin-project/specs-actors/support/mock"
+	tutil "github.com/filecoin-project/specs-actors/support/testing"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 func TestSend(t *testing.T) {

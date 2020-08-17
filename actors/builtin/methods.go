@@ -1,7 +1,7 @@
 package builtin
 
 import (
-	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	abi "github.com/filecoin-project/specs-actors/actors/abi"
 )
 
 const (
@@ -9,7 +9,7 @@ const (
 	MethodConstructor = abi.MethodNum(1)
 
 	// TODO fin: remove this once canonical method numbers are finalized
-	// https://github.com/EpiK-Protocol/go-epik-actors/issues/461
+	// https://github.com/filecoin-project/specs-actors/issues/461
 	MethodPlaceholder = abi.MethodNum(1 << 30)
 )
 

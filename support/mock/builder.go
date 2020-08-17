@@ -8,7 +8,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/minio/blake2b-simd"
 
-	"github.com/EpiK-Protocol/go-epik-actors/actors/abi"
+	"github.com/filecoin-project/specs-actors/actors/abi"
 )
 
 // Build for fluent initialization of a mock runtime.

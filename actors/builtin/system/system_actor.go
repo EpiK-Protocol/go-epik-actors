@@ -1,10 +1,10 @@
 package system
 
 import (
-	abi "github.com/EpiK-Protocol/go-epik-actors/actors/abi"
-	builtin "github.com/EpiK-Protocol/go-epik-actors/actors/builtin"
-	runtime "github.com/EpiK-Protocol/go-epik-actors/actors/runtime"
-	adt "github.com/EpiK-Protocol/go-epik-actors/actors/util/adt"
+	abi "github.com/filecoin-project/specs-actors/actors/abi"
+	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	runtime "github.com/filecoin-project/specs-actors/actors/runtime"
+	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
 )
 
 type Actor struct{}
