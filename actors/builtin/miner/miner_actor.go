@@ -1464,9 +1464,10 @@ func terminateSectors(rt Runtime, sectorNos *abi.BitField, terminationType power
 		err = st.SaveDeadlines(store, deadlines)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to store new deadlines")
 
-		if terminationType != power.SectorTerminationExpired {
-			penalty, err = unlockPenalty(&st, store, rt.CurrEpoch(), allSectors, pledgePenaltyForSectorTermination)
-		}
+		// for epik, miner quit not need penaty.
+		// if terminationType != power.SectorTerminationExpired {
+		// 	penalty, err = unlockPenalty(&st, store, rt.CurrEpoch(), allSectors, pledgePenaltyForSectorTermination)
+		// }
 		return nil
 	})
 
@@ -1731,6 +1732,19 @@ func commitWorkerKeyChange(rt Runtime) *adt.EmptyValue {
 func verifyPledgeMeetsInitialRequirements(rt Runtime, st *State) {
 	// TODO WPOST (follow-up): implement this
 	// https://github.com/filecoin-project/specs-actors/issues/415
+	store := adt.AsStore(rt)
+	size := st.Info.SectorSize
+	count, err := st.GetSectorCount(store)
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalState, "failed to get sector size")
+	}
+
+	pledge := int64(size) * int64(count) / (1 << 30) * 100
+	pledgeAmount := big.Mul(big.NewInt(pledge), abi.TokenPrecision)
+	if rt.CurrentBalance().LessThan(pledgeAmount) {
+		rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds for pledge initial requirements: %v", pledgeAmount)
+	}
+
 }
 
 // Resolves an address to an ID address and verifies that it is address of an account or multisig actor.

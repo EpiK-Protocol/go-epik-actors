@@ -8,4 +8,4 @@ import "github.com/filecoin-project/specs-actors/actors/abi/big"
 var TokenPrecision = big.NewIntUnsigned(1_000_000_000_000_000_000)
 
 // The maximum supply of Filecoin that will ever exist (in token units)
-var TotalFilecoin = big.Mul(big.NewIntUnsigned(2_000_000_000), TokenPrecision)
+var TotalFilecoin = big.Mul(big.NewIntUnsigned(1_000_000_000), TokenPrecision)
