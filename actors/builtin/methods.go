@@ -78,7 +78,8 @@ var MethodsPower = struct {
 	UpdatePledgeTotal        abi.MethodNum
 	OnConsensusFault         abi.MethodNum
 	SubmitPoRepForBulkVerify abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
+	PowerState               abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 100}
 
 var MethodsMiner = struct {
 	Constructor              abi.MethodNum

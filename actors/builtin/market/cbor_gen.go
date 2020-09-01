@@ -245,6 +245,97 @@ func (t *WithdrawBalanceParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
+func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write([]byte{131}); err != nil {
+		return err
+	}
+
+	// t.RootCID (cid.Cid) (struct)
+
+	if err := cbg.WriteCid(w, t.RootCID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.RootCID: %w", err)
+	}
+
+	// t.Expert (string) (string)
+	if len(t.Expert) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Expert was too long")
+	}
+
+	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.Expert)))); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(t.Expert)); err != nil {
+		return err
+	}
+
+	// t.Bounty (string) (string)
+	if len(t.Bounty) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Bounty was too long")
+	}
+
+	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.Bounty)))); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(t.Bounty)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *PublishStorageDataRef) UnmarshalCBOR(r io.Reader) error {
+	br := cbg.GetPeeker(r)
+
+	maj, extra, err := cbg.CborReadHeader(br)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 3 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.RootCID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.RootCID: %w", err)
+		}
+
+		t.RootCID = c
+
+	}
+	// t.Expert (string) (string)
+
+	{
+		sval, err := cbg.ReadString(br)
+		if err != nil {
+			return err
+		}
+
+		t.Expert = string(sval)
+	}
+	// t.Bounty (string) (string)
+
+	{
+		sval, err := cbg.ReadString(br)
+		if err != nil {
+			return err
+		}
+
+		t.Bounty = string(sval)
+	}
+	return nil
+}
+
 func (t *PublishStorageDealsParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
@@ -268,12 +359,10 @@ func (t *PublishStorageDealsParams) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.RootCID (cid.Cid) (struct)
-
-	if err := cbg.WriteCid(w, t.RootCID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.RootCID: %w", err)
+	// t.DataRef (market.PublishStorageDataRef) (struct)
+	if err := t.DataRef.MarshalCBOR(w); err != nil {
+		return err
 	}
-
 	return nil
 }
 
@@ -321,16 +410,13 @@ func (t *PublishStorageDealsParams) UnmarshalCBOR(r io.Reader) error {
 		t.Deals[i] = v
 	}
 
-	// t.RootCID (cid.Cid) (struct)
+	// t.DataRef (market.PublishStorageDataRef) (struct)
 
 	{
 
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.RootCID: %w", err)
+		if err := t.DataRef.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.DataRef: %w", err)
 		}
-
-		t.RootCID = c
 
 	}
 	return nil
@@ -774,7 +860,7 @@ func (t *DealProposal) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{138}); err != nil {
+	if _, err := w.Write([]byte{139}); err != nil {
 		return err
 	}
 
@@ -841,6 +927,17 @@ func (t *DealProposal) MarshalCBOR(w io.Writer) error {
 	if err := t.ClientCollateral.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.Redundancy (int64) (int64)
+	if t.Redundancy >= 0 {
+		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajUnsignedInt, uint64(t.Redundancy))); err != nil {
+			return err
+		}
+	} else {
+		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajNegativeInt, uint64(-t.Redundancy)-1)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -855,7 +952,7 @@ func (t *DealProposal) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 10 {
+	if extra != 11 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -996,6 +1093,31 @@ func (t *DealProposal) UnmarshalCBOR(r io.Reader) error {
 			return xerrors.Errorf("unmarshaling t.ClientCollateral: %w", err)
 		}
 
+	}
+	// t.Redundancy (int64) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeader(br)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.Redundancy = int64(extraI)
 	}
 	return nil
 }

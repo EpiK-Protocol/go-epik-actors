@@ -136,6 +136,7 @@ func main() {
 		// other types
 		power.MinerConstructorParams{},
 		power.SectorStorageWeightDesc{},
+		power.PowerStateReturn{},
 	); err != nil {
 		panic(err)
 	}
@@ -146,6 +147,7 @@ func main() {
 
 		// method params
 		market.WithdrawBalanceParams{},
+		market.PublishStorageDataRef{},
 		market.PublishStorageDealsParams{},
 		market.VerifyDealsOnSectorProveCommitParams{},
 		market.VerifyDealsOnSectorProveCommitReturn{},

@@ -6,6 +6,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
+	cid "github.com/ipfs/go-cid"
 	errors "github.com/pkg/errors"
 	xerrors "golang.org/x/xerrors"
 
@@ -46,6 +47,7 @@ func (a Actor) Exports() []interface{} {
 		11:                        a.UpdatePledgeTotal,
 		12:                        a.OnConsensusFault,
 		13:                        a.SubmitPoRepForBulkVerify,
+		100:                       a.PowerState,
 	}
 }
 
@@ -429,6 +431,25 @@ func (a Actor) SubmitPoRepForBulkVerify(rt Runtime, sealInfo *abi.SealVerifyInfo
 	})
 
 	return nil
+}
+
+type PowerStateReturn struct {
+	MinerCount int64
+
+	// Claimed power for each miner.
+	Claims cid.Cid // Map, HAMT[address]Claim
+}
+
+func (a Actor) PowerState(rt Runtime, _ *adt.EmptyValue) *PowerStateReturn {
+	var st State
+	rt.State().Readonly(&st)
+
+	stateReturn := PowerStateReturn{
+		MinerCount: st.MinerCount,
+		Claims:     st.Claims,
+	}
+
+	return &stateReturn
 }
 
 ////////////////////////////////////////////////////////////////////////////////

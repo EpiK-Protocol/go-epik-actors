@@ -41,6 +41,7 @@ type DealProposal struct {
 
 	ProviderCollateral abi.TokenAmount
 	ClientCollateral   abi.TokenAmount
+	Redundancy         int64
 }
 
 // ClientDealProposal is a DealProposal signed by a client

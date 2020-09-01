@@ -9,6 +9,7 @@ import (
 	abi "github.com/filecoin-project/specs-actors/actors/abi"
 	big "github.com/filecoin-project/specs-actors/actors/abi/big"
 	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/filecoin-project/specs-actors/actors/builtin/power"
 	verifreg "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
 	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
 	exitcode "github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
@@ -138,9 +139,16 @@ func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *ad
 	return nil
 }
 
+type PublishStorageDataRef struct {
+	RootCID cid.Cid
+
+	Expert string
+	Bounty string
+}
+
 type PublishStorageDealsParams struct {
-	Deals []ClientDealProposal
-	RootCID	cid.Cid
+	Deals   []ClientDealProposal
+	DataRef PublishStorageDataRef
 }
 
 type PublishStorageDealsReturn struct {
@@ -271,6 +279,17 @@ func (a Actor) VerifyDealsOnSectorProveCommit(rt Runtime, params *VerifyDealsOnS
 	totalDealSpaceTime := big.Zero()
 	totalVerifiedDealSpaceTime := big.Zero()
 
+	var powerState power.PowerStateReturn
+	ret, code := rt.Send(
+		builtin.StoragePowerActorAddr,
+		builtin.MethodsPower.PowerState,
+		nil,
+		abi.NewTokenAmount(0),
+	)
+	builtin.RequireSuccess(rt, code, "failed to get power state")
+	AssertNoError(ret.Into(&powerState))
+	minerCount := powerState.MinerCount
+
 	var st State
 	rt.State().Transaction(&st, func() interface{} {
 		// if there are no dealIDs, it is a CommittedCapacity sector
@@ -314,6 +333,10 @@ func (a Actor) VerifyDealsOnSectorProveCommit(rt Runtime, params *VerifyDealsOnS
 			dealDuration := big.NewInt(int64(proposal.Duration()))
 			dealSize := big.NewIntUnsigned(uint64(proposal.PieceSize))
 			dealSpaceTime := big.Mul(dealDuration, dealSize)
+			// calculate with Redundancy
+			if powerState.MinerCount > proposal.Redundancy {
+				dealSpaceTime = big.Div(big.Mul(dealSpaceTime, big.NewInt(minerCount-proposal.Redundancy)), big.NewInt(minerCount))
+			}
 
 			if proposal.VerifiedDeal {
 				totalVerifiedDealSpaceTime = big.Add(totalVerifiedDealSpaceTime, dealSpaceTime)
