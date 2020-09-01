@@ -47,7 +47,7 @@ func (a Actor) Exports() []interface{} {
 		11:                        a.UpdatePledgeTotal,
 		12:                        a.OnConsensusFault,
 		13:                        a.SubmitPoRepForBulkVerify,
-		100:                       a.PowerState,
+		14:                        a.PowerState,
 	}
 }
 
@@ -441,6 +441,8 @@ type PowerStateReturn struct {
 }
 
 func (a Actor) PowerState(rt Runtime, _ *adt.EmptyValue) *PowerStateReturn {
+	rt.ValidateImmediateCallerType(builtin.StorageMarketActorCodeID)
+
 	var st State
 	rt.State().Readonly(&st)
 

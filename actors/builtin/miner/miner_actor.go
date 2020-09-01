@@ -59,7 +59,7 @@ func (a Actor) Exports() []interface{} {
 		16:                        a.WithdrawBalance,
 		17:                        a.ConfirmSectorProofsValid,
 		18:                        a.ChangeMultiaddrs,
-		100:                       a.RemoveSector,
+		19:                        a.RemoveSector,
 	}
 }
 

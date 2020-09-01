@@ -79,7 +79,7 @@ var MethodsPower = struct {
 	OnConsensusFault         abi.MethodNum
 	SubmitPoRepForBulkVerify abi.MethodNum
 	PowerState               abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 100}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
 
 var MethodsMiner = struct {
 	Constructor              abi.MethodNum
@@ -99,8 +99,9 @@ var MethodsMiner = struct {
 	ReportConsensusFault     abi.MethodNum
 	WithdrawBalance          abi.MethodNum
 	ConfirmSectorProofsValid abi.MethodNum
+	ChangeMultiaddrs         abi.MethodNum
 	RemoveSector             abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 100}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19}
 
 var MethodsVerifiedRegistry = struct {
 	Constructor       abi.MethodNum
