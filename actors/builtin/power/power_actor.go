@@ -246,7 +246,7 @@ type OnFaultBeginParams struct {
 func (a Actor) OnFaultBegin(rt Runtime, params *OnFaultBeginParams) *adt.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
 	// TODO: larry need not update power for fault
-	if rt.CurrEpoch() <= 13157 {
+	if rt.CurrEpoch() < 13157 {
 		var st State
 		rt.State().Transaction(&st, func() interface{} {
 			rbpower, qapower := powersForWeights(params.Weights)
@@ -268,7 +268,7 @@ func (a Actor) OnFaultEnd(rt Runtime, params *OnFaultEndParams) *adt.EmptyValue 
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
 
 	// TODO: larry need not update power for fault
-	if rt.CurrEpoch() <= 13157 {
+	if rt.CurrEpoch() < 13157 {
 		var st State
 		rt.State().Transaction(&st, func() interface{} {
 			rbpower, qapower := powersForWeights(params.Weights)
