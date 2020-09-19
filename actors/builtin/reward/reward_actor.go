@@ -68,7 +68,7 @@ func (a Actor) AwardBlockReward(rt vmr.Runtime, params *AwardBlockRewardParams) 
 	//block reward 90% miner, 10% expert reward
 	blockReward := big.Div(st.LastPerEpochReward, big.NewInt(builtin.ExpectedLeadersPerEpoch))
 	minerReward := big.Div(big.Mul(blockReward, big.NewInt(9)), big.NewInt(10))
-	expertReward := big.Div(blockReward, big.NewInt(10))
+	expertReward := big.Sub(blockReward, minerReward)
 	totalReward := big.Add(minerReward, params.GasReward)
 
 	// Cap the penalty at the total reward value.
