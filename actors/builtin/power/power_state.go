@@ -121,6 +121,7 @@ func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePo
 	}
 
 	oldNominalPower := claim.QualityAdjPower
+	oldRawBytePower := claim.RawBytePower
 
 	// update power
 	claim.RawBytePower = big.Add(claim.RawBytePower, power)
@@ -140,7 +141,7 @@ func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePo
 		// just went below min miner size
 		st.NumMinersMeetingMinPower--
 		st.TotalQualityAdjPower = big.Sub(st.TotalQualityAdjPower, oldNominalPower)
-		st.TotalRawBytePower = big.Sub(st.TotalRawBytePower, claim.RawBytePower)
+		st.TotalRawBytePower = big.Sub(st.TotalRawBytePower, oldRawBytePower)
 	} else if !prevBelow && !stillBelow {
 		// Was above the threshold, still above
 		st.TotalQualityAdjPower = big.Add(st.TotalQualityAdjPower, qapower)
