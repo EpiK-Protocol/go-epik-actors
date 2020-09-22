@@ -211,6 +211,20 @@ func (st *State) GetMaxAllowedFaults(store adt.Store) (uint64, error) {
 	return 2 * sectorCount, nil
 }
 
+func (st *State) GetPrecommittedSectorCount(store adt.Store) (uint64, error) {
+	precommitted, err := adt.AsMap(store, st.PreCommittedSectors)
+	if err != nil {
+		return 0, err
+	}
+
+	keys, err := precommitted.CollectKeys()
+	if err != nil {
+		return 0, err
+	}
+
+	return uint64(len(keys)), nil
+}
+
 func (st *State) PutPrecommittedSector(store adt.Store, info *SectorPreCommitOnChainInfo) error {
 	precommitted, err := adt.AsMap(store, st.PreCommittedSectors)
 	if err != nil {

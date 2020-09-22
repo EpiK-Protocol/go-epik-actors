@@ -247,7 +247,7 @@ func (a Actor) SubmitWindowedPoSt(rt Runtime, params *SubmitWindowedPoStParams) 
 		// slightly higher than the true amount (i.e. slightly in the miner's favour).
 		// Computing vesting here would be almost always redundant since vesting is quantized to ~daily units.
 		// Vesting will be at most one proving period old if computed in the cron callback.
-		verifyPledgeMeetsInitialRequirements(rt, &st)
+		verifyPledgeMeetsInitialRequirements(rt, &st, 0)
 
 		// TODO WPOST (follow-up): process Skipped as faults
 		// https://github.com/filecoin-project/specs-actors/issues/410
@@ -367,6 +367,12 @@ func (a Actor) PreCommitSector(rt Runtime, params *SectorPreCommitInfo) *adt.Emp
 		if availableBalance.LessThan(depositReq) {
 			rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds for pre-commit deposit: %v", depositReq)
 		}
+
+		precommintedCount, err := st.GetPrecommittedSectorCount(store)
+		if err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to get precommited count: %v", err)
+		}
+		verifyPledgeMeetsInitialRequirements(rt, &st, precommintedCount+1)
 
 		st.AddPreCommitDeposit(depositReq)
 		st.AssertBalanceInvariants(rt.CurrentBalance())
@@ -532,7 +538,7 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 			st.AddPreCommitDeposit(precommit.PreCommitDeposit.Neg())
 
 			// Verify locked funds are are at least the sum of sector initial pledges.
-			verifyPledgeMeetsInitialRequirements(rt, &st)
+			verifyPledgeMeetsInitialRequirements(rt, &st, 0)
 
 			// Lock up initial pledge for new sector.
 			availableBalance := st.GetAvailableBalance(rt.CurrentBalance())
@@ -1729,7 +1735,7 @@ func commitWorkerKeyChange(rt Runtime) *adt.EmptyValue {
 }
 
 // Verifies that the total locked balance exceeds the sum of sector initial pledges.
-func verifyPledgeMeetsInitialRequirements(rt Runtime, st *State) {
+func verifyPledgeMeetsInitialRequirements(rt Runtime, st *State, append uint64) {
 	// TODO WPOST (follow-up): implement this
 	// https://github.com/filecoin-project/specs-actors/issues/415
 	store := adt.AsStore(rt)
@@ -1739,7 +1745,7 @@ func verifyPledgeMeetsInitialRequirements(rt Runtime, st *State) {
 		rt.Abortf(exitcode.ErrIllegalState, "failed to get sector size")
 	}
 
-	pledge := int64(size) * int64(count) / (1 << 30) * 100
+	pledge := int64(size) * int64(count+append) / (1 << 30) * builtin.InitialPledgeMeetsPerGiB
 	pledgeAmount := big.Mul(big.NewInt(pledge), abi.TokenPrecision)
 	if rt.CurrentBalance().LessThan(pledgeAmount) {
 		rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds for pledge initial requirements: %v", pledgeAmount)
