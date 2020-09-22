@@ -1837,7 +1837,7 @@ func assignProvingPeriodOffset(myAddr addr.Address, currEpoch abi.ChainEpoch, ha
 		return 0, fmt.Errorf("failed to interpret digest: %w", err)
 	}
 
-	offset = offset % uint64(WPoStProvingPeriod)
+	offset = offset % uint64(builtin.EpochsInDay)
 	return abi.ChainEpoch(offset), nil
 }
 
