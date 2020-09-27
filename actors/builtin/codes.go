@@ -19,6 +19,7 @@ var (
 	RewardActorCodeID           cid.Cid
 	VerifiedRegistryActorCodeID cid.Cid
 	CallerTypesSignable         []cid.Cid
+	ExpertActorCodeID           cid.Cid
 )
 
 func init() {
@@ -42,6 +43,7 @@ func init() {
 	MultisigActorCodeID = makeBuiltin("fil/1/multisig")
 	RewardActorCodeID = makeBuiltin("fil/1/reward")
 	VerifiedRegistryActorCodeID = makeBuiltin("fil/1/verifiedregistry")
+	ExpertActorCodeID = makeBuiltin("fil/1/expert")
 
 	// Set of actor code types that can represent external signing parties.
 	CallerTypesSignable = []cid.Cid{AccountActorCodeID, MultisigActorCodeID}
@@ -59,7 +61,8 @@ func IsBuiltinActor(code cid.Cid) bool {
 		code.Equals(PaymentChannelActorCodeID) ||
 		code.Equals(MultisigActorCodeID) ||
 		code.Equals(RewardActorCodeID) ||
-		code.Equals(VerifiedRegistryActorCodeID)
+		code.Equals(VerifiedRegistryActorCodeID) ||
+		code.Equals(ExpertActorCodeID)
 }
 
 // ActorNameByCode returns the (string) name of the actor given a cid code.
@@ -79,6 +82,7 @@ func ActorNameByCode(code cid.Cid) string {
 		PaymentChannelActorCodeID: "fil/1/paymentchannel",
 		MultisigActorCodeID:       "fil/1/multisig",
 		RewardActorCodeID:         "fil/1/reward",
+		ExpertActorCodeID:         "fil/1/expert",
 	}
 	name, ok := names[code]
 	if !ok {

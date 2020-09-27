@@ -81,5 +81,9 @@ func BuiltinActors() []BuiltinActor {
 			actor: verifreg.Actor{},
 			code:  builtin.VerifiedRegistryActorCodeID,
 		},
+		{
+			actor: verifreg.Actor{},
+			code:  builtin.ExpertActorCodeID,
+		},
 	}
 }

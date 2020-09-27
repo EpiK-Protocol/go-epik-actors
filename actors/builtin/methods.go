@@ -111,3 +111,14 @@ var MethodsVerifiedRegistry = struct {
 	UseBytes          abi.MethodNum
 	RestoreBytes      abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6}
+
+var MethodsExpert = struct {
+	Constructor         abi.MethodNum
+	CreateExpert        abi.MethodNum
+	DeleteExpert        abi.MethodNum
+	ChangeAddress       abi.MethodNum
+	ChangePeerID        abi.MethodNum
+	ChangeMultiaddrs    abi.MethodNum
+	ImportData          abi.MethodNum
+	CheckDataDuplicated abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8}

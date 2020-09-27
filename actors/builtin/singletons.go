@@ -42,5 +42,6 @@ func IsSingletonActor(code cid.Cid) bool {
 		code.Equals(CronActorCodeID) ||
 		code.Equals(StoragePowerActorCodeID) ||
 		code.Equals(StorageMarketActorCodeID) ||
-		code.Equals(VerifiedRegistryActorCodeID)
+		code.Equals(VerifiedRegistryActorCodeID) ||
+		code.Equals(ExpertActorCodeID)
 }

@@ -1,0 +1,228 @@
+package expert
+
+import (
+	"bytes"
+
+	addr "github.com/filecoin-project/go-address"
+	abi "github.com/filecoin-project/specs-actors/actors/abi"
+	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	initact "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
+	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
+	. "github.com/filecoin-project/specs-actors/actors/util"
+	adt "github.com/filecoin-project/specs-actors/actors/util/adt"
+	"github.com/ipfs/go-cid"
+)
+
+type Runtime = vmr.Runtime
+
+// Actor of expert
+type Actor struct{}
+
+func (a Actor) Exports() []interface{} {
+	return []interface{}{
+		builtin.MethodConstructor: a.Constructor,
+		2:                         a.CreateExpert,
+		3:                         a.DeleteExpert,
+		4:                         a.ChangeAddress,
+		5:                         a.ChangePeerID,
+		6:                         a.ChangeMultiaddrs,
+		7:                         a.ImportData,
+		8:                         a.CheckDataDuplicated,
+	}
+}
+
+var _ abi.Invokee = Actor{}
+
+type ConstructorParams struct {
+	OwnerAddr  addr.Address
+	PeerId     abi.PeerID
+	Multiaddrs []abi.Multiaddrs
+}
+
+func (a Actor) Constructor(rt vmr.Runtime, params *ConstructorParams) *adt.EmptyValue {
+	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+
+	owner := resolveOwnerAddress(rt, params.OwnerAddr)
+
+	emptyArray, err := adt.MakeEmptyArray(adt.AsStore(rt)).Root()
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalState, "failed to construct initial state: %v", err)
+	}
+
+	st := ConstructState(emptyArray, owner, params.PeerId, params.Multiaddrs)
+	rt.State().Create(st)
+	return nil
+}
+
+// Resolves an address to an ID address and verifies that it is address of an account or multisig actor.
+func resolveOwnerAddress(rt Runtime, raw addr.Address) addr.Address {
+	resolved, ok := rt.ResolveAddress(raw)
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", raw)
+	}
+	Assert(resolved.Protocol() == addr.ID)
+
+	ownerCode, ok := rt.GetActorCodeCID(resolved)
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "no code for address %v", resolved)
+	}
+	if !builtin.IsPrincipal(ownerCode) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "owner actor type must be a principal, was %v", ownerCode)
+	}
+	return resolved
+}
+
+type CreateExpertParams struct {
+	Owner      addr.Address
+	Peer       abi.PeerID
+	Multiaddrs []abi.Multiaddrs
+}
+
+type CreateExpertReturn struct {
+	IDAddress     addr.Address // The canonical ID-based address for the actor.
+	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
+}
+
+func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExpertReturn {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+
+	ctorParams := ConstructorParams{
+		OwnerAddr:  params.Owner,
+		PeerId:     params.Peer,
+		Multiaddrs: params.Multiaddrs,
+	}
+	ctorParamBuf := new(bytes.Buffer)
+	err := ctorParams.MarshalCBOR(ctorParamBuf)
+	if err != nil {
+		rt.Abortf(exitcode.ErrPlaceholder, "failed to serialize expert constructor params %v: %v", ctorParams, err)
+	}
+	ret, code := rt.Send(
+		builtin.InitActorAddr,
+		builtin.MethodsInit.Exec,
+		&initact.ExecParams{
+			CodeCID:           builtin.StorageMinerActorCodeID,
+			ConstructorParams: ctorParamBuf.Bytes(),
+		},
+		rt.Message().ValueReceived(), // Pass on any value to the new actor.
+	)
+	builtin.RequireSuccess(rt, code, "failed to init new actor")
+	var addresses initact.ExecReturn
+	err = ret.Into(&addresses)
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalState, "unmarshaling exec return value: %v", err)
+	}
+
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		st.ExpertCount += 1
+		return nil
+	})
+	return &CreateExpertReturn{
+		IDAddress:     addresses.IDAddress,
+		RobustAddress: addresses.RobustAddress,
+	}
+}
+
+type DeleteExpertParams struct {
+	Expert addr.Address
+}
+
+func (a Actor) DeleteExpert(rt Runtime, params *DeleteExpertParams) *adt.EmptyValue {
+
+	_, ok := rt.ResolveAddress(params.Expert)
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", params.Expert)
+	}
+
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		rt.ValidateImmediateCallerIs(st.Info.Owner)
+		//TODO: state update
+		st.ExpertCount--
+		return nil
+	})
+	return nil
+}
+
+type ChangePeerIDParams struct {
+	NewID abi.PeerID
+}
+
+func (a Actor) ChangePeerID(rt Runtime, params *ChangePeerIDParams) *adt.EmptyValue {
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		rt.ValidateImmediateCallerIs(st.Info.Owner)
+		st.Info.PeerId = params.NewID
+		return nil
+	})
+	return nil
+}
+
+type ChangeMultiaddrsParams struct {
+	NewMultiaddrs []abi.Multiaddrs
+}
+
+func (a Actor) ChangeMultiaddrs(rt Runtime, params *ChangeMultiaddrsParams) *adt.EmptyValue {
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		rt.ValidateImmediateCallerIs(st.Info.Owner)
+		st.Info.Multiaddrs = params.NewMultiaddrs
+		return nil
+	})
+	return nil
+}
+
+type ChangeAddressParams struct {
+	NewOwner addr.Address
+}
+
+func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *adt.EmptyValue {
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		rt.ValidateImmediateCallerIs(st.Info.Owner)
+
+		owner := resolveOwnerAddress(rt, params.NewOwner)
+
+		st.Info.Owner = owner
+		return nil
+	})
+	return nil
+}
+
+type ExpertDataParams struct {
+	PieceID cid.Cid
+}
+
+func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *adt.EmptyValue {
+	store := adt.AsStore(rt)
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		rt.ValidateImmediateCallerIs(st.Info.Owner)
+
+		newDataInfo := &DataOnChainInfo{
+			PieceID: params.PieceID,
+		}
+
+		if err := st.PutData(store, newDataInfo); err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to import data: %v", err)
+		}
+		return nil
+	})
+	return nil
+}
+
+func (a Actor) CheckDataDuplicated(rt Runtime, params *ExpertDataParams) *adt.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+
+	var st State
+	rt.State().Readonly(&st)
+	store := adt.AsStore(rt)
+
+	if _, found, err := st.GetData(store, params.PieceID); err != nil {
+		rt.Abortf(exitcode.ErrIllegalState, "failed to load expert data %v", params.PieceID)
+	} else if found {
+		rt.Abortf(exitcode.ErrNotFound, "data %v has imported", params.PieceID)
+	}
+	return nil
+}

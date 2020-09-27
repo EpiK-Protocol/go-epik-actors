@@ -82,6 +82,18 @@ func (k AddrKey) Key() string {
 	return string(addr.Address(k).Bytes())
 }
 
+type cidKey struct {
+	cid.Cid
+}
+
+func CidKey(k cid.Cid) cidKey {
+	return cidKey{k}
+}
+
+func (k cidKey) Key() string {
+	return k.String()
+}
+
 // Adapts an int64 as a mapping key.
 type intKey struct {
 	int64

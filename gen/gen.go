@@ -7,6 +7,7 @@ import (
 	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
 	account "github.com/filecoin-project/specs-actors/actors/builtin/account"
 	cron "github.com/filecoin-project/specs-actors/actors/builtin/cron"
+	expert "github.com/filecoin-project/specs-actors/actors/builtin/expert"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	market "github.com/filecoin-project/specs-actors/actors/builtin/market"
 	miner "github.com/filecoin-project/specs-actors/actors/builtin/miner"
@@ -204,6 +205,25 @@ func main() {
 		verifreg.AddVerifiedClientParams{},
 		verifreg.UseBytesParams{},
 		verifreg.RestoreBytesParams{},
+		// other types
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/expert/cbor_gen.go", "expert",
+		// actor state
+		expert.State{},
+		expert.ExpertInfo{},
+		// method params
+		expert.ConstructorParams{},
+		expert.CreateExpertParams{},
+		expert.CreateExpertReturn{},
+		expert.DeleteExpertParams{},
+		expert.ChangePeerIDParams{},
+		expert.ChangeMultiaddrsParams{},
+		expert.ChangeAddressParams{},
+		expert.ExpertDataParams{},
+		expert.DataOnChainInfo{},
 		// other types
 	); err != nil {
 		panic(err)
