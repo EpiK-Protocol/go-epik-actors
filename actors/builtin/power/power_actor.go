@@ -246,17 +246,15 @@ type OnFaultBeginParams struct {
 func (a Actor) OnFaultBegin(rt Runtime, params *OnFaultBeginParams) *adt.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
 	// TODO: larry need not update power for fault
-	if rt.CurrEpoch() <= 13157 {
-		var st State
-		rt.State().Transaction(&st, func() interface{} {
-			rbpower, qapower := powersForWeights(params.Weights)
-			err := st.AddToClaim(adt.AsStore(rt), rt.Message().Caller(), rbpower.Neg(), qapower.Neg())
-			if err != nil {
-				rt.Abortf(exitcode.ErrIllegalState, "failed to deduct claimed power for sector: %v", err)
-			}
-			return nil
-		})
-	}
+	// var st State
+	// rt.State().Transaction(&st, func() interface{} {
+	// 	rbpower, qapower := powersForWeights(params.Weights)
+	// 	err := st.AddToClaim(adt.AsStore(rt), rt.Message().Caller(), rbpower.Neg(), qapower.Neg())
+	// 	if err != nil {
+	// 		rt.Abortf(exitcode.ErrIllegalState, "failed to deduct claimed power for sector: %v", err)
+	// 	}
+	// 	return nil
+	// })
 	return nil
 }
 
@@ -268,17 +266,16 @@ func (a Actor) OnFaultEnd(rt Runtime, params *OnFaultEndParams) *adt.EmptyValue 
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
 
 	// TODO: larry need not update power for fault
-	if rt.CurrEpoch() <= 13157 {
-		var st State
-		rt.State().Transaction(&st, func() interface{} {
-			rbpower, qapower := powersForWeights(params.Weights)
-			err := st.AddToClaim(adt.AsStore(rt), rt.Message().Caller(), rbpower, qapower)
-			if err != nil {
-				rt.Abortf(exitcode.ErrIllegalState, "failed to add claimed power for sector: %v", err)
-			}
-			return nil
-		})
-	}
+	// var st State
+	// rt.State().Transaction(&st, func() interface{} {
+	// 	rbpower, qapower := powersForWeights(params.Weights)
+	// 	err := st.AddToClaim(adt.AsStore(rt), rt.Message().Caller(), rbpower, qapower)
+	// 	if err != nil {
+	// 		rt.Abortf(exitcode.ErrIllegalState, "failed to add claimed power for sector: %v", err)
+	// 	}
+	// 	return nil
+	// })
+
 	return nil
 }
 
