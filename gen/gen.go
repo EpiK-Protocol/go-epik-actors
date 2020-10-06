@@ -215,6 +215,7 @@ func main() {
 		expert.State{},
 		expert.ExpertInfo{},
 		// method params
+		expert.Expert{},
 		expert.ConstructorParams{},
 		expert.CreateExpertParams{},
 		expert.CreateExpertReturn{},

@@ -115,6 +115,11 @@ func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExper
 
 	var st State
 	rt.State().Transaction(&st, func() interface{} {
+		store := adt.AsStore(rt)
+		err = st.setExpert(store, addresses.IDAddress, &Expert{DataCount: 0})
+		if err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to put expert in experts table while creating expert: %v", err)
+		}
 		st.ExpertCount += 1
 		return nil
 	})

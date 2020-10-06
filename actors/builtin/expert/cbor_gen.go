@@ -17,7 +17,7 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{131}); err != nil {
+	if _, err := w.Write([]byte{132}); err != nil {
 		return err
 	}
 
@@ -43,6 +43,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Datas: %w", err)
 	}
 
+	// t.Experts (cid.Cid) (struct)
+
+	if err := cbg.WriteCid(w, t.Experts); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Experts: %w", err)
+	}
+
 	return nil
 }
 
@@ -57,7 +63,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -105,6 +111,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Datas = c
+
+	}
+	// t.Experts (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Experts: %w", err)
+		}
+
+		t.Experts = c
 
 	}
 	return nil
@@ -243,6 +261,71 @@ func (t *ExpertInfo) UnmarshalCBOR(r io.Reader) error {
 		}
 	}
 
+	return nil
+}
+
+func (t *Expert) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write([]byte{129}); err != nil {
+		return err
+	}
+
+	// t.DataCount (int64) (int64)
+	if t.DataCount >= 0 {
+		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajUnsignedInt, uint64(t.DataCount))); err != nil {
+			return err
+		}
+	} else {
+		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajNegativeInt, uint64(-t.DataCount)-1)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *Expert) UnmarshalCBOR(r io.Reader) error {
+	br := cbg.GetPeeker(r)
+
+	maj, extra, err := cbg.CborReadHeader(br)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.DataCount (int64) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeader(br)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.DataCount = int64(extraI)
+	}
 	return nil
 }
 
