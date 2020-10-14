@@ -1738,14 +1738,15 @@ func commitWorkerKeyChange(rt Runtime) *adt.EmptyValue {
 func verifyPledgeMeetsInitialRequirements(rt Runtime, st *State, append uint64) {
 	// TODO WPOST (follow-up): implement this
 	// https://github.com/filecoin-project/specs-actors/issues/415
-	store := adt.AsStore(rt)
-	size := st.Info.SectorSize
-	count, err := st.GetSectorCount(store)
-	if err != nil {
-		rt.Abortf(exitcode.ErrIllegalState, "failed to get sector size")
-	}
+	// store := adt.AsStore(rt)
+	// size := st.Info.SectorSize
+	// count, err := st.GetSectorCount(store)
+	// if err != nil {
+	// 	rt.Abortf(exitcode.ErrIllegalState, "failed to get sector size")
+	// }
 
-	pledge := int64(size) * int64(count+append) / (1 << 30) * builtin.InitialPledgeMeetsPerGiB
+	// pledge := int64(size) * int64(count+append) / (1 << 30) * builtin.InitialPledgeMeetsPerGiB
+	pledge := int64(1000)
 	pledgeAmount := big.Mul(big.NewInt(pledge), abi.TokenPrecision)
 	if rt.CurrentBalance().LessThan(pledgeAmount) {
 		rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds for pledge initial requirements: %v", pledgeAmount)
