@@ -37,6 +37,15 @@ func RequestMinerControlAddrs(rt runtime.Runtime, minerAddr addr.Address) (owner
 	return addrs.Owner, addrs.Worker
 }
 
+func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (ownerAddr addr.Address) {
+	ret, code := rt.Send(expertAddr, MethodsExpert.ControlAddress, nil, abi.NewTokenAmount(0))
+	RequireSuccess(rt, code, "failed fetching control address")
+	var addr ExpertAddr
+	autil.AssertNoError(ret.Into(&addr))
+
+	return addr.Owner
+}
+
 // This type duplicates the Miner.ControlAddresses return type, to work around a circular dependency between actors.
 type MinerAddrs struct {
 	Owner  addr.Address
@@ -45,4 +54,8 @@ type MinerAddrs struct {
 
 type ConfirmSectorProofsParams struct {
 	Sectors []abi.SectorNumber
+}
+
+type ExpertAddr struct {
+	Owner addr.Address
 }

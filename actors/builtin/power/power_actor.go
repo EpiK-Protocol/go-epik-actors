@@ -48,6 +48,8 @@ func (a Actor) Exports() []interface{} {
 		12:                        a.OnConsensusFault,
 		13:                        a.SubmitPoRepForBulkVerify,
 		14:                        a.PowerState,
+		15:                        a.CreateExpert,
+		16:                        a.DeleteExpert,
 	}
 }
 
@@ -636,4 +638,86 @@ func abortIfError(rt Runtime, err error, msg string, args ...interface{}) {
 		fmtmst := fmt.Sprintf(msg, args...)
 		rt.Abortf(code, "%s: %v", fmtmst, err)
 	}
+}
+
+type CreateExpertParams struct {
+	Owner      addr.Address
+	PeerId     abi.PeerID
+	Multiaddrs []abi.Multiaddrs
+}
+
+type ExpertConstructorParams = CreateExpertParams
+
+type CreateExpertReturn struct {
+	IDAddress     addr.Address // The canonical ID-based address for the actor.
+	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
+}
+
+func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExpertReturn {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+
+	ctorParams := ExpertConstructorParams{
+		Owner:      params.Owner,
+		PeerId:     params.PeerId,
+		Multiaddrs: params.Multiaddrs,
+	}
+	ctorParamBuf := new(bytes.Buffer)
+	err := ctorParams.MarshalCBOR(ctorParamBuf)
+	if err != nil {
+		rt.Abortf(exitcode.ErrPlaceholder, "failed to serialize expert constructor params %v: %v", ctorParams, err)
+	}
+	ret, code := rt.Send(
+		builtin.InitActorAddr,
+		builtin.MethodsInit.Exec,
+		&initact.ExecParams{
+			CodeCID:           builtin.ExpertActorCodeID,
+			ConstructorParams: ctorParamBuf.Bytes(),
+		},
+		rt.Message().ValueReceived(), // Pass on any value to the new actor.
+	)
+	builtin.RequireSuccess(rt, code, "failed to init new actor")
+	var addresses initact.ExecReturn
+	err = ret.Into(&addresses)
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalState, "unmarshaling exec return value: %v", err)
+	}
+
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		store := adt.AsStore(rt)
+		err = st.setExpert(store, addresses.IDAddress, &Expert{DataCount: 0})
+		if err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to put expert in experts table while creating expert: %v", err)
+		}
+		st.ExpertCount += 1
+		return nil
+	})
+	return &CreateExpertReturn{
+		IDAddress:     addresses.IDAddress,
+		RobustAddress: addresses.RobustAddress,
+	}
+}
+
+type DeleteExpertParams struct {
+	Expert addr.Address
+}
+
+func (a Actor) DeleteExpert(rt Runtime, params *DeleteExpertParams) *adt.EmptyValue {
+
+	nominal, ok := rt.ResolveAddress(params.Expert)
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", params.Expert)
+	}
+	ownerAddr := builtin.RequestExpertControlAddr(rt, nominal)
+	rt.ValidateImmediateCallerIs(ownerAddr)
+
+	var st State
+	rt.State().Transaction(&st, func() interface{} {
+		if err := st.deleteExpert(adt.AsStore(rt), nominal); err != nil {
+			return errors.Wrapf(err, "failed to delete %v from expert power table", nominal)
+		}
+		st.ExpertCount--
+		return nil
+	})
+	return nil
 }

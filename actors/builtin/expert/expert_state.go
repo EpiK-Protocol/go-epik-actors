@@ -16,13 +16,8 @@ type AddrKey = adt.AddrKey
 type State struct {
 	Info ExpertInfo
 
-	ExpertCount int64
-
 	// Information for all submit rdf data.
 	Datas cid.Cid // Map, AMT[key]DataOnChainInfo (sparse)
-
-	// Information for all submit rdf data.
-	Experts cid.Cid // Map, AMT[key]Expert (sparse)
 }
 
 // ExpertInfo expert info
@@ -43,11 +38,6 @@ type DataOnChainInfo struct {
 	PieceID cid.Cid
 }
 
-type Expert struct {
-	// Sum of rdf data count.
-	DataCount int64
-}
-
 func ConstructState(emptyArrayCid cid.Cid, ownerAddr addr.Address,
 	peerId abi.PeerID, multiaddrs []abi.Multiaddrs) *State {
 	return &State{
@@ -58,39 +48,6 @@ func ConstructState(emptyArrayCid cid.Cid, ownerAddr addr.Address,
 		},
 		Datas: emptyArrayCid,
 	}
-}
-
-func (st *State) setExpert(s adt.Store, a addr.Address, expert *Expert) error {
-	hm, err := adt.AsMap(s, st.Experts)
-	if err != nil {
-		return err
-	}
-
-	if err = hm.Put(AddrKey(a), expert); err != nil {
-		return errors.Wrapf(err, "failed to put expert with address %s expert %v in store %s", a, expert, st.Experts)
-	}
-
-	st.Experts, err = hm.Root()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (st *State) deleteExpert(s adt.Store, a addr.Address) error {
-	hm, err := adt.AsMap(s, st.Experts)
-	if err != nil {
-		return err
-	}
-
-	if err = hm.Delete(AddrKey(a)); err != nil {
-		return errors.Wrapf(err, "failed to delete expert at address %s from store %s", a, st.Experts)
-	}
-	st.Experts, err = hm.Root()
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (st *State) HasDataID(store adt.Store, pieceID cid.Cid) (bool, error) {

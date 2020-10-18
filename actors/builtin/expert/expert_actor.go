@@ -1,12 +1,10 @@
 package expert
 
 import (
-	"bytes"
-
 	addr "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/specs-actors/actors/abi"
 	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
-	initact "github.com/filecoin-project/specs-actors/actors/builtin/init"
+	"github.com/filecoin-project/specs-actors/actors/builtin/power"
 	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
 	"github.com/filecoin-project/specs-actors/actors/runtime/exitcode"
 	. "github.com/filecoin-project/specs-actors/actors/util"
@@ -22,28 +20,23 @@ type Actor struct{}
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
-		2:                         a.CreateExpert,
-		3:                         a.DeleteExpert,
-		4:                         a.ChangeAddress,
-		5:                         a.ChangePeerID,
-		6:                         a.ChangeMultiaddrs,
-		7:                         a.ImportData,
-		8:                         a.CheckDataDuplicated,
+		2:                         a.ControlAddress,
+		3:                         a.ChangeAddress,
+		4:                         a.ChangePeerID,
+		5:                         a.ChangeMultiaddrs,
+		6:                         a.ImportData,
+		7:                         a.CheckDataDuplicated,
 	}
 }
 
 var _ abi.Invokee = Actor{}
 
-type ConstructorParams struct {
-	OwnerAddr  addr.Address
-	PeerId     abi.PeerID
-	Multiaddrs []abi.Multiaddrs
-}
+type ConstructorParams = power.ExpertConstructorParams
 
 func (a Actor) Constructor(rt vmr.Runtime, params *ConstructorParams) *adt.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	owner := resolveOwnerAddress(rt, params.OwnerAddr)
+	owner := resolveOwnerAddress(rt, params.Owner)
 
 	emptyArray, err := adt.MakeEmptyArray(adt.AsStore(rt)).Root()
 	if err != nil {
@@ -53,6 +46,19 @@ func (a Actor) Constructor(rt vmr.Runtime, params *ConstructorParams) *adt.Empty
 	st := ConstructState(emptyArray, owner, params.PeerId, params.Multiaddrs)
 	rt.State().Create(st)
 	return nil
+}
+
+type GetControlAddressReturn struct {
+	Owner addr.Address
+}
+
+func (a Actor) ControlAddress(rt Runtime, _ *adt.EmptyValue) *GetControlAddressReturn {
+	rt.ValidateImmediateCallerAcceptAny()
+	var st State
+	rt.State().Readonly(&st)
+	return &GetControlAddressReturn{
+		Owner: st.Info.Owner,
+	}
 }
 
 // Resolves an address to an ID address and verifies that it is address of an account or multisig actor.
@@ -71,83 +77,6 @@ func resolveOwnerAddress(rt Runtime, raw addr.Address) addr.Address {
 		rt.Abortf(exitcode.ErrIllegalArgument, "owner actor type must be a principal, was %v", ownerCode)
 	}
 	return resolved
-}
-
-type CreateExpertParams struct {
-	Owner      addr.Address
-	Peer       abi.PeerID
-	Multiaddrs []abi.Multiaddrs
-}
-
-type CreateExpertReturn struct {
-	IDAddress     addr.Address // The canonical ID-based address for the actor.
-	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
-}
-
-func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExpertReturn {
-	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
-
-	ctorParams := ConstructorParams{
-		OwnerAddr:  params.Owner,
-		PeerId:     params.Peer,
-		Multiaddrs: params.Multiaddrs,
-	}
-	ctorParamBuf := new(bytes.Buffer)
-	err := ctorParams.MarshalCBOR(ctorParamBuf)
-	if err != nil {
-		rt.Abortf(exitcode.ErrPlaceholder, "failed to serialize expert constructor params %v: %v", ctorParams, err)
-	}
-	ret, code := rt.Send(
-		builtin.InitActorAddr,
-		builtin.MethodsInit.Exec,
-		&initact.ExecParams{
-			CodeCID:           builtin.StorageMinerActorCodeID,
-			ConstructorParams: ctorParamBuf.Bytes(),
-		},
-		rt.Message().ValueReceived(), // Pass on any value to the new actor.
-	)
-	builtin.RequireSuccess(rt, code, "failed to init new actor")
-	var addresses initact.ExecReturn
-	err = ret.Into(&addresses)
-	if err != nil {
-		rt.Abortf(exitcode.ErrIllegalState, "unmarshaling exec return value: %v", err)
-	}
-
-	var st State
-	rt.State().Transaction(&st, func() interface{} {
-		store := adt.AsStore(rt)
-		err = st.setExpert(store, addresses.IDAddress, &Expert{DataCount: 0})
-		if err != nil {
-			rt.Abortf(exitcode.ErrIllegalState, "failed to put expert in experts table while creating expert: %v", err)
-		}
-		st.ExpertCount += 1
-		return nil
-	})
-	return &CreateExpertReturn{
-		IDAddress:     addresses.IDAddress,
-		RobustAddress: addresses.RobustAddress,
-	}
-}
-
-type DeleteExpertParams struct {
-	Expert addr.Address
-}
-
-func (a Actor) DeleteExpert(rt Runtime, params *DeleteExpertParams) *adt.EmptyValue {
-
-	_, ok := rt.ResolveAddress(params.Expert)
-	if !ok {
-		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", params.Expert)
-	}
-
-	var st State
-	rt.State().Transaction(&st, func() interface{} {
-		rt.ValidateImmediateCallerIs(st.Info.Owner)
-		//TODO: state update
-		st.ExpertCount--
-		return nil
-	})
-	return nil
 }
 
 type ChangePeerIDParams struct {

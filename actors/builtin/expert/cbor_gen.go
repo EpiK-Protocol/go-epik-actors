@@ -17,7 +17,7 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{132}); err != nil {
+	if _, err := w.Write([]byte{130}); err != nil {
 		return err
 	}
 
@@ -26,27 +26,10 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.ExpertCount (int64) (int64)
-	if t.ExpertCount >= 0 {
-		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajUnsignedInt, uint64(t.ExpertCount))); err != nil {
-			return err
-		}
-	} else {
-		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajNegativeInt, uint64(-t.ExpertCount)-1)); err != nil {
-			return err
-		}
-	}
-
 	// t.Datas (cid.Cid) (struct)
 
 	if err := cbg.WriteCid(w, t.Datas); err != nil {
 		return xerrors.Errorf("failed to write cid field t.Datas: %w", err)
-	}
-
-	// t.Experts (cid.Cid) (struct)
-
-	if err := cbg.WriteCid(w, t.Experts); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Experts: %w", err)
 	}
 
 	return nil
@@ -63,7 +46,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -76,31 +59,6 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.ExpertCount (int64) (int64)
-	{
-		maj, extra, err := cbg.CborReadHeader(br)
-		var extraI int64
-		if err != nil {
-			return err
-		}
-		switch maj {
-		case cbg.MajUnsignedInt:
-			extraI = int64(extra)
-			if extraI < 0 {
-				return fmt.Errorf("int64 positive overflow")
-			}
-		case cbg.MajNegativeInt:
-			extraI = int64(extra)
-			if extraI < 0 {
-				return fmt.Errorf("int64 negative oveflow")
-			}
-			extraI = -1 - extraI
-		default:
-			return fmt.Errorf("wrong type for int64 field: %d", maj)
-		}
-
-		t.ExpertCount = int64(extraI)
-	}
 	// t.Datas (cid.Cid) (struct)
 
 	{
@@ -111,18 +69,6 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Datas = c
-
-	}
-	// t.Experts (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Experts: %w", err)
-		}
-
-		t.Experts = c
 
 	}
 	return nil
@@ -264,7 +210,7 @@ func (t *ExpertInfo) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-func (t *Expert) MarshalCBOR(w io.Writer) error {
+func (t *GetControlAddressReturn) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
@@ -273,20 +219,14 @@ func (t *Expert) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.DataCount (int64) (int64)
-	if t.DataCount >= 0 {
-		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajUnsignedInt, uint64(t.DataCount))); err != nil {
-			return err
-		}
-	} else {
-		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajNegativeInt, uint64(-t.DataCount)-1)); err != nil {
-			return err
-		}
+	// t.Owner (address.Address) (struct)
+	if err := t.Owner.MarshalCBOR(w); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (t *Expert) UnmarshalCBOR(r io.Reader) error {
+func (t *GetControlAddressReturn) UnmarshalCBOR(r io.Reader) error {
 	br := cbg.GetPeeker(r)
 
 	maj, extra, err := cbg.CborReadHeader(br)
@@ -298,234 +238,6 @@ func (t *Expert) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.DataCount (int64) (int64)
-	{
-		maj, extra, err := cbg.CborReadHeader(br)
-		var extraI int64
-		if err != nil {
-			return err
-		}
-		switch maj {
-		case cbg.MajUnsignedInt:
-			extraI = int64(extra)
-			if extraI < 0 {
-				return fmt.Errorf("int64 positive overflow")
-			}
-		case cbg.MajNegativeInt:
-			extraI = int64(extra)
-			if extraI < 0 {
-				return fmt.Errorf("int64 negative oveflow")
-			}
-			extraI = -1 - extraI
-		default:
-			return fmt.Errorf("wrong type for int64 field: %d", maj)
-		}
-
-		t.DataCount = int64(extraI)
-	}
-	return nil
-}
-
-func (t *ConstructorParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write([]byte{131}); err != nil {
-		return err
-	}
-
-	// t.OwnerAddr (address.Address) (struct)
-	if err := t.OwnerAddr.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.PeerId ([]uint8) (slice)
-	if len(t.PeerId) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.PeerId was too long")
-	}
-
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajByteString, uint64(len(t.PeerId)))); err != nil {
-		return err
-	}
-	if _, err := w.Write(t.PeerId); err != nil {
-		return err
-	}
-
-	// t.Multiaddrs ([][]uint8) (slice)
-	if len(t.Multiaddrs) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.Multiaddrs was too long")
-	}
-
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajArray, uint64(len(t.Multiaddrs)))); err != nil {
-		return err
-	}
-	for _, v := range t.Multiaddrs {
-		if len(v) > cbg.ByteArrayMaxLen {
-			return xerrors.Errorf("Byte array in field v was too long")
-		}
-
-		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajByteString, uint64(len(v)))); err != nil {
-			return err
-		}
-		if _, err := w.Write(v); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (t *ConstructorParams) UnmarshalCBOR(r io.Reader) error {
-	br := cbg.GetPeeker(r)
-
-	maj, extra, err := cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 3 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.OwnerAddr (address.Address) (struct)
-
-	{
-
-		if err := t.OwnerAddr.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.OwnerAddr: %w", err)
-		}
-
-	}
-	// t.PeerId ([]uint8) (slice)
-
-	maj, extra, err = cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.PeerId: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
-	t.PeerId = make([]byte, extra)
-	if _, err := io.ReadFull(br, t.PeerId); err != nil {
-		return err
-	}
-	// t.Multiaddrs ([][]uint8) (slice)
-
-	maj, extra, err = cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.Multiaddrs: array too large (%d)", extra)
-	}
-
-	if maj != cbg.MajArray {
-		return fmt.Errorf("expected cbor array")
-	}
-
-	if extra > 0 {
-		t.Multiaddrs = make([][]uint8, extra)
-	}
-
-	for i := 0; i < int(extra); i++ {
-		{
-			var maj byte
-			var extra uint64
-			var err error
-
-			maj, extra, err = cbg.CborReadHeader(br)
-			if err != nil {
-				return err
-			}
-
-			if extra > cbg.ByteArrayMaxLen {
-				return fmt.Errorf("t.Multiaddrs[i]: byte array too large (%d)", extra)
-			}
-			if maj != cbg.MajByteString {
-				return fmt.Errorf("expected byte array")
-			}
-			t.Multiaddrs[i] = make([]byte, extra)
-			if _, err := io.ReadFull(br, t.Multiaddrs[i]); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (t *CreateExpertParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write([]byte{131}); err != nil {
-		return err
-	}
-
-	// t.Owner (address.Address) (struct)
-	if err := t.Owner.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.Peer ([]uint8) (slice)
-	if len(t.Peer) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.Peer was too long")
-	}
-
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajByteString, uint64(len(t.Peer)))); err != nil {
-		return err
-	}
-	if _, err := w.Write(t.Peer); err != nil {
-		return err
-	}
-
-	// t.Multiaddrs ([][]uint8) (slice)
-	if len(t.Multiaddrs) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.Multiaddrs was too long")
-	}
-
-	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajArray, uint64(len(t.Multiaddrs)))); err != nil {
-		return err
-	}
-	for _, v := range t.Multiaddrs {
-		if len(v) > cbg.ByteArrayMaxLen {
-			return xerrors.Errorf("Byte array in field v was too long")
-		}
-
-		if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajByteString, uint64(len(v)))); err != nil {
-			return err
-		}
-		if _, err := w.Write(v); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (t *CreateExpertParams) UnmarshalCBOR(r io.Reader) error {
-	br := cbg.GetPeeker(r)
-
-	maj, extra, err := cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -535,166 +247,6 @@ func (t *CreateExpertParams) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.Owner.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.Owner: %w", err)
-		}
-
-	}
-	// t.Peer ([]uint8) (slice)
-
-	maj, extra, err = cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.Peer: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
-	t.Peer = make([]byte, extra)
-	if _, err := io.ReadFull(br, t.Peer); err != nil {
-		return err
-	}
-	// t.Multiaddrs ([][]uint8) (slice)
-
-	maj, extra, err = cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.Multiaddrs: array too large (%d)", extra)
-	}
-
-	if maj != cbg.MajArray {
-		return fmt.Errorf("expected cbor array")
-	}
-
-	if extra > 0 {
-		t.Multiaddrs = make([][]uint8, extra)
-	}
-
-	for i := 0; i < int(extra); i++ {
-		{
-			var maj byte
-			var extra uint64
-			var err error
-
-			maj, extra, err = cbg.CborReadHeader(br)
-			if err != nil {
-				return err
-			}
-
-			if extra > cbg.ByteArrayMaxLen {
-				return fmt.Errorf("t.Multiaddrs[i]: byte array too large (%d)", extra)
-			}
-			if maj != cbg.MajByteString {
-				return fmt.Errorf("expected byte array")
-			}
-			t.Multiaddrs[i] = make([]byte, extra)
-			if _, err := io.ReadFull(br, t.Multiaddrs[i]); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (t *CreateExpertReturn) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write([]byte{130}); err != nil {
-		return err
-	}
-
-	// t.IDAddress (address.Address) (struct)
-	if err := t.IDAddress.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.RobustAddress (address.Address) (struct)
-	if err := t.RobustAddress.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *CreateExpertReturn) UnmarshalCBOR(r io.Reader) error {
-	br := cbg.GetPeeker(r)
-
-	maj, extra, err := cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 2 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.IDAddress (address.Address) (struct)
-
-	{
-
-		if err := t.IDAddress.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.IDAddress: %w", err)
-		}
-
-	}
-	// t.RobustAddress (address.Address) (struct)
-
-	{
-
-		if err := t.RobustAddress.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.RobustAddress: %w", err)
-		}
-
-	}
-	return nil
-}
-
-func (t *DeleteExpertParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write([]byte{129}); err != nil {
-		return err
-	}
-
-	// t.Expert (address.Address) (struct)
-	if err := t.Expert.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *DeleteExpertParams) UnmarshalCBOR(r io.Reader) error {
-	br := cbg.GetPeeker(r)
-
-	maj, extra, err := cbg.CborReadHeader(br)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.Expert (address.Address) (struct)
-
-	{
-
-		if err := t.Expert.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Expert: %w", err)
 		}
 
 	}

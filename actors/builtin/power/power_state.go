@@ -33,6 +33,11 @@ type State struct {
 	NumMinersMeetingMinPower int64
 
 	ProofValidationBatch *cid.Cid
+
+	ExpertCount int64
+
+	// Information for all submit rdf data.
+	Experts cid.Cid // Map, AMT[key]Expert (sparse)
 }
 
 type Claim struct {
@@ -280,4 +285,42 @@ func init() {
 	if reflect.TypeOf(e).Kind() != reflect.Int64 {
 		panic("incorrect chain epoch encoding")
 	}
+}
+
+type Expert struct {
+	// Sum of rdf data count.
+	DataCount int64
+}
+
+func (st *State) setExpert(s adt.Store, a addr.Address, expert *Expert) error {
+	hm, err := adt.AsMap(s, st.Experts)
+	if err != nil {
+		return err
+	}
+
+	// if err = hm.Put(AddrKey(a), expert); err != nil {
+	// 	return errors.Wrapf(err, "failed to put expert with address %s expert %v in store %s", a, expert, st.Experts)
+	// }
+
+	st.Experts, err = hm.Root()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (st *State) deleteExpert(s adt.Store, a addr.Address) error {
+	hm, err := adt.AsMap(s, st.Experts)
+	if err != nil {
+		return err
+	}
+
+	if err = hm.Delete(AddrKey(a)); err != nil {
+		return errors.Wrapf(err, "failed to delete expert at address %s from store %s", a, st.Experts)
+	}
+	st.Experts, err = hm.Root()
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -37,6 +37,7 @@ func main() {
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/cbor_gen.go", "builtin",
 		builtin.MinerAddrs{},
 		builtin.ConfirmSectorProofsParams{},
+		builtin.ExpertAddr{},
 	); err != nil {
 		panic(err)
 	}
@@ -138,6 +139,11 @@ func main() {
 		power.MinerConstructorParams{},
 		power.SectorStorageWeightDesc{},
 		power.PowerStateReturn{},
+		// expert
+		power.Expert{},
+		power.CreateExpertParams{},
+		power.CreateExpertReturn{},
+		power.DeleteExpertParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -215,11 +221,8 @@ func main() {
 		expert.State{},
 		expert.ExpertInfo{},
 		// method params
-		expert.Expert{},
-		expert.ConstructorParams{},
-		expert.CreateExpertParams{},
-		expert.CreateExpertReturn{},
-		expert.DeleteExpertParams{},
+		// expert.ConstructorParams{},
+		expert.GetControlAddressReturn{},
 		expert.ChangePeerIDParams{},
 		expert.ChangeMultiaddrsParams{},
 		expert.ChangeAddressParams{},

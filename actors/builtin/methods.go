@@ -79,7 +79,9 @@ var MethodsPower = struct {
 	OnConsensusFault         abi.MethodNum
 	SubmitPoRepForBulkVerify abi.MethodNum
 	PowerState               abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
+	CreateExpert             abi.MethodNum
+	DeleteExpert             abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 
 var MethodsMiner = struct {
 	Constructor              abi.MethodNum
@@ -114,11 +116,10 @@ var MethodsVerifiedRegistry = struct {
 
 var MethodsExpert = struct {
 	Constructor         abi.MethodNum
-	CreateExpert        abi.MethodNum
-	DeleteExpert        abi.MethodNum
+	ControlAddress      abi.MethodNum
 	ChangeAddress       abi.MethodNum
 	ChangePeerID        abi.MethodNum
 	ChangeMultiaddrs    abi.MethodNum
 	ImportData          abi.MethodNum
 	CheckDataDuplicated abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7}
