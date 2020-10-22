@@ -80,7 +80,7 @@ func (st *State) minerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 	minerNominalPower := claim.QualityAdjPower
 
 	// if miner is larger than min power requirement, we're set
-	if minerNominalPower.GreaterThanEqual(ConsensusMinerMinPower) {
+	if minerNominalPower.GreaterThan(ConsensusMinerMinPower) {
 		return true, nil
 	}
 
@@ -134,8 +134,8 @@ func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePo
 
 	newNominalPower := claim.QualityAdjPower
 
-	prevBelow := oldNominalPower.LessThan(ConsensusMinerMinPower)
-	stillBelow := newNominalPower.LessThan(ConsensusMinerMinPower)
+	prevBelow := oldNominalPower.LessThanEqual(ConsensusMinerMinPower)
+	stillBelow := newNominalPower.LessThanEqual(ConsensusMinerMinPower)
 
 	if prevBelow && !stillBelow {
 		// just passed min miner size
