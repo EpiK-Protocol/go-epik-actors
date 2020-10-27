@@ -656,13 +656,28 @@ type CreateExpertReturn struct {
 func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExpertReturn {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
+	caller, ok := rt.ResolveAddress(rt.Message().Caller())
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", rt.Message().Caller())
+	}
+	var st State
+	rt.State().Readonly(&st)
+	store := adt.AsStore(rt)
+	_, exist, err := st.getExpert(store, caller)
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalArgument, "failed to get expert params %v: %v", params, err)
+	}
+	if st.ExpertCount > 0 && !exist {
+		rt.Abortf(exitcode.ErrForbidden, "failed to create expert params %v", params)
+	}
+
 	ctorParams := ExpertConstructorParams{
 		Owner:      params.Owner,
 		PeerId:     params.PeerId,
 		Multiaddrs: params.Multiaddrs,
 	}
 	ctorParamBuf := new(bytes.Buffer)
-	err := ctorParams.MarshalCBOR(ctorParamBuf)
+	err = ctorParams.MarshalCBOR(ctorParamBuf)
 	if err != nil {
 		rt.Abortf(exitcode.ErrPlaceholder, "failed to serialize expert constructor params %v: %v", ctorParams, err)
 	}
@@ -682,14 +697,13 @@ func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExper
 		rt.Abortf(exitcode.ErrIllegalState, "unmarshaling exec return value: %v", err)
 	}
 
-	var st State
 	rt.State().Transaction(&st, func() interface{} {
 		store := adt.AsStore(rt)
 		err = st.setExpert(store, addresses.IDAddress, &Expert{DataCount: 0})
 		if err != nil {
 			rt.Abortf(exitcode.ErrIllegalState, "failed to put expert in experts table while creating expert: %v", err)
 		}
-		st.ExpertCount += 1
+		st.ExpertCount++
 		return nil
 	})
 	return &CreateExpertReturn{

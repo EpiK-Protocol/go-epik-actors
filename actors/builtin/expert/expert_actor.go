@@ -25,7 +25,7 @@ func (a Actor) Exports() []interface{} {
 		4:                         a.ChangePeerID,
 		5:                         a.ChangeMultiaddrs,
 		6:                         a.ImportData,
-		7:                         a.CheckDataDuplicated,
+		7:                         a.CheckData,
 	}
 }
 
@@ -34,16 +34,16 @@ var _ abi.Invokee = Actor{}
 type ConstructorParams = power.ExpertConstructorParams
 
 func (a Actor) Constructor(rt vmr.Runtime, params *ConstructorParams) *adt.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+	rt.ValidateImmediateCallerIs(builtin.InitActorAddr)
 
 	owner := resolveOwnerAddress(rt, params.Owner)
 
-	emptyArray, err := adt.MakeEmptyArray(adt.AsStore(rt)).Root()
+	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	if err != nil {
 		rt.Abortf(exitcode.ErrIllegalState, "failed to construct initial state: %v", err)
 	}
 
-	st := ConstructState(emptyArray, owner, params.PeerId, params.Multiaddrs)
+	st := ConstructState(emptyMap, owner, params.PeerId, params.Multiaddrs)
 	rt.State().Create(st)
 	return nil
 }
@@ -129,8 +129,8 @@ type ExpertDataParams struct {
 }
 
 func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *adt.EmptyValue {
-	store := adt.AsStore(rt)
 	var st State
+	store := adt.AsStore(rt)
 	rt.State().Transaction(&st, func() interface{} {
 		rt.ValidateImmediateCallerIs(st.Info.Owner)
 
@@ -146,7 +146,7 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *adt.EmptyValue 
 	return nil
 }
 
-func (a Actor) CheckDataDuplicated(rt Runtime, params *ExpertDataParams) *adt.EmptyValue {
+func (a Actor) CheckData(rt Runtime, params *ExpertDataParams) *adt.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
@@ -155,8 +155,8 @@ func (a Actor) CheckDataDuplicated(rt Runtime, params *ExpertDataParams) *adt.Em
 
 	if _, found, err := st.GetData(store, params.PieceID); err != nil {
 		rt.Abortf(exitcode.ErrIllegalState, "failed to load expert data %v", params.PieceID)
-	} else if found {
-		rt.Abortf(exitcode.ErrNotFound, "data %v has imported", params.PieceID)
+	} else if !found {
+		rt.Abortf(exitcode.ErrNotFound, "data %v has not imported", params.PieceID)
 	}
 	return nil
 }

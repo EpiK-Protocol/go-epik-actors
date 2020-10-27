@@ -38,7 +38,7 @@ type DataOnChainInfo struct {
 	PieceID cid.Cid
 }
 
-func ConstructState(emptyArrayCid cid.Cid, ownerAddr addr.Address,
+func ConstructState(emptyMapCid cid.Cid, ownerAddr addr.Address,
 	peerId abi.PeerID, multiaddrs []abi.Multiaddrs) *State {
 	return &State{
 		Info: ExpertInfo{
@@ -46,7 +46,7 @@ func ConstructState(emptyArrayCid cid.Cid, ownerAddr addr.Address,
 			PeerId:     peerId,
 			Multiaddrs: multiaddrs,
 		},
-		Datas: emptyArrayCid,
+		Datas: emptyMapCid,
 	}
 }
 
@@ -105,7 +105,7 @@ func (st *State) DeleteData(store adt.Store, pieceID cid.Cid) error {
 	return err
 }
 
-func (st *State) ForEachSector(store adt.Store, f func(*DataOnChainInfo)) error {
+func (st *State) ForEachData(store adt.Store, f func(*DataOnChainInfo)) error {
 	datas, err := adt.AsMap(store, st.Datas)
 	if err != nil {
 		return err

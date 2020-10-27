@@ -292,15 +292,32 @@ type Expert struct {
 	DataCount int64
 }
 
+func (st *State) getExpert(s adt.Store, a addr.Address) (*Expert, bool, error) {
+	hm, err := adt.AsMap(s, st.Experts)
+	if err != nil {
+		return nil, false, err
+	}
+
+	var out Expert
+	found, err := hm.Get(AddrKey(a), &out)
+	if err != nil {
+		return nil, false, errors.Wrapf(err, "failed to get expert for address %v from store %s", a, st.Experts)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	return &out, true, nil
+}
+
 func (st *State) setExpert(s adt.Store, a addr.Address, expert *Expert) error {
 	hm, err := adt.AsMap(s, st.Experts)
 	if err != nil {
 		return err
 	}
 
-	// if err = hm.Put(AddrKey(a), expert); err != nil {
-	// 	return errors.Wrapf(err, "failed to put expert with address %s expert %v in store %s", a, expert, st.Experts)
-	// }
+	if err = hm.Put(AddrKey(a), expert); err != nil {
+		return errors.Wrapf(err, "failed to put expert with address %s expert %v in store %s", a, expert, st.Experts)
+	}
 
 	st.Experts, err = hm.Root()
 	if err != nil {

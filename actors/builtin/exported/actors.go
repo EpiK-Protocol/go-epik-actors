@@ -7,6 +7,7 @@ import (
 
 	"github.com/filecoin-project/specs-actors/actors/builtin/account"
 	"github.com/filecoin-project/specs-actors/actors/builtin/cron"
+	"github.com/filecoin-project/specs-actors/actors/builtin/expert"
 	init_ "github.com/filecoin-project/specs-actors/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/actors/builtin/miner"
@@ -82,7 +83,7 @@ func BuiltinActors() []BuiltinActor {
 			code:  builtin.VerifiedRegistryActorCodeID,
 		},
 		{
-			actor: verifreg.Actor{},
+			actor: expert.Actor{},
 			code:  builtin.ExpertActorCodeID,
 		},
 	}

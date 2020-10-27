@@ -93,6 +93,11 @@ func canExec(callerCodeID cid.Cid, execCodeID cid.Cid) bool {
 			return true
 		}
 		return false
+	case builtin.ExpertActorCodeID:
+		if callerCodeID == builtin.StoragePowerActorCodeID {
+			return true
+		}
+		return false
 	case builtin.PaymentChannelActorCodeID, builtin.MultisigActorCodeID:
 		return true
 	default:

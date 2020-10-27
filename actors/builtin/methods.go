@@ -115,11 +115,11 @@ var MethodsVerifiedRegistry = struct {
 }{MethodConstructor, 2, 3, 4, 5, 6}
 
 var MethodsExpert = struct {
-	Constructor         abi.MethodNum
-	ControlAddress      abi.MethodNum
-	ChangeAddress       abi.MethodNum
-	ChangePeerID        abi.MethodNum
-	ChangeMultiaddrs    abi.MethodNum
-	ImportData          abi.MethodNum
-	CheckDataDuplicated abi.MethodNum
+	Constructor      abi.MethodNum
+	ControlAddress   abi.MethodNum
+	ChangeAddress    abi.MethodNum
+	ChangePeerID     abi.MethodNum
+	ChangeMultiaddrs abi.MethodNum
+	ImportData       abi.MethodNum
+	CheckData        abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}

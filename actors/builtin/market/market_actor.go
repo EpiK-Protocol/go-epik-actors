@@ -9,6 +9,7 @@ import (
 	abi "github.com/filecoin-project/specs-actors/actors/abi"
 	big "github.com/filecoin-project/specs-actors/actors/abi/big"
 	builtin "github.com/filecoin-project/specs-actors/actors/builtin"
+	"github.com/filecoin-project/specs-actors/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/actors/builtin/power"
 	verifreg "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
 	vmr "github.com/filecoin-project/specs-actors/actors/runtime"
@@ -175,6 +176,22 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	_, worker := builtin.RequestMinerControlAddrs(rt, provider)
 	if worker != rt.Message().Caller() {
 		rt.Abortf(exitcode.ErrForbidden, "caller is not provider %v", provider)
+	}
+
+	if len(params.DataRef.Expert) > 0 {
+		eaddr, err := addr.NewFromString(params.DataRef.Expert)
+		if err != nil {
+			rt.Abortf(exitcode.ErrIllegalArgument, "invalid expert %v", params.DataRef.Expert)
+		}
+		_, code := rt.Send(
+			eaddr,
+			builtin.MethodsExpert.CheckData,
+			&expert.ExpertDataParams{
+				PieceID: params.DataRef.RootCID,
+			},
+			abi.NewTokenAmount(0),
+		)
+		builtin.RequireSuccess(rt, code, "failed to check expert data")
 	}
 
 	for _, deal := range params.Deals {
