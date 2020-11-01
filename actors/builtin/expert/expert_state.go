@@ -35,7 +35,8 @@ type ExpertInfo struct {
 }
 
 type DataOnChainInfo struct {
-	PieceID cid.Cid
+	PieceID string
+	Bounty  string
 }
 
 func ConstructState(emptyMapCid cid.Cid, ownerAddr addr.Address,
@@ -50,14 +51,14 @@ func ConstructState(emptyMapCid cid.Cid, ownerAddr addr.Address,
 	}
 }
 
-func (st *State) HasDataID(store adt.Store, pieceID cid.Cid) (bool, error) {
+func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
 	pieces, err := adt.AsMap(store, st.Datas)
 	if err != nil {
 		return false, err
 	}
 
 	var info DataOnChainInfo
-	found, err := pieces.Get(adt.CidKey(pieceID), &info)
+	found, err := pieces.Get(adt.StringKey(pieceID), &info)
 	if err != nil {
 		return false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
 	}
@@ -70,33 +71,33 @@ func (st *State) PutData(store adt.Store, data *DataOnChainInfo) error {
 		return err
 	}
 
-	if err := datas.Put(adt.CidKey(data.PieceID), data); err != nil {
+	if err := datas.Put(adt.StringKey(data.PieceID), data); err != nil {
 		return errors.Wrapf(err, "failed to put data %v", data)
 	}
 	st.Datas, err = datas.Root()
 	return err
 }
 
-func (st *State) GetData(store adt.Store, pieceID cid.Cid) (*DataOnChainInfo, bool, error) {
+func (st *State) GetData(store adt.Store, pieceID string) (*DataOnChainInfo, bool, error) {
 	datas, err := adt.AsMap(store, st.Datas)
 	if err != nil {
 		return nil, false, err
 	}
 
 	var info DataOnChainInfo
-	found, err := datas.Get(adt.CidKey(pieceID), &info)
+	found, err := datas.Get(adt.StringKey(pieceID), &info)
 	if err != nil {
 		return nil, false, errors.Wrapf(err, "failed to get data %v", pieceID)
 	}
 	return &info, found, nil
 }
 
-func (st *State) DeleteData(store adt.Store, pieceID cid.Cid) error {
+func (st *State) DeleteData(store adt.Store, pieceID string) error {
 	datas, err := adt.AsMap(store, st.Datas)
 	if err != nil {
 		return err
 	}
-	err = datas.Delete(adt.CidKey(pieceID))
+	err = datas.Delete(adt.StringKey(pieceID))
 	if err != nil {
 		return errors.Wrapf(err, "failed to delete data for %v", pieceID)
 	}

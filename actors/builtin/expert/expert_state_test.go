@@ -36,7 +36,7 @@ func TestData(t *testing.T) {
 		harness := constructStateHarness(t)
 
 		pieceID := tutils.MakeCID("1")
-		err := harness.s.DeleteData(harness.store, pieceID)
+		err := harness.s.DeleteData(harness.store, pieceID.String())
 		assert.Error(t, err)
 	})
 
@@ -61,18 +61,18 @@ func (h *stateHarness) putData(data *expert.DataOnChainInfo) {
 }
 
 func (h *stateHarness) getData(pieceID cid.Cid) *expert.DataOnChainInfo {
-	data, _, err := h.s.GetData(h.store, pieceID)
+	data, _, err := h.s.GetData(h.store, pieceID.String())
 	require.NoError(h.t, err)
 	return data
 }
 
 func (h *stateHarness) deleteData(pieceID cid.Cid) {
-	err := h.s.DeleteData(h.store, pieceID)
+	err := h.s.DeleteData(h.store, pieceID.String())
 	require.NoError(h.t, err)
 }
 
 func (h *stateHarness) hasData(pieceID cid.Cid) bool {
-	_, found, err := h.s.GetData(h.store, pieceID)
+	_, found, err := h.s.GetData(h.store, pieceID.String())
 	require.NoError(h.t, err)
 	return found
 }
@@ -96,6 +96,6 @@ func constructStateHarness(t *testing.T) *stateHarness {
 
 func newDataOnChainInfo(pieceID cid.Cid) *expert.DataOnChainInfo {
 	return &expert.DataOnChainInfo{
-		PieceID: pieceID,
+		PieceID: pieceID.String(),
 	}
 }

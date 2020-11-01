@@ -126,6 +126,7 @@ func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *adt.Empty
 
 type ExpertDataParams struct {
 	PieceID cid.Cid
+	Bounty  string
 }
 
 func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *adt.EmptyValue {
@@ -135,7 +136,8 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *adt.EmptyValue 
 		rt.ValidateImmediateCallerIs(st.Info.Owner)
 
 		newDataInfo := &DataOnChainInfo{
-			PieceID: params.PieceID,
+			PieceID: params.PieceID.String(),
+			Bounty:  params.Bounty,
 		}
 
 		if err := st.PutData(store, newDataInfo); err != nil {
@@ -153,7 +155,12 @@ func (a Actor) CheckData(rt Runtime, params *ExpertDataParams) *adt.EmptyValue {
 	rt.State().Readonly(&st)
 	store := adt.AsStore(rt)
 
-	if _, found, err := st.GetData(store, params.PieceID); err != nil {
+	// if params.PieceID.String() != TestDataRootID {
+	// 	rt.Abortf(exitcode.ErrNotFound, "data %v has not imported", params.PieceID)
+	// }
+	// fmt.Println("check data success")
+
+	if _, found, err := st.GetData(store, params.PieceID.String()); err != nil {
 		rt.Abortf(exitcode.ErrIllegalState, "failed to load expert data %v", params.PieceID)
 	} else if !found {
 		rt.Abortf(exitcode.ErrNotFound, "data %v has not imported", params.PieceID)

@@ -94,6 +94,18 @@ func (k cidKey) Key() string {
 	return k.String()
 }
 
+type stringKey struct {
+	string
+}
+
+func StringKey(k string) stringKey {
+	return stringKey{k}
+}
+
+func (k stringKey) Key() string {
+	return k.string
+}
+
 // Adapts an int64 as a mapping key.
 type intKey struct {
 	int64

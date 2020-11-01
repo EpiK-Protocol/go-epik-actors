@@ -452,7 +452,7 @@ func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{129}); err != nil {
+	if _, err := w.Write([]byte{130}); err != nil {
 		return err
 	}
 
@@ -462,6 +462,17 @@ func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
 	}
 
+	// t.Bounty (string) (string)
+	if len(t.Bounty) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Bounty was too long")
+	}
+
+	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.Bounty)))); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(t.Bounty)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -476,7 +487,7 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -492,6 +503,16 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		t.PieceID = c
 
 	}
+	// t.Bounty (string) (string)
+
+	{
+		sval, err := cbg.ReadString(br)
+		if err != nil {
+			return err
+		}
+
+		t.Bounty = string(sval)
+	}
 	return nil
 }
 
@@ -500,16 +521,33 @@ func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write([]byte{129}); err != nil {
+	if _, err := w.Write([]byte{130}); err != nil {
 		return err
 	}
 
-	// t.PieceID (cid.Cid) (struct)
-
-	if err := cbg.WriteCid(w, t.PieceID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
+	// t.PieceID (string) (string)
+	if len(t.PieceID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.PieceID was too long")
 	}
 
+	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.PieceID)))); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(t.PieceID)); err != nil {
+		return err
+	}
+
+	// t.Bounty (string) (string)
+	if len(t.Bounty) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.Bounty was too long")
+	}
+
+	if _, err := w.Write(cbg.CborEncodeMajorType(cbg.MajTextString, uint64(len(t.Bounty)))); err != nil {
+		return err
+	}
+	if _, err := w.Write([]byte(t.Bounty)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -524,21 +562,29 @@ func (t *DataOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.PieceID (cid.Cid) (struct)
+	// t.PieceID (string) (string)
 
 	{
-
-		c, err := cbg.ReadCid(br)
+		sval, err := cbg.ReadString(br)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.PieceID: %w", err)
+			return err
 		}
 
-		t.PieceID = c
+		t.PieceID = string(sval)
+	}
+	// t.Bounty (string) (string)
 
+	{
+		sval, err := cbg.ReadString(br)
+		if err != nil {
+			return err
+		}
+
+		t.Bounty = string(sval)
 	}
 	return nil
 }

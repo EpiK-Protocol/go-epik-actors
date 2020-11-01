@@ -178,21 +178,19 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 		rt.Abortf(exitcode.ErrForbidden, "caller is not provider %v", provider)
 	}
 
-	if len(params.DataRef.Expert) > 0 {
-		eaddr, err := addr.NewFromString(params.DataRef.Expert)
-		if err != nil {
-			rt.Abortf(exitcode.ErrIllegalArgument, "invalid expert %v", params.DataRef.Expert)
-		}
-		_, code := rt.Send(
-			eaddr,
-			builtin.MethodsExpert.CheckData,
-			&expert.ExpertDataParams{
-				PieceID: params.DataRef.RootCID,
-			},
-			abi.NewTokenAmount(0),
-		)
-		builtin.RequireSuccess(rt, code, "failed to check expert data")
+	eaddr, err := addr.NewFromString(params.DataRef.Expert)
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalArgument, "invalid expert actor %v", params.DataRef.Expert)
 	}
+	_, code := rt.Send(
+		eaddr,
+		builtin.MethodsExpert.CheckData,
+		&expert.ExpertDataParams{
+			PieceID: params.DataRef.RootCID,
+		},
+		abi.NewTokenAmount(0),
+	)
+	builtin.RequireSuccess(rt, code, "failed to check expert data")
 
 	for _, deal := range params.Deals {
 		// Check VerifiedClient allowed cap and deduct PieceSize from cap.
