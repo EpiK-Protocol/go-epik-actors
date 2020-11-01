@@ -30,7 +30,9 @@ func TestConstruction(t *testing.T) {
 	actor := newHarness(t)
 	owner := tutil.NewIDAddr(t, 101)
 	miner := tutil.NewIDAddr(t, 103)
+	expert := tutil.NewIDAddr(t, 104)
 	actr := tutil.NewActorAddr(t, "actor")
+	expertActr := tutil.NewActorAddr(t, "expert")
 
 	builder := mock.NewBuilder(context.Background(), builtin.StoragePowerActorAddr).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 
@@ -62,6 +64,30 @@ func TestConstruction(t *testing.T) {
 		require.NoError(t, err_)
 		assert.True(t, found)
 		assert.Equal(t, power.Claim{big.Zero(), big.Zero()}, actualClaim) // miner has not proven anything
+
+		verifyEmptyMap(t, rt, st.CronEventQueue)
+	})
+
+	t.Run("create expert", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+
+		actor.createExpert(rt, owner, expert, expertActr, abi.PeerID("expert"), []abi.Multiaddrs{{1}}, abi.NewTokenAmount(0))
+
+		var st power.State
+		rt.GetState(&st)
+		assert.Equal(t, int64(1), st.ExpertCount)
+
+		experts, err := adt.AsMap(adt.AsStore(rt), st.Experts)
+		assert.NoError(t, err)
+		keys, err := experts.CollectKeys()
+		require.NoError(t, err)
+		assert.Equal(t, 1, len(keys))
+		var actualExpert power.Expert
+		found, err_ := experts.Get(asKey(keys[0]), &actualExpert)
+		require.NoError(t, err_)
+		assert.True(t, found)
+		assert.Equal(t, power.Expert{0}, actualExpert)
 
 		verifyEmptyMap(t, rt, st.CronEventQueue)
 	})
@@ -220,6 +246,34 @@ func (h *spActorHarness) createMiner(rt *mock.Runtime, owner, worker, miner, rob
 	rt.Verify()
 }
 
+func (h *spActorHarness) createExpert(rt *mock.Runtime, owner, expert, robust addr.Address, peer abi.PeerID,
+	multiaddrs []abi.Multiaddrs, value abi.TokenAmount) {
+	createExpertParams := &power.CreateExpertParams{
+		Owner:      owner,
+		PeerId:     peer,
+		Multiaddrs: multiaddrs,
+	}
+
+	// owner send CreateExpert to Actor
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.SetReceived(value)
+	rt.SetBalance(value)
+	rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
+
+	createMinerRet := &power.CreateExpertReturn{
+		IDAddress:     expert, // expert actor id address
+		RobustAddress: robust, // should be long expert actor address
+	}
+
+	msgParams := &initact.ExecParams{
+		CodeCID:           builtin.ExpertActorCodeID,
+		ConstructorParams: initCreateExpertBytes(h.t, owner, peer, multiaddrs),
+	}
+	rt.ExpectSend(builtin.InitActorAddr, builtin.MethodsInit.Exec, msgParams, value, createMinerRet, 0)
+	rt.Call(h.Actor.CreateExpert, createExpertParams)
+	rt.Verify()
+}
+
 func (h *spActorHarness) enrollCronEvent(rt *mock.Runtime, miner addr.Address, epoch abi.ChainEpoch, payload []byte) {
 	rt.ExpectValidateCallerType(builtin.StorageMinerActorCodeID)
 	rt.SetCaller(miner, builtin.StorageMinerActorCodeID)
@@ -237,6 +291,18 @@ func initCreateMinerBytes(t testing.TB, owner, worker addr.Address, peer abi.Pee
 		SealProofType: sealProofType,
 		PeerId:        peer,
 		Multiaddrs:    multiaddrs,
+	}
+
+	buf := new(bytes.Buffer)
+	require.NoError(t, params.MarshalCBOR(buf))
+	return buf.Bytes()
+}
+
+func initCreateExpertBytes(t testing.TB, owner addr.Address, peer abi.PeerID, multiaddrs []abi.Multiaddrs) []byte {
+	params := &power.ExpertConstructorParams{
+		Owner:      owner,
+		PeerId:     peer,
+		Multiaddrs: multiaddrs,
 	}
 
 	buf := new(bytes.Buffer)

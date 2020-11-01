@@ -36,8 +36,8 @@ type State struct {
 
 	ExpertCount int64
 
-	// Information for all submit rdf data.
-	Experts cid.Cid // Map, AMT[key]Expert (sparse)
+	// Information for all submit rdf data experts.
+	Experts cid.Cid // Map, AMT[key]Expert
 }
 
 type Claim struct {
@@ -63,6 +63,7 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 		CronEventQueue:           emptyMapCid,
 		Claims:                   emptyMapCid,
 		NumMinersMeetingMinPower: 0,
+		Experts:                  emptyMapCid,
 	}
 }
 
@@ -340,4 +341,36 @@ func (st *State) deleteExpert(s adt.Store, a addr.Address) error {
 		return err
 	}
 	return nil
+}
+
+func (st *State) ForEachExpert(store adt.Store, f func(*Expert)) error {
+	datas, err := adt.AsMap(store, st.Experts)
+	if err != nil {
+		return err
+	}
+	var info Expert
+	return datas.ForEach(&info, func(key string) error {
+		f(&info)
+		return nil
+	})
+}
+
+func (st *State) expertActors(store adt.Store) ([]addr.Address, error) {
+	datas, err := adt.AsMap(store, st.Experts)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := datas.CollectKeys()
+	if err != nil {
+		return nil, err
+	}
+	var actors []addr.Address
+	for _, a := range addrs {
+		addr, err := addr.NewFromBytes([]byte(a))
+		if err != nil {
+			return nil, err
+		}
+		actors = append(actors, addr)
+	}
+	return actors, nil
 }

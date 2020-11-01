@@ -656,19 +656,29 @@ type CreateExpertReturn struct {
 func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExpertReturn {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	caller, ok := rt.ResolveAddress(rt.Message().Caller())
-	if !ok {
-		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", rt.Message().Caller())
-	}
 	var st State
 	rt.State().Readonly(&st)
-	store := adt.AsStore(rt)
-	_, exist, err := st.getExpert(store, caller)
-	if err != nil {
-		rt.Abortf(exitcode.ErrIllegalArgument, "failed to get expert params %v: %v", params, err)
-	}
-	if st.ExpertCount > 0 && !exist {
-		rt.Abortf(exitcode.ErrForbidden, "failed to create expert params %v", params)
+	if st.ExpertCount > 0 {
+		caller, ok := rt.ResolveAddress(rt.Message().Caller())
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", rt.Message().Caller())
+		}
+		store := adt.AsStore(rt)
+		experts, err := st.expertActors(store)
+		if err != nil {
+			rt.Abortf(exitcode.ErrIllegalArgument, "failed to get expert actors: %v", err)
+		}
+		exist := false
+		for _, addr := range experts {
+			ownerAddr := builtin.RequestExpertControlAddr(rt, addr)
+			if ownerAddr == caller {
+				exist = true
+				break
+			}
+		}
+		if !exist {
+			rt.Abortf(exitcode.ErrForbidden, "failed to create expert params %v", params)
+		}
 	}
 
 	ctorParams := ExpertConstructorParams{
@@ -677,7 +687,7 @@ func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExper
 		Multiaddrs: params.Multiaddrs,
 	}
 	ctorParamBuf := new(bytes.Buffer)
-	err = ctorParams.MarshalCBOR(ctorParamBuf)
+	err := ctorParams.MarshalCBOR(ctorParamBuf)
 	if err != nil {
 		rt.Abortf(exitcode.ErrPlaceholder, "failed to serialize expert constructor params %v: %v", ctorParams, err)
 	}
