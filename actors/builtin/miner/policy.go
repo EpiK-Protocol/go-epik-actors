@@ -14,22 +14,22 @@ import (
 // The period over which a miner's active sectors are expected to be proven via WindowPoSt.
 // This guarantees that (1) user data is proven daily, (2) user data is stored for 24h by a rational miner
 // (due to Window PoSt cost assumption).
-var WPoStProvingPeriod = abi.ChainEpoch(builtin.EpochsInDay) // 24 hours PARAM_SPEC
+var WPoStProvingPeriod = abi.ChainEpoch(7 * builtin.EpochsInDay) // 24 hours PARAM_SPEC
 
 // The period between the opening and the closing of a WindowPoSt deadline in which the miner is expected to
 // provide a Window PoSt proof.
 // This provides a miner enough time to compute and propagate a Window PoSt proof.
-var WPoStChallengeWindow = abi.ChainEpoch(30 * 60 / builtin.EpochDurationSeconds) // 30 minutes (48 per day) PARAM_SPEC
+var WPoStChallengeWindow = abi.ChainEpoch(180 * 60 / builtin.EpochDurationSeconds) //  3 hours (56 per week) PARAM_SPEC
 
 // The number of non-overlapping PoSt deadlines in a proving period.
 // This spreads a miner's Window PoSt work across a proving period.
-const WPoStPeriodDeadlines = uint64(48) // PARAM_SPEC
+const WPoStPeriodDeadlines = uint64(56) // PARAM_SPEC
 
 // MaxPartitionsPerDeadline is the maximum number of partitions that will be assigned to a deadline.
 // For a minimum storage of upto 1Eib, we need 300 partitions per deadline.
 // 48 * 32GiB * 2349 * 300 = 1.00808144 EiB
 // So, to support upto 10Eib storage, we set this to 3000.
-const MaxPartitionsPerDeadline = 3000
+const MaxPartitionsPerDeadline = 10000
 
 func init() {
 	// Check that the challenge windows divide the proving period evenly.
@@ -65,9 +65,7 @@ const (
 )
 
 // Maximum size of a single prove-commit proof, in bytes.
-// The 1024 maximum at network version 4 was an error (the expected size is 1920).
-const MaxProveCommitSizeV4 = 1024
-const MaxProveCommitSizeV5 = 10240
+const MaxProveCommitSize = 10240
 
 // Maximum number of control addresses a miner may register.
 const MaxControlAddresses = 10
@@ -138,12 +136,12 @@ var FaultMaxAge = WPoStProvingPeriod * 14 // PARAM_SPEC
 const WorkerKeyChangeDelay = ChainFinality // PARAM_SPEC
 
 // Minimum number of epochs past the current epoch a sector may be set to expire.
-const MinSectorExpiration = 180 * builtin.EpochsInDay // PARAM_SPEC
+const MinSectorExpiration = 30 * builtin.EpochsInDay // PARAM_SPEC
 
 // The maximum number of epochs past the current epoch that sector lifetime may be extended.
 // A sector may be extended multiple times, however, the total maximum lifetime is also bounded by
 // the associated seal proof's maximum lifetime.
-const MaxSectorExpirationExtension = 540 * builtin.EpochsInDay // PARAM_SPEC
+const MaxSectorExpirationExtension = 1000 * builtin.EpochsInYear // PARAM_SPEC
 
 // Ratio of sector size to maximum number of deals per sector.
 // The maximum number of deals is the sector size divided by this number (2^27)
@@ -232,8 +230,8 @@ type VestSpec struct {
 
 // The vesting schedule for total rewards (block reward + gas reward) earned by a block producer.
 var RewardVestingSpec = VestSpec{ // PARAM_SPEC
-	InitialDelay: abi.ChainEpoch(0),
-	VestPeriod:   abi.ChainEpoch(180 * builtin.EpochsInDay),
+	InitialDelay: abi.ChainEpoch(7 * builtin.EpochsInDay),
+	VestPeriod:   abi.ChainEpoch(7 * builtin.EpochsInDay),
 	StepDuration: abi.ChainEpoch(1 * builtin.EpochsInDay),
 	Quantization: 12 * builtin.EpochsInHour,
 }

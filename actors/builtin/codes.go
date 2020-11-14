@@ -21,6 +21,7 @@ var (
 	RewardActorCodeID           cid.Cid
 	VerifiedRegistryActorCodeID cid.Cid
 	CallerTypesSignable         []cid.Cid
+	ExpertActorCodeID           cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -46,6 +47,7 @@ func init() {
 		&VerifiedRegistryActorCodeID: {name: "fil/2/verifiedregistry"},
 		&AccountActorCodeID:          {name: "fil/2/account", signer: true},
 		&MultisigActorCodeID:         {name: "fil/2/multisig", signer: true},
+		&ExpertActorCodeID:           {name: "fil/2/expert"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {

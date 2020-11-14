@@ -8,7 +8,6 @@ import (
 
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	verifreg0 "github.com/filecoin-project/specs-actors/actors/builtin/verifreg"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
@@ -62,11 +61,10 @@ func (a Actor) Constructor(rt runtime.Runtime, rootKey *addr.Address) *abi.Empty
 	return nil
 }
 
-//type AddVerifierParams struct {
-//	Address   addr.Address
-//	Allowance DataCap
-//}
-type AddVerifierParams = verifreg0.AddVerifierParams
+type AddVerifierParams struct {
+	Address   addr.Address
+	Allowance DataCap
+}
 
 func (a Actor) AddVerifier(rt runtime.Runtime, params *AddVerifierParams) *abi.EmptyValue {
 	if params.Allowance.LessThan(MinVerifiedDealSize) {
@@ -129,11 +127,10 @@ func (a Actor) RemoveVerifier(rt runtime.Runtime, verifierAddr *addr.Address) *a
 	return nil
 }
 
-//type AddVerifiedClientParams struct {
-//	Address   addr.Address
-//	Allowance DataCap
-//}
-type AddVerifiedClientParams = verifreg0.AddVerifiedClientParams
+type AddVerifiedClientParams struct {
+	Address   addr.Address
+	Allowance DataCap
+}
 
 func (a Actor) AddVerifiedClient(rt runtime.Runtime, params *AddVerifiedClientParams) *abi.EmptyValue {
 	// The caller will be verified by checking the verifiers table below.
@@ -207,11 +204,10 @@ func (a Actor) AddVerifiedClient(rt runtime.Runtime, params *AddVerifiedClientPa
 	return nil
 }
 
-//type UseBytesParams struct {
-//	Address  addr.Address     // Address of verified client.
-//	DealSize abi.StoragePower // Number of bytes to use.
-//}
-type UseBytesParams = verifreg0.UseBytesParams
+type UseBytesParams struct {
+	Address  addr.Address     // Address of verified client.
+	DealSize abi.StoragePower // Number of bytes to use.
+}
 
 // Called by StorageMarketActor during PublishStorageDeals.
 // Do not allow partially verified deals (DealSize must be greater than equal to allowed cap).
@@ -264,11 +260,10 @@ func (a Actor) UseBytes(rt runtime.Runtime, params *UseBytesParams) *abi.EmptyVa
 	return nil
 }
 
-//type RestoreBytesParams struct {
-//	Address  addr.Address
-//	DealSize abi.StoragePower
-//}
-type RestoreBytesParams = verifreg0.RestoreBytesParams
+type RestoreBytesParams struct {
+	Address  addr.Address
+	DealSize abi.StoragePower
+}
 
 // Called by HandleInitTimeoutDeals from StorageMarketActor when a VerifiedDeal fails to init.
 // Restore allowable cap for the client, creating new entry if the client has been deleted.

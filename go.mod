@@ -3,6 +3,7 @@ module github.com/filecoin-project/specs-actors/v2
 go 1.13
 
 require (
+	github.com/dchest/blake2b v1.0.0
 	github.com/filecoin-project/go-address v0.0.3
 	github.com/filecoin-project/go-amt-ipld/v2 v2.1.0
 	github.com/filecoin-project/go-bitfield v0.2.0
@@ -20,6 +21,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/whyrusleeping/cbor-gen v0.0.0-20200812213548-958ddffe352c
 	github.com/xorcare/golden v0.6.0
+	golang.org/x/crypto v0.0.0-20191122220453-ac88ee75c92c // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 )

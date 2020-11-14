@@ -2,12 +2,11 @@ package builtin
 
 import (
 	"github.com/filecoin-project/go-state-types/abi"
-	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 )
 
 const (
-	MethodSend        = builtin0.MethodSend
-	MethodConstructor = builtin0.MethodConstructor
+	MethodSend        = abi.MethodNum(0)
+	MethodConstructor = abi.MethodNum(1)
 )
 
 var MethodsAccount = struct {
@@ -70,10 +69,11 @@ var MethodsPower = struct {
 	EnrollCronEvent          abi.MethodNum
 	OnEpochTickEnd           abi.MethodNum
 	UpdatePledgeTotal        abi.MethodNum
-	Deprecated1              abi.MethodNum
 	SubmitPoRepForBulkVerify abi.MethodNum
 	CurrentTotalPower        abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9}
+	CreateExpert             abi.MethodNum
+	DeleteExpert             abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 var MethodsMiner = struct {
 	Constructor              abi.MethodNum
@@ -109,3 +109,13 @@ var MethodsVerifiedRegistry = struct {
 	UseBytes          abi.MethodNum
 	RestoreBytes      abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6}
+
+var MethodsExpert = struct {
+	Constructor      abi.MethodNum
+	ControlAddress   abi.MethodNum
+	ChangeAddress    abi.MethodNum
+	ChangePeerID     abi.MethodNum
+	ChangeMultiaddrs abi.MethodNum
+	ImportData       abi.MethodNum
+	CheckData        abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7}

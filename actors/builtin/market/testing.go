@@ -158,6 +158,7 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 	if err != nil {
 		return nil, nil, err
 	}
+
 	var pendingProposal DealProposal
 	err = pendingProposals.ForEach(&pendingProposal, func(key string) error {
 		proposalCID, err := cid.Parse([]byte(key))

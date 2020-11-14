@@ -19,8 +19,10 @@ import (
 const EpochDurationSeconds = 30
 const SecondsInHour = 60 * 60
 const SecondsInDay = 24 * SecondsInHour
+const SecondsInYear = 365 * SecondsInDay
 const EpochsInHour = SecondsInHour / EpochDurationSeconds
 const EpochsInDay = SecondsInDay / EpochDurationSeconds
+const EpochsInYear = SecondsInYear / EpochDurationSeconds
 
 // PARAM_SPEC
 // Expected number of block quality in an epoch (e.g. 1 block with block quality 5, or 5 blocks with quality 1)
@@ -44,7 +46,7 @@ func init() {
 var TokenPrecision = big.NewIntUnsigned(1_000_000_000_000_000_000)
 
 // The maximum supply of Filecoin that will ever exist (in token units)
-var TotalFilecoin = big.Mul(big.NewIntUnsigned(2_000_000_000), TokenPrecision)
+var TotalFilecoin = big.Mul(big.NewIntUnsigned(1_000_000_000), TokenPrecision)
 
 // Quality multiplier for committed capacity (no deals) in a sector
 var QualityBaseMultiplier = big.NewInt(10)

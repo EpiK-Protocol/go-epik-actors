@@ -1,12 +1,12 @@
 package reward
 
 import (
+	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
-	reward0 "github.com/filecoin-project/specs-actors/actors/builtin/reward"
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
@@ -55,13 +55,12 @@ func (a Actor) Constructor(rt runtime.Runtime, currRealizedPower *abi.StoragePow
 	return nil
 }
 
-//type AwardBlockRewardParams struct {
-//	Miner     address.Address
-//	Penalty   abi.TokenAmount // penalty for including bad messages in a block, >= 0
-//	GasReward abi.TokenAmount // gas reward from all gas fees in a block, >= 0
-//	WinCount  int64           // number of reward units won, > 0
-//}
-type AwardBlockRewardParams = reward0.AwardBlockRewardParams
+type AwardBlockRewardParams struct {
+	Miner     address.Address
+	Penalty   abi.TokenAmount // penalty for including bad messages in a block, >= 0
+	GasReward abi.TokenAmount // gas reward from all gas fees in a block, >= 0
+	WinCount  int64           // number of reward units won, > 0
+}
 
 // Awards a reward to a block producer.
 // This method is called only by the system actor, implicitly, as the last message in the evaluation of a block.
@@ -96,6 +95,8 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	}
 	// The miner penalty is scaled up by a factor of PenaltyMultiplier
 	penalty := big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty)
+	expertReward := big.Zero()
+	minerReward := big.Zero()
 	totalReward := big.Zero()
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -111,17 +112,23 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 			// Since we have already asserted the balance is greater than gas reward blockReward is >= 0
 			AssertMsg(blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward is %v below zero", blockReward)
 		}
-		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, blockReward)
+		expertReward = big.Div(blockReward, big.NewInt(10))
+		minerReward = big.Sub(totalReward, expertReward)
+		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, minerReward)
 	})
 
 	AssertMsg(totalReward.LessThanEqual(priorBalance), "reward %v exceeds balance %v", totalReward, priorBalance)
 
+	// expert reward
+	code := rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodSend, nil, expertReward, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send reward to expert fund")
+
 	// if this fails, we can assume the miner is responsible and avoid failing here.
 	rewardParams := builtin.ApplyRewardParams{
-		Reward:  totalReward,
+		Reward:  minerReward,
 		Penalty: penalty,
 	}
-	code := rt.Send(minerAddr, builtin.MethodsMiner.ApplyRewards, &rewardParams, totalReward, &builtin.Discard{})
+	code = rt.Send(minerAddr, builtin.MethodsMiner.ApplyRewards, &rewardParams, minerReward, &builtin.Discard{})
 	if !code.IsSuccess() {
 		rt.Log(rtt.ERROR, "failed to send ApplyRewards call to the miner actor with funds: %v, code: %v", totalReward, code)
 		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, totalReward, &builtin.Discard{})

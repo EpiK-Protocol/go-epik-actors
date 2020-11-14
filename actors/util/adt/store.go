@@ -67,3 +67,15 @@ func (r rtStore) Put(_ context.Context, v interface{}) (cid.Cid, error) {
 	// See https://github.com/filecoin-project/specs-actors/issues/140
 	return r.StorePut(v.(cbor.Marshaler)), nil
 }
+
+type stringKey struct {
+	string
+}
+
+func StringKey(k string) stringKey {
+	return stringKey{k}
+}
+
+func (k stringKey) Key() string {
+	return k.string
+}

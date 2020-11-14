@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	power0 "github.com/filecoin-project/specs-actors/actors/builtin/power"
 	"github.com/ipfs/go-cid"
 
 	rtt "github.com/filecoin-project/go-state-types/rt"
@@ -37,9 +36,10 @@ func (a Actor) Exports() []interface{} {
 		4:                         a.EnrollCronEvent,
 		5:                         a.OnEpochTickEnd,
 		6:                         a.UpdatePledgeTotal,
-		7:                         nil, // deprecated
-		8:                         a.SubmitPoRepForBulkVerify,
-		9:                         a.CurrentTotalPower,
+		7:                         a.SubmitPoRepForBulkVerify,
+		8:                         a.CurrentTotalPower,
+		9:                         a.CreateExpert,
+		10:                        a.DeleteExpert,
 	}
 }
 
@@ -87,20 +87,18 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-//type CreateMinerParams struct {
-//	Owner         addr.Address
-//	Worker        addr.Address
-//	SealProofType abi.RegisteredSealProof
-//	Peer          abi.PeerID
-//	Multiaddrs    []abi.Multiaddrs
-//}
-type CreateMinerParams = power0.CreateMinerParams
+type CreateMinerParams struct {
+	Owner         addr.Address
+	Worker        addr.Address
+	SealProofType abi.RegisteredSealProof
+	Peer          abi.PeerID
+	Multiaddrs    []abi.Multiaddrs
+}
 
-//type CreateMinerReturn struct {
-//	IDAddress     addr.Address // The canonical ID-based address for the actor.
-//	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
-//}
-type CreateMinerReturn = power0.CreateMinerReturn
+type CreateMinerReturn struct {
+	IDAddress     addr.Address // The canonical ID-based address for the actor.
+	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
+}
 
 func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerReturn {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
@@ -148,11 +146,10 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 	}
 }
 
-//type UpdateClaimedPowerParams struct {
-//	RawByteDelta         abi.StoragePower
-//	QualityAdjustedDelta abi.StoragePower
-//}
-type UpdateClaimedPowerParams = power0.UpdateClaimedPowerParams
+type UpdateClaimedPowerParams struct {
+	RawByteDelta         abi.StoragePower
+	QualityAdjustedDelta abi.StoragePower
+}
 
 // Adds or removes claimed power for the calling actor.
 // May only be invoked by a miner actor.
@@ -173,11 +170,10 @@ func (a Actor) UpdateClaimedPower(rt Runtime, params *UpdateClaimedPowerParams) 
 	return nil
 }
 
-//type EnrollCronEventParams struct {
-//	EventEpoch abi.ChainEpoch
-//	Payload    []byte
-//}
-type EnrollCronEventParams = power0.EnrollCronEventParams
+type EnrollCronEventParams struct {
+	EventEpoch abi.ChainEpoch
+	Payload    []byte
+}
 
 func (a Actor) EnrollCronEvent(rt Runtime, params *EnrollCronEventParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
@@ -492,4 +488,104 @@ func (a Actor) processDeferredCronEvents(rt Runtime) {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush claims")
 		})
 	}
+}
+
+type CreateExpertParams struct {
+	Owner      addr.Address
+	PeerId     abi.PeerID
+	Multiaddrs []abi.Multiaddrs
+}
+
+type ExpertConstructorParams = CreateExpertParams
+
+type CreateExpertReturn struct {
+	IDAddress     addr.Address // The canonical ID-based address for the actor.
+	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
+}
+
+func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExpertReturn {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+
+	var st State
+	rt.StateReadonly(&st)
+	if st.ExpertCount > 0 {
+		caller, ok := rt.ResolveAddress(rt.Caller())
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", rt.Caller())
+		}
+		store := adt.AsStore(rt)
+		experts, err := st.expertActors(store)
+		if err != nil {
+			rt.Abortf(exitcode.ErrIllegalArgument, "failed to get expert actors: %v", err)
+		}
+		exist := false
+		for _, addr := range experts {
+			ownerAddr := builtin.RequestExpertControlAddr(rt, addr)
+			if ownerAddr == caller {
+				exist = true
+				break
+			}
+		}
+		if !exist {
+			rt.Abortf(exitcode.ErrForbidden, "failed to create expert params %v", params)
+		}
+	}
+
+	ctorParams := ExpertConstructorParams{
+		Owner:      params.Owner,
+		PeerId:     params.PeerId,
+		Multiaddrs: params.Multiaddrs,
+	}
+	ctorParamBuf := new(bytes.Buffer)
+	err := ctorParams.MarshalCBOR(ctorParamBuf)
+	if err != nil {
+		rt.Abortf(exitcode.ErrSerialization, "failed to serialize expert constructor params %v: %v", ctorParams, err)
+	}
+	var addresses initact.ExecReturn
+	code := rt.Send(
+		builtin.InitActorAddr,
+		builtin.MethodsInit.Exec,
+		&initact.ExecParams{
+			CodeCID:           builtin.ExpertActorCodeID,
+			ConstructorParams: ctorParamBuf.Bytes(),
+		},
+		rt.ValueReceived(), // Pass on any value to the new actor.
+		&addresses,
+	)
+	builtin.RequireSuccess(rt, code, "failed to init new actor")
+
+	rt.StateTransaction(&st, func() {
+		store := adt.AsStore(rt)
+		err = st.setExpert(store, addresses.IDAddress, &Expert{DataCount: 0})
+		if err != nil {
+			rt.Abortf(exitcode.ErrIllegalState, "failed to put expert in experts table while creating expert: %v", err)
+		}
+		st.ExpertCount++
+	})
+	return &CreateExpertReturn{
+		IDAddress:     addresses.IDAddress,
+		RobustAddress: addresses.RobustAddress,
+	}
+}
+
+type DeleteExpertParams struct {
+	Expert addr.Address
+}
+
+func (a Actor) DeleteExpert(rt Runtime, params *DeleteExpertParams) *abi.EmptyValue {
+
+	nominal, ok := rt.ResolveAddress(params.Expert)
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", params.Expert)
+	}
+	ownerAddr := builtin.RequestExpertControlAddr(rt, nominal)
+	rt.ValidateImmediateCallerIs(ownerAddr)
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		err := st.deleteExpert(adt.AsStore(rt), nominal)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete %v from expert power table", nominal)
+		st.ExpertCount--
+	})
+	return nil
 }

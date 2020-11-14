@@ -55,6 +55,11 @@ type State struct {
 	Claims cid.Cid // Map, HAMT[address]Claim
 
 	ProofValidationBatch *cid.Cid // Multimap, (HAMT[Address]AMT[SealVerifyInfo])
+
+	ExpertCount int64
+
+	// Information for all submit rdf data experts.
+	Experts cid.Cid // Map, AMT[key]Expert
 }
 
 type Claim struct {
@@ -301,4 +306,91 @@ func init() {
 		panic("incorrect chain epoch encoding")
 	}
 
+}
+
+type Expert struct {
+	// Sum of rdf data count.
+	DataCount int64
+}
+
+func (st *State) getExpert(s adt.Store, a addr.Address) (*Expert, bool, error) {
+	hm, err := adt.AsMap(s, st.Experts)
+	if err != nil {
+		return nil, false, err
+	}
+
+	var out Expert
+	found, err := hm.Get(abi.AddrKey(a), &out)
+	if err != nil {
+		return nil, false, errors.Wrapf(err, "failed to get expert for address %v from store %s", a, st.Experts)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	return &out, true, nil
+}
+
+func (st *State) setExpert(s adt.Store, a addr.Address, expert *Expert) error {
+	hm, err := adt.AsMap(s, st.Experts)
+	if err != nil {
+		return err
+	}
+
+	if err = hm.Put(abi.AddrKey(a), expert); err != nil {
+		return errors.Wrapf(err, "failed to put expert with address %s expert %v in store %s", a, expert, st.Experts)
+	}
+
+	st.Experts, err = hm.Root()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (st *State) deleteExpert(s adt.Store, a addr.Address) error {
+	hm, err := adt.AsMap(s, st.Experts)
+	if err != nil {
+		return err
+	}
+
+	if err = hm.Delete(abi.AddrKey(a)); err != nil {
+		return errors.Wrapf(err, "failed to delete expert at address %s from store %s", a, st.Experts)
+	}
+	st.Experts, err = hm.Root()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (st *State) ForEachExpert(store adt.Store, f func(*Expert)) error {
+	datas, err := adt.AsMap(store, st.Experts)
+	if err != nil {
+		return err
+	}
+	var info Expert
+	return datas.ForEach(&info, func(key string) error {
+		f(&info)
+		return nil
+	})
+}
+
+func (st *State) expertActors(store adt.Store) ([]addr.Address, error) {
+	datas, err := adt.AsMap(store, st.Experts)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := datas.CollectKeys()
+	if err != nil {
+		return nil, err
+	}
+	var actors []addr.Address
+	for _, a := range addrs {
+		addr, err := addr.NewFromBytes([]byte(a))
+		if err != nil {
+			return nil, err
+		}
+		actors = append(actors, addr)
+	}
+	return actors, nil
 }

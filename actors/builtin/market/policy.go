@@ -8,7 +8,7 @@ import (
 )
 
 // The number of epochs between payment and other state processing for deals.
-const DealUpdatesInterval = builtin.EpochsInDay // PARAM_SPEC
+const DealUpdatesInterval = builtin.EpochsInDay // PARAM_SPEC //TODO:
 
 // The percentage of normalized cirulating
 // supply that must be covered by provider collateral in a deal
@@ -18,10 +18,10 @@ var ProviderCollateralSupplyTarget = builtin.BigFrac{
 }
 
 // Minimum deal duration.
-var DealMinDuration = abi.ChainEpoch(180 * builtin.EpochsInDay) // PARAM_SPEC
+var DealMinDuration = abi.ChainEpoch(30 * builtin.EpochsInDay) // PARAM_SPEC
 
 // Maximum deal duration
-var DealMaxDuration = abi.ChainEpoch(540 * builtin.EpochsInDay) // PARAM_SPEC
+var DealMaxDuration = abi.ChainEpoch(1000 * builtin.EpochsInYear) // PARAM_SPEC
 
 // DealMaxLabelSize is the maximum size of a deal label.
 const DealMaxLabelSize = 256

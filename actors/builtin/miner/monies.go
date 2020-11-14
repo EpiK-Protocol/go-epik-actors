@@ -24,7 +24,7 @@ var InitialPledgeProjectionPeriod = abi.ChainEpoch(InitialPledgeFactor) * builti
 // Cap on initial pledge requirement for sectors.
 // The target is 1 FIL (10**18 attoFIL) per 32GiB.
 // This does not divide evenly, so the result is fractionally smaller.
-var InitialPledgeMaxPerByte = big.Div(big.NewInt(1e18), big.NewInt(32<<30))
+var InitialPledgeMaxPerByte = big.Div(big.NewInt(1e18), big.NewInt(8<<20))
 
 // Multiplier of share of circulating money supply for consensus pledge required to commit a sector.
 // This pledge is lost if a sector is terminated before its full committed lifetime.
@@ -57,8 +57,8 @@ const TerminationLifetimeCap = 140 // PARAM_SPEC
 const ConsensusFaultFactor = 5
 
 // Fraction of total reward (block reward + gas reward) to be locked up as of V6
-var LockedRewardFactorNumV6 = big.NewInt(75)
-var LockedRewardFactorDenomV6 = big.NewInt(100)
+var LockedRewardFactorNum = big.NewInt(75)
+var LockedRewardFactorDenom = big.NewInt(100)
 
 // The projected block reward a sector would earn over some period.
 // Also known as "BR(t)".
@@ -80,7 +80,8 @@ func ExpectedRewardForPower(rewardEstimate, networkQAPowerEstimate smoothing.Fil
 // It is a projection of the expected reward earned by the sector.
 // Also known as "FF(t)"
 func PledgePenaltyForContinuedFault(rewardEstimate, networkQAPowerEstimate smoothing.FilterEstimate, qaSectorPower abi.StoragePower) abi.TokenAmount {
-	return ExpectedRewardForPower(rewardEstimate, networkQAPowerEstimate, qaSectorPower, ContinuedFaultProjectionPeriod)
+	// return ExpectedRewardForPower(rewardEstimate, networkQAPowerEstimate, qaSectorPower, ContinuedFaultProjectionPeriod)
+	return big.Zero()
 }
 
 // Lower bound on the penalty for a terminating sector.
@@ -179,9 +180,7 @@ func ConsensusFaultPenalty(thisEpochReward abi.TokenAmount) abi.TokenAmount {
 func LockedRewardFromReward(reward abi.TokenAmount, nv network.Version) (abi.TokenAmount, *VestSpec) {
 	lockAmount := reward
 	spec := &RewardVestingSpec
-	if nv >= network.Version6 {
-		// Locked amount is 75% of award.
-		lockAmount = big.Div(big.Mul(reward, LockedRewardFactorNumV6), LockedRewardFactorDenomV6)
-	}
+	// Locked amount is 75% of award.
+	lockAmount = big.Div(big.Mul(reward, LockedRewardFactorNum), LockedRewardFactorDenom)
 	return lockAmount, spec
 }

@@ -3,7 +3,6 @@ package cron
 import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
-	cron0 "github.com/filecoin-project/specs-actors/actors/builtin/cron"
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
@@ -34,20 +33,15 @@ func (a Actor) State() cbor.Er {
 
 var _ runtime.VMActor = Actor{}
 
-//type ConstructorParams struct {
-//	Entries []Entry
-//}
-type ConstructorParams = cron0.ConstructorParams
+type ConstructorParams struct {
+	Entries []Entry
+}
 
-type EntryParam = cron0.Entry
+// type EntryParam = Entry
 
 func (a Actor) Constructor(rt runtime.Runtime, params *ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
-	entries := make([]Entry, len(params.Entries))
-	for i, e := range params.Entries {
-		entries[i] = Entry(e) // Identical
-	}
-	rt.StateCreate(ConstructState(entries))
+	rt.StateCreate(ConstructState(params.Entries))
 	return nil
 }
 

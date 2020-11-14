@@ -10,7 +10,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 
-	builtin0 "github.com/filecoin-project/specs-actors/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 )
 
@@ -69,6 +68,14 @@ func RequestMinerControlAddrs(rt runtime.Runtime, minerAddr addr.Address) (owner
 	return addrs.Owner, addrs.Worker, addrs.ControlAddrs
 }
 
+func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (ownerAddr addr.Address) {
+	var addr ExpertAddr
+	code := rt.Send(expertAddr, MethodsExpert.ControlAddress, nil, abi.NewTokenAmount(0), &addr)
+	RequireSuccess(rt, code, "failed fetching control address")
+
+	return addr.Owner
+}
+
 // This type duplicates the Miner.ControlAddresses return type, to work around a circular dependency between actors.
 type MinerAddrs struct {
 	Owner        addr.Address
@@ -78,10 +85,9 @@ type MinerAddrs struct {
 
 // Note: we could move this alias back to the mutually-importing packages that use it, now that they
 // can instead both alias the v0 version.
-//type ConfirmSectorProofsParams struct {
-//	Sectors []abi.SectorNumber
-//}
-type ConfirmSectorProofsParams = builtin0.ConfirmSectorProofsParams
+type ConfirmSectorProofsParams struct {
+	Sectors []abi.SectorNumber
+}
 
 // ResolveToIDAddr resolves the given address to it's ID address form.
 // If an ID address for the given address dosen't exist yet, it tries to create one by sending a zero balance to the given address.
@@ -125,4 +131,8 @@ func (d *Discard) MarshalCBOR(_ io.Writer) error {
 func (d *Discard) UnmarshalCBOR(_ io.Reader) error {
 	// deserialization is a noop
 	return nil
+}
+
+type ExpertAddr struct {
+	Owner addr.Address
 }

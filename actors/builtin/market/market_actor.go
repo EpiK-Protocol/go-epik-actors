@@ -12,12 +12,12 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	rtt "github.com/filecoin-project/go-state-types/rt"
-	market0 "github.com/filecoin-project/specs-actors/actors/builtin/market"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
@@ -79,11 +79,10 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-//type WithdrawBalanceParams struct {
-//	ProviderOrClientAddress addr.Address
-//	Amount                  abi.TokenAmount
-//}
-type WithdrawBalanceParams = market0.WithdrawBalanceParams
+type WithdrawBalanceParams struct {
+	ProviderOrClientAddress addr.Address
+	Amount                  abi.TokenAmount
+}
 
 // Attempt to withdraw the specified amount from the balance held in escrow.
 // If less than the specified amount is available, yields the entire available balance.
@@ -149,15 +148,21 @@ func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *ab
 	return nil
 }
 
-//type PublishStorageDealsParams struct {
-//	Deals []ClientDealProposal
-//}
-type PublishStorageDealsParams = market0.PublishStorageDealsParams
+type PublishStorageDataRef struct {
+	RootCID cid.Cid `checked:"true"`
 
-//type PublishStorageDealsReturn struct {
-//	IDs []abi.DealID
-//}
-type PublishStorageDealsReturn = market0.PublishStorageDealsReturn
+	Expert string
+	Bounty string
+}
+
+type PublishStorageDealsParams struct {
+	Deals   []ClientDealProposal
+	DataRef PublishStorageDataRef
+}
+
+type PublishStorageDealsReturn struct {
+	IDs []abi.DealID
+}
 
 // Publish a new set of storage deals (not yet included in a sector).
 func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams) *PublishStorageDealsReturn {
@@ -186,6 +191,21 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	if worker != rt.Caller() {
 		rt.Abortf(exitcode.ErrForbidden, "caller is not provider %v", provider)
 	}
+
+	eaddr, err := addr.NewFromString(params.DataRef.Expert)
+	if err != nil {
+		rt.Abortf(exitcode.ErrIllegalArgument, "invalid expert actor %v", params.DataRef.Expert)
+	}
+	code := rt.Send(
+		eaddr,
+		builtin.MethodsExpert.CheckData,
+		&expert.ExpertDataParams{
+			PieceID: params.DataRef.RootCID,
+		},
+		abi.NewTokenAmount(0),
+		&builtin.Discard{},
+	)
+	builtin.RequireSuccess(rt, code, "failed to check expert data")
 
 	resolvedAddrs := make(map[addr.Address]addr.Address, len(params.Deals))
 	baselinePower := requestCurrentBaselinePower(rt)
@@ -276,12 +296,11 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	return &PublishStorageDealsReturn{IDs: newDealIds}
 }
 
-//type VerifyDealsForActivationParams struct {
-//	DealIDs      []abi.DealID
-//	SectorExpiry abi.ChainEpoch
-//	SectorStart  abi.ChainEpoch
-//}
-type VerifyDealsForActivationParams = market0.VerifyDealsForActivationParams
+type VerifyDealsForActivationParams struct {
+	DealIDs      []abi.DealID
+	SectorExpiry abi.ChainEpoch
+	SectorStart  abi.ChainEpoch
+}
 
 // Changed since v0:
 // - Added DealSpace
@@ -312,11 +331,10 @@ func (A Actor) VerifyDealsForActivation(rt Runtime, params *VerifyDealsForActiva
 	}
 }
 
-//type ActivateDealsParams struct {
-//	DealIDs      []abi.DealID
-//	SectorExpiry abi.ChainEpoch
-//}
-type ActivateDealsParams = market0.ActivateDealsParams
+type ActivateDealsParams struct {
+	DealIDs      []abi.DealID
+	SectorExpiry abi.ChainEpoch
+}
 
 // Verify that a given set of storage deals is valid for a sector currently being ProveCommitted,
 // update the market's internal state accordingly.
@@ -374,11 +392,10 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *abi.Empty
 	return nil
 }
 
-//type ComputeDataCommitmentParams struct {
-//	DealIDs    []abi.DealID
-//	SectorType abi.RegisteredSealProof
-//}
-type ComputeDataCommitmentParams = market0.ComputeDataCommitmentParams
+type ComputeDataCommitmentParams struct {
+	DealIDs    []abi.DealID
+	SectorType abi.RegisteredSealProof
+}
 
 func (a Actor) ComputeDataCommitment(rt Runtime, params *ComputeDataCommitmentParams) *cbg.CborCid {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
@@ -407,11 +424,10 @@ func (a Actor) ComputeDataCommitment(rt Runtime, params *ComputeDataCommitmentPa
 	return (*cbg.CborCid)(&commd)
 }
 
-//type OnMinerSectorsTerminateParams struct {
-//	Epoch   abi.ChainEpoch
-//	DealIDs []abi.DealID
-//}
-type OnMinerSectorsTerminateParams = market0.OnMinerSectorsTerminateParams
+type OnMinerSectorsTerminateParams struct {
+	Epoch   abi.ChainEpoch
+	DealIDs []abi.DealID
+}
 
 // Terminate a set of deals in response to their containing sector being terminated.
 // Slash provider collateral, refund client collateral, and refund partial unpaid escrow
