@@ -25,9 +25,10 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Info (expert.ExpertInfo) (struct)
-	if err := t.Info.MarshalCBOR(w); err != nil {
-		return err
+	// t.Info (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Info); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Info: %w", err)
 	}
 
 	// t.Datas (cid.Cid) (struct)
@@ -57,13 +58,16 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Info (expert.ExpertInfo) (struct)
+	// t.Info (cid.Cid) (struct)
 
 	{
 
-		if err := t.Info.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Info: %w", err)
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Info: %w", err)
 		}
+
+		t.Info = c
 
 	}
 	// t.Datas (cid.Cid) (struct)

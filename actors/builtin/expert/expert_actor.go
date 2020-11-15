@@ -51,7 +51,11 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct initial state")
 
-	st := ConstructState(emptyMap, owner, params.PeerId, params.Multiaddrs)
+	info, err := ConstructExpertInfo(owner, params.PeerId, params.Multiaddrs)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to construct initial expert info")
+	infoCid := rt.StorePut(info)
+
+	st := ConstructState(infoCid, emptyMap)
 	rt.StateCreate(st)
 	return nil
 }
@@ -64,10 +68,17 @@ func (a Actor) ControlAddress(rt Runtime, _ *abi.EmptyValue) *GetControlAddressR
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateReadonly(&st)
+	info := getExpertInfo(rt, &st)
 	return &GetControlAddressReturn{
-		Owner: st.Info.Owner,
+		Owner: info.Owner,
 	}
 	return nil
+}
+
+func getExpertInfo(rt Runtime, st *State) *ExpertInfo {
+	info, err := st.GetInfo(adt.AsStore(rt))
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not read expert info")
+	return info
 }
 
 // Resolves an address to an ID address and verifies that it is address of an account or multisig actor.
@@ -89,8 +100,11 @@ type ChangePeerIDParams struct {
 func (a Actor) ChangePeerID(rt Runtime, params *ChangePeerIDParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerIs(st.Info.Owner)
-		st.Info.PeerId = params.NewID
+		info := getExpertInfo(rt, &st)
+		rt.ValidateImmediateCallerIs(info.Owner)
+		info.PeerId = params.NewID
+		st.SaveInfo(adt.AsStore(rt), info)
+
 	})
 	return nil
 }
@@ -102,8 +116,10 @@ type ChangeMultiaddrsParams struct {
 func (a Actor) ChangeMultiaddrs(rt Runtime, params *ChangeMultiaddrsParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerIs(st.Info.Owner)
-		st.Info.Multiaddrs = params.NewMultiaddrs
+		info := getExpertInfo(rt, &st)
+		rt.ValidateImmediateCallerIs(info.Owner)
+		info.Multiaddrs = params.NewMultiaddrs
+		st.SaveInfo(adt.AsStore(rt), info)
 	})
 	return nil
 }
@@ -115,9 +131,11 @@ type ChangeAddressParams struct {
 func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerIs(st.Info.Owner)
+		info := getExpertInfo(rt, &st)
+		rt.ValidateImmediateCallerIs(info.Owner)
 		owner := resolveOwnerAddress(rt, params.NewOwner)
-		st.Info.Owner = owner
+		info.Owner = owner
+		st.SaveInfo(adt.AsStore(rt), info)
 	})
 	return nil
 }
@@ -131,7 +149,8 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 	var st State
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerIs(st.Info.Owner)
+		info := getExpertInfo(rt, &st)
+		rt.ValidateImmediateCallerIs(info.Owner)
 
 		newDataInfo := &DataOnChainInfo{
 			PieceID: params.PieceID.String(),

@@ -14,7 +14,8 @@ type AddrKey = abi.AddrKey
 
 // State of expert
 type State struct {
-	Info ExpertInfo
+	// Information not related to sectors.
+	Info cid.Cid
 
 	// Information for all submit rdf data.
 	Datas cid.Cid // Map, AMT[key]DataOnChainInfo (sparse)
@@ -39,16 +40,36 @@ type DataOnChainInfo struct {
 	Bounty  string
 }
 
-func ConstructState(emptyMapCid cid.Cid, ownerAddr addr.Address,
-	peerId abi.PeerID, multiaddrs []abi.Multiaddrs) *State {
+func ConstructExpertInfo(owner addr.Address, pid []byte, multiAddrs [][]byte) (*ExpertInfo, error) {
+	return &ExpertInfo{
+		Owner:      owner,
+		PeerId:     pid,
+		Multiaddrs: multiAddrs,
+	}, nil
+}
+
+func ConstructState(info cid.Cid, emptyMapCid cid.Cid) *State {
 	return &State{
-		Info: ExpertInfo{
-			Owner:      ownerAddr,
-			PeerId:     peerId,
-			Multiaddrs: multiaddrs,
-		},
+		Info:  info,
 		Datas: emptyMapCid,
 	}
+}
+
+func (st *State) GetInfo(store adt.Store) (*ExpertInfo, error) {
+	var info ExpertInfo
+	if err := store.Get(store.Context(), st.Info, &info); err != nil {
+		return nil, xerrors.Errorf("failed to get expert info %w", err)
+	}
+	return &info, nil
+}
+
+func (st *State) SaveInfo(store adt.Store, info *ExpertInfo) error {
+	c, err := store.Put(store.Context(), info)
+	if err != nil {
+		return err
+	}
+	st.Info = c
+	return nil
 }
 
 func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {

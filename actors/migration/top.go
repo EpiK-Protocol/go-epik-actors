@@ -401,7 +401,7 @@ func InputTreeBalance(ctx context.Context, store cbor.IpldStore, stateRootIn cid
 		return big.Zero(), err
 	}
 	total := abi.NewTokenAmount(0)
-	err = actorsIn.ForEach(func(addr address.Address, a *states.Actor) error {
+	err = actorsIn.ForEach(func(addr address.Address, a *states0.Actor) error {
 		total = big.Add(total, a.Balance)
 		return nil
 	})
@@ -418,7 +418,7 @@ func InputTreeMinerAvailableBalance(ctx context.Context, store cbor.IpldStore, s
 		return nil, err
 	}
 	available := make(map[address.Address]abi.TokenAmount)
-	err = actorsIn.ForEach(func(addr address.Address, a *states.Actor) error {
+	err = actorsIn.ForEach(func(addr address.Address, a *states0.Actor) error {
 		if !a.Code.Equals(builtin0.StorageMinerActorCodeID) {
 			return nil
 		}

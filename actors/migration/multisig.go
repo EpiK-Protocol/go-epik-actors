@@ -38,7 +38,7 @@ func (m multisigMigrator) MigrateState(ctx context.Context, store cbor.IpldStore
 	outState := multisig2.State{
 		Signers:               inState.Signers,
 		NumApprovalsThreshold: inState.NumApprovalsThreshold,
-		NextTxnID:             inState.NextTxnID,
+		NextTxnID:             multisig2.TxnID(inState.NextTxnID),
 		InitialBalance:        inState.InitialBalance,
 		StartEpoch:            inState.StartEpoch,
 		UnlockDuration:        inState.UnlockDuration,
