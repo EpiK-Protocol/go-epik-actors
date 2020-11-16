@@ -19,10 +19,8 @@ import (
 const EpochDurationSeconds = 30
 const SecondsInHour = 60 * 60
 const SecondsInDay = 24 * SecondsInHour
-const SecondsInYear = 365 * SecondsInDay
 const EpochsInHour = SecondsInHour / EpochDurationSeconds
 const EpochsInDay = SecondsInDay / EpochDurationSeconds
-const EpochsInYear = SecondsInYear / EpochDurationSeconds
 
 // PARAM_SPEC
 // Expected number of block quality in an epoch (e.g. 1 block with block quality 5, or 5 blocks with quality 1)

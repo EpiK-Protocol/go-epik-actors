@@ -1750,7 +1750,7 @@ func TestLockBalance(t *testing.T) {
 
 	t.Run("retroactive vesting", func(t *testing.T) {
 		rt := builder.Build(t)
-		rt.SetNetworkVersion(network.Version2)
+		rt.SetNetworkVersion(network.Version6)
 
 		// Create empty multisig
 		rt.SetEpoch(100)
@@ -1802,7 +1802,7 @@ func TestLockBalance(t *testing.T) {
 
 	t.Run("prospective vesting", func(t *testing.T) {
 		rt := builder.Build(t)
-		rt.SetNetworkVersion(network.Version2)
+		rt.SetNetworkVersion(network.Version6)
 
 		// Create empty multisig
 		rt.SetEpoch(100)
@@ -1854,7 +1854,7 @@ func TestLockBalance(t *testing.T) {
 
 	t.Run("can't alter vesting", func(t *testing.T) {
 		rt := builder.Build(t)
-		rt.SetNetworkVersion(network.Version2)
+		rt.SetNetworkVersion(network.Version6)
 
 		// Create empty multisig
 		rt.SetEpoch(100)
@@ -1888,7 +1888,7 @@ func TestLockBalance(t *testing.T) {
 
 	t.Run("can't alter vesting from construction", func(t *testing.T) {
 		rt := builder.Build(t)
-		rt.SetNetworkVersion(network.Version2)
+		rt.SetNetworkVersion(network.Version6)
 
 		// Create empty multisig with vesting
 		startEpoch := abi.ChainEpoch(100)

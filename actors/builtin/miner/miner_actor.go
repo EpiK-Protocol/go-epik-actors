@@ -661,10 +661,9 @@ func (a Actor) ProveCommitSector(rt Runtime, params *ProveCommitSectorParams) *a
 		rt.Abortf(exitcode.ErrIllegalArgument, "sector number greater than maximum")
 	}
 
-	maxProofSize := MaxProveCommitSize
-	if len(params.Proof) > maxProofSize {
+	if len(params.Proof) > MaxProveCommitSize {
 		rt.Abortf(exitcode.ErrIllegalArgument, "sector prove-commit proof of size %d exceeds max size of %d",
-			len(params.Proof), maxProofSize)
+			len(params.Proof), MaxProveCommitSize)
 	}
 
 	store := adt.AsStore(rt)
@@ -2064,7 +2063,7 @@ type SealVerifyStuff struct {
 
 func getVerifyInfo(rt Runtime, params *SealVerifyStuff) *proof.SealVerifyInfo {
 	if rt.CurrEpoch() <= params.InteractiveEpoch {
-		rt.Abortf(exitcode.ErrForbidden, "too early to prove sector")
+		rt.Abortf(exitcode.ErrForbidden, "too early %d to prove sector, must be after %v", rt.CurrEpoch(), params.InteractiveEpoch)
 	}
 
 	commD := requestUnsealedSectorCID(rt, params.RegisteredSealProof, params.DealIDs)

@@ -12,9 +12,9 @@ import (
 )
 
 // The period over which a miner's active sectors are expected to be proven via WindowPoSt.
-// This guarantees that (1) user data is proven daily, (2) user data is stored for 24h by a rational miner
+// This guarantees that (1) user data is proven weekly, (2) user data is stored for 24h by a rational miner
 // (due to Window PoSt cost assumption).
-var WPoStProvingPeriod = abi.ChainEpoch(7 * builtin.EpochsInDay) // 24 hours PARAM_SPEC
+var WPoStProvingPeriod = abi.ChainEpoch(7 * builtin.EpochsInDay) // 7 * 24 hours PARAM_SPEC
 
 // The period between the opening and the closing of a WindowPoSt deadline in which the miner is expected to
 // provide a Window PoSt proof.
@@ -91,8 +91,7 @@ var SealedCIDPrefix = cid.Prefix{
 // List of proof types which may be used when creating a new miner actor.
 // This is mutable to allow configuration of testing and development networks.
 var SupportedProofTypes = map[abi.RegisteredSealProof]struct{}{
-	abi.RegisteredSealProof_StackedDrg32GiBV1: {},
-	abi.RegisteredSealProof_StackedDrg64GiBV1: {},
+	abi.RegisteredSealProof_StackedDrg8MiBV1: {},
 }
 
 // Maximum delay to allow between sector pre-commit and subsequent proof.
@@ -129,19 +128,19 @@ const FaultDeclarationCutoff = WPoStChallengeLookback + 50 // PARAM_SPEC
 
 // The maximum age of a fault before the sector is terminated.
 // This bounds the time a miner can lose client's data before sacrificing pledge and deal collateral.
-var FaultMaxAge = WPoStProvingPeriod * 14 // PARAM_SPEC
+var FaultMaxAge = WPoStProvingPeriod * 4 // PARAM_SPEC
 
 // Staging period for a miner worker key change.
 // This delay prevents a miner choosing a more favorable worker key that wins leader elections.
 const WorkerKeyChangeDelay = ChainFinality // PARAM_SPEC
 
 // Minimum number of epochs past the current epoch a sector may be set to expire.
-const MinSectorExpiration = 30 * builtin.EpochsInDay // PARAM_SPEC
+const MinSectorExpiration = 180 * builtin.EpochsInDay // PARAM_SPEC
 
 // The maximum number of epochs past the current epoch that sector lifetime may be extended.
 // A sector may be extended multiple times, however, the total maximum lifetime is also bounded by
 // the associated seal proof's maximum lifetime.
-const MaxSectorExpirationExtension = 1000 * builtin.EpochsInYear // PARAM_SPEC
+const MaxSectorExpirationExtension = 1050 * builtin.EpochsInDay // PARAM_SPEC
 
 // Ratio of sector size to maximum number of deals per sector.
 // The maximum number of deals is the sector size divided by this number (2^27)

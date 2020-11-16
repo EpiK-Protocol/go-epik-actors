@@ -14,7 +14,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/support/mock"
-	tutil "github.com/filecoin-project/specs-actors/v2/support/testing"
 )
 
 func TestExports(t *testing.T) {
@@ -74,6 +73,7 @@ func TestConstructor(t *testing.T) {
 
 }
 
+// TODO: error
 func TestAwardBlockReward(t *testing.T) {
 	actor := rewardHarness{reward.Actor{}, t}
 	winner := tutil.NewIDAddr(t, 1000)

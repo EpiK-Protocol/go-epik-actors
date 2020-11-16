@@ -16,7 +16,6 @@ import (
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/go-state-types/network"
 	cid "github.com/ipfs/go-cid"
 	"github.com/minio/blake2b-simd"
 	"github.com/stretchr/testify/assert"
@@ -41,11 +40,12 @@ var testMultiaddrs []abi.Multiaddrs
 
 // A balance for use in tests where the miner's low balance is not interesting.
 var bigBalance = big.Mul(big.NewInt(1_000_000), big.NewInt(1e18))
+
 // A reward amount for use in tests where the vesting amount wants to be large enough to cover penalties.
 var bigRewards = big.Mul(big.NewInt(1_000), big.NewInt(1e18))
 
 // an expriration 1 greater than min expiration
-const defaultSectorExpiration = 190
+const defaultSectorExpiration = 27 // (190 / uint64(miner.WPoStProvingPeriod/builtin.EpochsInDay))
 
 func init() {
 	testPid = abi.PeerID("peerID")
@@ -63,6 +63,7 @@ func TestExports(t *testing.T) {
 	mock.CheckActorExports(t, miner.Actor{})
 }
 
+//TODO:
 func TestConstruction(t *testing.T) {
 	actor := miner.Actor{}
 	owner := tutil.NewIDAddr(t, 100)
@@ -86,7 +87,7 @@ func TestConstruction(t *testing.T) {
 			OwnerAddr:     owner,
 			WorkerAddr:    worker,
 			ControlAddrs:  controlAddrs,
-			SealProofType: abi.RegisteredSealProof_StackedDrg32GiBV1,
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1,
 			PeerId:        testPid,
 			Multiaddrs:    testMultiaddrs,
 		}
@@ -114,9 +115,9 @@ func TestConstruction(t *testing.T) {
 		assert.Equal(t, params.ControlAddrs, info.ControlAddresses)
 		assert.Equal(t, params.PeerId, info.PeerId)
 		assert.Equal(t, params.Multiaddrs, info.Multiaddrs)
-		assert.Equal(t, abi.RegisteredSealProof_StackedDrg32GiBV1, info.SealProofType)
-		assert.Equal(t, abi.SectorSize(1<<35), info.SectorSize)
-		assert.Equal(t, uint64(2349), info.WindowPoStPartitionSectors)
+		assert.Equal(t, abi.RegisteredSealProof_StackedDrg8MiBV1, info.SealProofType)
+		assert.Equal(t, abi.SectorSize(1<<23), info.SectorSize)
+		assert.Equal(t, uint64(2), info.WindowPoStPartitionSectors)
 
 		assert.Equal(t, big.Zero(), st.PreCommitDeposits)
 		assert.Equal(t, big.Zero(), st.LockedFunds)
@@ -608,7 +609,7 @@ func TestCommitments(t *testing.T) {
 		// Bad seal proof type
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "unsupported seal proof type", func() {
 			pc := actor.makePreCommit(102, challengeEpoch, deadline.PeriodEnd(), nil)
-			pc.SealProof = abi.RegisteredSealProof_StackedDrg8MiBV1
+			pc.SealProof = abi.RegisteredSealProof_StackedDrg512MiBV1
 			actor.preCommitSector(rt, pc, preCommitConf{})
 		})
 		rt.Reset()
@@ -689,7 +690,6 @@ func TestCommitments(t *testing.T) {
 		rt := builderForHarness(actor).
 			WithBalance(bigBalance, big.Zero()).
 			Build(t)
-
 		// Epoch 101 should be at the beginning of the miner's proving period so there will be time to commit
 		// and PoSt a sector.
 		rt.SetEpoch(101)
@@ -756,18 +756,7 @@ func TestCommitments(t *testing.T) {
 
 		rt.SetBalance(big.Mul(big.NewInt(1000), big.NewInt(1e18)))
 
-		// Too big at version 4
-		proveCommit := makeProveCommit(sectorNo)
-		proveCommit.Proof = make([]byte, 1920)
-		rt.SetNetworkVersion(network.Version4)
-		rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-			actor.proveCommitSectorAndConfirm(rt, precommit, proveCommit, proveCommitConf{})
-		})
-		rt.Reset()
-
-		// Good proof at version 5
-		rt.SetNetworkVersion(network.Version5)
-		actor.proveCommitSectorAndConfirm(rt, precommit, proveCommit, proveCommitConf{})
+		actor.proveCommitSectorAndConfirm(rt, precommit, makeProveCommit(sectorNo), proveCommitConf{})
 		st := getState(rt)
 
 		// Verify new sectors
@@ -850,9 +839,10 @@ func TestCommitments(t *testing.T) {
 		sectorNo := abi.SectorNumber(100)
 
 		dealLimits := map[abi.RegisteredSealProof]int{
-			abi.RegisteredSealProof_StackedDrg2KiBV1:  256,
-			abi.RegisteredSealProof_StackedDrg32GiBV1: 256,
-			abi.RegisteredSealProof_StackedDrg64GiBV1: 512,
+			abi.RegisteredSealProof_StackedDrg8MiBV1: 256,
+			// abi.RegisteredSealProof_StackedDrg2KiBV1:  256,
+			// abi.RegisteredSealProof_StackedDrg32GiBV1: 256,
+			// abi.RegisteredSealProof_StackedDrg64GiBV1: 512,
 		}
 
 		for proof, limit := range dealLimits {
@@ -1503,11 +1493,20 @@ func TestCCUpgrade(t *testing.T) {
 
 		//actor.checkState(rt)
 		// ExtendSectorExpiration fails to update the deadline expiration queue.
+		osi := actor.getSector(rt, oldSector.SectorNumber)
+		nsi := actor.getSector(rt, newSector.SectorNumber)
+		lastExpir := osi.Expiration
+		if nsi.Expiration > lastExpir {
+			lastExpir = nsi.Expiration
+		}
+		quant := st.QuantSpecForDeadline(dlIdx)
+		expectMsg := fmt.Sprintf("at epoch %d", quant.QuantizeUp(lastExpir))
+
 		st = getState(rt)
 		_, msgs := miner.CheckStateInvariants(st, rt.AdtStore(), rt.Balance())
 		assert.Equal(t, 2, len(msgs.Messages()), strings.Join(msgs.Messages(), "\n"))
 		for _, msg := range msgs.Messages() {
-			assert.True(t, strings.Contains(msg, "at epoch 725919"))
+			assert.True(t, strings.Contains(msg, expectMsg), msg)
 		}
 	})
 
@@ -1647,19 +1646,31 @@ func TestCCUpgrade(t *testing.T) {
 		assert.Equal(t, oldSector.InitialPledge, newSector1.InitialPledge)
 		assert.Equal(t, oldSector.InitialPledge, newSector2.InitialPledge)
 
-		// All three sectors are present (in the same deadline/partition).
+		// For sector type 32GiB & 64GiB:
+		// 	All three sectors are present (in the same deadline/partition).
+		//
+		// For sector type 8MiB:
+		// 	Old sector and new sector 1 are in the same deadline/partition, new sector 2 in other.
 		deadline, partition := actor.getDeadlineAndPartition(rt, dlIdx, partIdx)
-		assert.Equal(t, uint64(3), deadline.TotalSectors)
-		assert.Equal(t, uint64(3), deadline.LiveSectors)
+		assert.Equal(t, uint64(2), deadline.TotalSectors)
+		assert.Equal(t, uint64(2), deadline.LiveSectors)
 		assertEmptyBitfield(t, deadline.EarlyTerminations)
 
-		assertBitfieldEquals(t, partition.Sectors,
-			uint64(newSector1.SectorNumber),
-			uint64(newSector2.SectorNumber),
-			uint64(oldSector.SectorNumber))
+		dlIdx2, partIdx2, err := st.FindSector(rt.AdtStore(), upgrade2.Info.SectorNumber)
+		assert.NoError(t, err)
+		deadline2, partition2 := actor.getDeadlineAndPartition(rt, dlIdx2, partIdx2)
+		assert.Equal(t, uint64(1), deadline2.TotalSectors)
+		assert.Equal(t, uint64(1), deadline2.LiveSectors)
+		assertEmptyBitfield(t, deadline2.EarlyTerminations)
+
+		assertBitfieldEquals(t, partition.Sectors, uint64(newSector1.SectorNumber), uint64(oldSector.SectorNumber))
 		assertEmptyBitfield(t, partition.Faults)
 		assertEmptyBitfield(t, partition.Recoveries)
 		assertEmptyBitfield(t, partition.Terminated)
+		assertBitfieldEquals(t, partition2.Sectors, uint64(newSector2.SectorNumber))
+		assertEmptyBitfield(t, partition2.Faults)
+		assertEmptyBitfield(t, partition2.Recoveries)
+		assertEmptyBitfield(t, partition2.Terminated)
 
 		// The old sector's expiration has changed to the end of this proving deadline.
 		// The new one expires when the old one used to.
@@ -1674,9 +1685,7 @@ func TestCCUpgrade(t *testing.T) {
 
 		pQueue := actor.collectPartitionExpirations(rt, partition)
 		assertBitfieldEquals(t, pQueue[dlInfo.NextNotElapsed().Last()].OnTimeSectors, uint64(oldSector.SectorNumber))
-		assertBitfieldEquals(t, pQueue[quantizedExpiration].OnTimeSectors,
-			uint64(newSector1.SectorNumber), uint64(newSector2.SectorNumber),
-		)
+		assertBitfieldEquals(t, pQueue[quantizedExpiration].OnTimeSectors, uint64(newSector1.SectorNumber))
 
 		// Roll forward to the beginning of the next iteration of this deadline
 		advanceToEpochWithCron(rt, actor, dlInfo.NextNotElapsed().Open)
@@ -1695,21 +1704,22 @@ func TestCCUpgrade(t *testing.T) {
 		// The old sector is marked as terminated
 		st = getState(rt)
 		deadline, partition = actor.getDeadlineAndPartition(rt, dlIdx, partIdx)
-		assert.Equal(t, uint64(3), deadline.TotalSectors)
-		assert.Equal(t, uint64(2), deadline.LiveSectors)
-		assertBitfieldEquals(t, partition.Sectors,
-			uint64(newSector1.SectorNumber),
-			uint64(newSector2.SectorNumber),
-			uint64(oldSector.SectorNumber),
-		)
+		assert.Equal(t, uint64(2), deadline.TotalSectors) // old and new 1
+		assert.Equal(t, uint64(1), deadline.LiveSectors)
+		assertBitfieldEquals(t, partition.Sectors, uint64(newSector1.SectorNumber), uint64(oldSector.SectorNumber))
 		assertBitfieldEquals(t, partition.Terminated, uint64(oldSector.SectorNumber))
-		assertBitfieldEquals(t, partition.Faults,
-			uint64(newSector1.SectorNumber),
-			uint64(newSector2.SectorNumber),
-		)
+		assertBitfieldEquals(t, partition.Faults, uint64(newSector1.SectorNumber))
+
+		deadline2, partition2 = actor.getDeadlineAndPartition(rt, dlIdx2, partIdx2)
+		assert.Equal(t, uint64(1), deadline2.TotalSectors) // new 2
+		assert.Equal(t, uint64(1), deadline2.LiveSectors)
+		assertBitfieldEquals(t, partition2.Sectors, uint64(newSector2.SectorNumber))
+		assertBitfieldEquals(t, partition2.Faults, uint64(newSector2.SectorNumber))
+		assertEmptyBitfield(t, partition2.Terminated)
+
 		newPower := miner.PowerForSectors(actor.sectorSize, allSectors[1:])
-		assert.True(t, newPower.Equals(partition.LivePower))
-		assert.True(t, newPower.Equals(partition.FaultyPower))
+		assert.True(t, newPower.Equals(partition.LivePower.Add(partition2.LivePower)))
+		assert.True(t, newPower.Equals(partition.FaultyPower.Add(partition2.LivePower)))
 
 		// we expect the expiration to be scheduled twice, once early
 		// and once on-time.
@@ -2037,7 +2047,7 @@ func TestWindowPost(t *testing.T) {
 		actor.constructAndVerify(rt)
 
 		// create enough sectors that one will be in a different partition
-		n := 95
+		n := 113
 		infos := actor.commitAndProveSectors(rt, n, defaultSectorExpiration, nil)
 
 		// add lots of funds so we can pay penalties without going into debt
@@ -2281,6 +2291,11 @@ func TestDeadlineCron(t *testing.T) {
 		dlIdx, pIdx, err := st.FindSector(rt.AdtStore(), activeSectors[0].SectorNumber)
 		require.NoError(t, err)
 
+		dlIdx2, pIdx2, err := st.FindSector(rt.AdtStore(), unprovenSectors[0].SectorNumber)
+		require.NoError(t, err)
+
+		fmt.Println(dlIdx, pIdx, dlIdx2, pIdx2, unprovenSectors[0].SectorNumber)
+
 		// advance to next deadline where we expect the first sectors to appear
 		dlinfo := actor.deadline(rt)
 		for dlinfo.Index != dlIdx {
@@ -2295,14 +2310,16 @@ func TestDeadlineCron(t *testing.T) {
 
 		// expect faulty power to be added to state
 		deadline := actor.getDeadline(rt, dlIdx)
-		assert.True(t, totalPower.Equals(deadline.FaultyPower))
+		deadline2 := actor.getDeadline(rt, dlIdx2)
+		assert.True(t, totalPower.Equals(deadline.FaultyPower.Add(deadline2.FaultyPower)))
 
 		// advance 3 deadlines
 		advanceDeadline(rt, actor, &cronConfig{})
 		advanceDeadline(rt, actor, &cronConfig{})
 		dlinfo = advanceDeadline(rt, actor, &cronConfig{})
 
-		actor.declareRecoveries(rt, dlIdx, pIdx, sectorInfoAsBitfield(allSectors[1:]), big.Zero())
+		// declare active[1] recovery
+		actor.declareRecoveries(rt, dlIdx, pIdx, sectorInfoAsBitfield(allSectors[1:2]), big.Zero())
 
 		// Skip to end of proving period for sectors, cron detects all sectors as faulty
 		for dlinfo.Index != dlIdx {
@@ -2314,12 +2331,13 @@ func TestDeadlineCron(t *testing.T) {
 		ongoingPenalty := miner.PledgePenaltyForContinuedFault(actor.epochRewardSmooth, actor.epochQAPowerSmooth, ongoingPwr.QA)
 
 		advanceDeadline(rt, actor, &cronConfig{
-			continuedFaultsPenalty: ongoingPenalty,
+			continuedFaultsPenalty: ongoingPenalty, // penalty is zero
 		})
 
 		// recorded faulty power is unchanged
 		deadline = actor.getDeadline(rt, dlIdx)
-		assert.True(t, totalPower.Equals(deadline.FaultyPower))
+		deadline2 = actor.getDeadline(rt, dlIdx2)
+		assert.True(t, totalPower.Equals(deadline.FaultyPower.Add(deadline2.FaultyPower)))
 		checkDeadlineInvariants(t, rt.AdtStore(), deadline, st.QuantSpecForDeadline(dlIdx), actor.sectorSize, allSectors)
 		actor.checkState(rt)
 	})
@@ -2416,7 +2434,7 @@ func TestDeclareFaults(t *testing.T) {
 }
 
 func TestDeclareRecoveries(t *testing.T) {
-	periodOffset := abi.ChainEpoch(100)
+	periodOffset := abi.ChainEpoch(155)
 	actor := newHarness(t, periodOffset)
 	builder := builderForHarness(actor).
 		WithBalance(bigBalance, big.Zero())
@@ -2454,6 +2472,9 @@ func TestDeclareRecoveries(t *testing.T) {
 
 		// Fault will take miner into fee debt
 		st := getState(rt)
+		feeDebt := big.Mul(big.NewInt(10), big.NewInt(1e18))
+		st.FeeDebt = feeDebt
+		rt.ReplaceState(st)
 		rt.SetBalance(big.Sum(st.PreCommitDeposits, st.InitialPledge, st.LockedFunds))
 
 		actor.declareFaults(rt, oneSector...)
@@ -2471,12 +2492,13 @@ func TestDeclareRecoveries(t *testing.T) {
 		// Can't pay during this deadline so miner goes into fee debt
 		ongoingPwr := miner.PowerForSectors(actor.sectorSize, oneSector)
 		ff := miner.PledgePenaltyForContinuedFault(actor.epochRewardSmooth, actor.epochQAPowerSmooth, ongoingPwr.QA)
+		assert.True(t, ff.IsZero())
+
 		advanceDeadline(rt, actor, &cronConfig{
 			continuedFaultsPenalty: big.Zero(), // fee is instead added to debt
 		})
 
 		st = getState(rt)
-		assert.Equal(t, ff, st.FeeDebt)
 
 		// Recovery fails when it can't pay back fee debt
 		rt.ExpectAbortContainsMessage(exitcode.ErrInsufficientFunds, "unlocked balance can not repay fee debt", func() {
@@ -2484,6 +2506,7 @@ func TestDeclareRecoveries(t *testing.T) {
 		})
 
 		// Recovery pays back fee debt and IP requirements and succeeds
+		ff = feeDebt
 		funds := big.Add(ff, st.InitialPledge)
 		rt.SetBalance(funds) // this is how we send funds along with recovery message using mock rt
 		actor.declareRecoveries(rt, dlIdx, pIdx, bf(uint64(oneSector[0].SectorNumber)), ff)
@@ -2641,10 +2664,12 @@ func TestExtendSectorExpiration(t *testing.T) {
 		// actor.checkState(rt)
 		// ExtendSectorExpiration fails to update the deadline expiration queue.
 		st = getState(rt)
+		quant := st.QuantSpecForDeadline(dlIdx)
 		_, msgs := miner.CheckStateInvariants(st, rt.AdtStore(), rt.Balance())
 		assert.Equal(t, 2, len(msgs.Messages()), strings.Join(msgs.Messages(), "\n"))
+		expectMsg := fmt.Sprintf("at epoch %d", quant.QuantizeUp(expiration-extension))
 		for _, msg := range msgs.Messages() {
-			assert.True(t, strings.Contains(msg, "at epoch 5213079"))
+			assert.True(t, strings.Contains(msg, expectMsg))
 		}
 	})
 
@@ -2695,8 +2720,9 @@ func TestExtendSectorExpiration(t *testing.T) {
 		st = getState(rt)
 		_, msgs := miner.CheckStateInvariants(st, rt.AdtStore(), rt.Balance())
 		assert.Equal(t, 2, len(msgs.Messages()), strings.Join(msgs.Messages(), "\n"))
+		expectMsg := fmt.Sprintf("at epoch %d", quant.QuantizeUp(newExpiration))
 		for _, msg := range msgs.Messages() {
-			assert.True(t, strings.Contains(msg, "at epoch 668439"))
+			assert.True(t, strings.Contains(msg, expectMsg))
 		}
 	})
 
@@ -2704,14 +2730,13 @@ func TestExtendSectorExpiration(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 
-		const sectorCount = 4000
+		const sectorCount = 10
 
 		// commit a bunch of sectors to ensure that we get multiple partitions.
 		sectorInfos := actor.commitAndProveSectors(rt, sectorCount, defaultSectorExpiration, nil)
 		advanceAndSubmitPoSts(rt, actor, sectorInfos...)
 
 		newExpiration := sectorInfos[0].Expiration + 42*miner.WPoStProvingPeriod
-
 		var params miner.ExtendSectorExpirationParams
 
 		// extend all odd-numbered sectors.
@@ -2790,12 +2815,14 @@ func TestExtendSectorExpiration(t *testing.T) {
 		// ExtendSectorExpiration fails to update the deadline expiration queue.
 		st := getState(rt)
 		_, msgs := miner.CheckStateInvariants(st, rt.AdtStore(), rt.Balance())
-		assert.Equal(t, 4, len(msgs.Messages()), strings.Join(msgs.Messages(), "\n"))
-		for _, msg := range msgs.Messages()[:2] {
-			assert.True(t, strings.Contains(msg, "at epoch 668439")) // deadline 2
-		}
-		for _, msg := range msgs.Messages()[2:] {
-			assert.True(t, strings.Contains(msg, "at epoch 668499")) // deadline 3
+		assert.Equal(t, 10, len(msgs.Messages()), strings.Join(msgs.Messages(), "\n"))
+
+		for i, extension := range params.Extensions { // deadline 2 to 6
+			quant := st.QuantSpecForDeadline(extension.Deadline)
+			expectMsg := fmt.Sprintf("at epoch %d", quant.QuantizeUp(extension.NewExpiration))
+			for _, msg := range msgs.Messages()[i*2 : i*2+2] {
+				assert.True(t, strings.Contains(msg, expectMsg))
+			}
 		}
 	})
 
@@ -2917,14 +2944,14 @@ func TestTerminateSectors(t *testing.T) {
 		rt.SetEpoch(periodOffset + miner.WPoStChallengeWindow)
 
 		// Commit a sector to upgrade
-		oldSector := actor.commitAndProveSector(rt, 1, defaultSectorExpiration, nil)
+		oldSector := actor.commitAndProveSector(rt, 1, defaultSectorExpiration+1, nil)
 		advanceAndSubmitPoSts(rt, actor, oldSector) // activate power
 		st := getState(rt)
 		dlIdx, partIdx, err := st.FindSector(rt.AdtStore(), oldSector.SectorNumber)
 		require.NoError(t, err)
 
-		// advance clock so upgrade happens later
-		rt.SetEpoch(rt.Epoch() + 10_000)
+		// advance clock so upgrade happens later(next period)
+		rt.SetEpoch(rt.Epoch() + 21_000)
 
 		challengeEpoch := rt.Epoch() - 1
 		upgradeParams := actor.makePreCommit(200, challengeEpoch, oldSector.Expiration, []abi.DealID{1})
@@ -2970,7 +2997,7 @@ func TestWithdrawBalance(t *testing.T) {
 	builder := builderForHarness(actor).
 		WithBalance(bigBalance, big.Zero())
 
-	 onePercentBalance := big.Div(bigBalance, big.NewInt(100))
+	onePercentBalance := big.Div(bigBalance, big.NewInt(100))
 
 	t.Run("happy path withdraws funds", func(t *testing.T) {
 		rt := builder.Build(t)
@@ -3171,13 +3198,17 @@ func TestCompactPartitions(t *testing.T) {
 		actor.terminateSectors(rt, sectors, expectedFee)
 
 		// compacting partition will remove sector1 but retain sector 2, 3 and 4.
-		partId := uint64(0)
-		deadlineId := uint64(0)
+		st := getState(rt)
+		deadlineId, partId, err := st.FindSector(rt.AdtStore(), sector1)
+		assert.NoError(t, err)
 		partitions := bitfield.NewFromSet([]uint64{partId})
 		actor.compactPartitions(rt, deadlineId, partitions)
 
-		st := getState(rt)
+		st = getState(rt)
 		assertSectorExists(rt.AdtStore(), st, sector2, partId, deadlineId)
+
+		deadlineId, partId, err = st.FindSector(rt.AdtStore(), sector3)
+		assert.NoError(t, err)
 		assertSectorExists(rt.AdtStore(), st, sector3, partId, deadlineId)
 		assertSectorExists(rt.AdtStore(), st, sector4, partId, deadlineId)
 
@@ -3197,9 +3228,12 @@ func TestCompactPartitions(t *testing.T) {
 		// fault sector1
 		actor.declareFaults(rt, info[0])
 
-		partId := uint64(0)
-		deadlineId := uint64(0)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "failed to remove partitions from deadline 0: while removing partitions: cannot remove partition 0: has faults", func() {
+		st := getState(rt)
+		deadlineId, partId, err := st.FindSector(rt.AdtStore(), info[0].SectorNumber)
+		assert.NoError(t, err)
+
+		substr := fmt.Sprintf("failed to remove partitions from deadline %d: while removing partitions: cannot remove partition %d: has faults", deadlineId, partId)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, substr, func() {
 			partitions := bitfield.NewFromSet([]uint64{partId})
 			actor.compactPartitions(rt, deadlineId, partitions)
 		})
@@ -3212,11 +3246,14 @@ func TestCompactPartitions(t *testing.T) {
 
 		rt.SetEpoch(200)
 		// create 2 sectors in partition 0
-		actor.commitAndProveSectors(rt, 2, defaultSectorExpiration, [][]abi.DealID{{10}, {20}})
+		info := actor.commitAndProveSectors(rt, 2, defaultSectorExpiration, [][]abi.DealID{{10}, {20}})
 
-		partId := uint64(0)
-		deadlineId := uint64(0)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "failed to remove partitions from deadline 0: while removing partitions: cannot remove partition 0: has unproven sectors", func() {
+		st := getState(rt)
+		deadlineId, partId, err := st.FindSector(rt.AdtStore(), info[0].SectorNumber)
+		assert.NoError(t, err)
+
+		substr := fmt.Sprintf("failed to remove partitions from deadline %d: while removing partitions: cannot remove partition %d: has unproven sectors", deadlineId, partId)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, substr, func() {
 			partitions := bitfield.NewFromSet([]uint64{partId})
 			actor.compactPartitions(rt, deadlineId, partitions)
 		})
@@ -3902,27 +3939,14 @@ func TestApplyRewards(t *testing.T) {
 		WithBalance(bigBalance, big.Zero())
 
 	t.Run("funds are locked", func(t *testing.T) {
-		{
-			rt := builder.Build(t)
-			rt.SetNetworkVersion(network.Version5)
-			actor.constructAndVerify(rt)
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
 
-			rwd := abi.NewTokenAmount(1_000_000)
-			actor.applyRewards(rt, rwd, big.Zero())
+		rwd := abi.NewTokenAmount(1_000_000)
+		actor.applyRewards(rt, rwd, big.Zero())
 
-			assert.Equal(t, rwd, actor.getLockedFunds(rt))
-		}
-		{
-			rt := builder.Build(t)
-			rt.SetNetworkVersion(network.Version6)
-			actor.constructAndVerify(rt)
-
-			rwd := abi.NewTokenAmount(1_000_000)
-			actor.applyRewards(rt, rwd, big.Zero())
-
-			expected := abi.NewTokenAmount(750_000)
-			assert.Equal(t, expected, actor.getLockedFunds(rt))
-		}
+		expected := abi.NewTokenAmount(750_000)
+		assert.Equal(t, expected, actor.getLockedFunds(rt))
 	})
 
 	t.Run("funds vest", func(t *testing.T) {
@@ -3944,7 +3968,7 @@ func TestApplyRewards(t *testing.T) {
 		vestingFunds, err = st.LoadVestingFunds(adt.AsStore(rt))
 		require.NoError(t, err)
 
-		require.Len(t, vestingFunds.Funds, 180)
+		require.Len(t, vestingFunds.Funds, 7)
 
 		// Vested FIL pays out on epochs with expected offset
 		quantSpec := miner.NewQuantSpec(miner.RewardVestingSpec.Quantization, periodOffset)
@@ -4245,7 +4269,7 @@ func newHarness(t testing.TB, provingPeriodOffset abi.ChainEpoch) *actorHarness 
 		epochRewardSmooth:  smoothing.TestingConstantEstimate(rwd),
 		epochQAPowerSmooth: smoothing.TestingConstantEstimate(pwr),
 	}
-	h.setProofType(abi.RegisteredSealProof_StackedDrg32GiBV1)
+	h.setProofType(abi.RegisteredSealProof_StackedDrg8MiBV1)
 	return h
 }
 
