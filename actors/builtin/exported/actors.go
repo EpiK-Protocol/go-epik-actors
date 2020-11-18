@@ -3,6 +3,7 @@ package exported
 import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/account"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
@@ -28,5 +29,6 @@ func BuiltinActors() []runtime.VMActor {
 		reward.Actor{},
 		system.Actor{},
 		verifreg.Actor{},
+		expert.Actor{},
 	}
 }
