@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
 	"github.com/filecoin-project/specs-actors/v2/actors/states"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
@@ -248,6 +249,18 @@ func main() {
 
 	if err := gen.WriteTupleEncodersToFile("./actors/util/smoothing/cbor_gen.go", "smoothing",
 		smoothing.FilterEstimate{},
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/vote/cbor_gen.go", "vote",
+		vote.State{},
+		vote.Candidate{},
+		vote.Voter{},
+		vote.VotingRecord{},
+		vote.RevokeParams{},
+		vote.VoteParams{},
+		vote.RegisterCandidatesParams{},
 	); err != nil {
 		panic(err)
 	}

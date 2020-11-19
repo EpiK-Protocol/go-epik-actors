@@ -119,3 +119,12 @@ var MethodsExpert = struct {
 	ImportData       abi.MethodNum
 	CheckData        abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}
+
+var MethodsVote = struct {
+	Constructor        abi.MethodNum
+	RegisterCandidates abi.MethodNum
+	Vote               abi.MethodNum
+	Revoke             abi.MethodNum
+	WithdrawBalance    abi.MethodNum
+	ApplyRewards       abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6}
