@@ -141,8 +141,9 @@ func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *abi.Empty
 }
 
 type ExpertDataParams struct {
-	PieceID cid.Cid `checked:"true"`
-	Bounty  string
+	PieceID   cid.Cid `checked:"true"`
+	PieceSize abi.PaddedPieceSize
+	Bounty    string
 }
 
 func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue {

@@ -22,6 +22,7 @@ var (
 	VerifiedRegistryActorCodeID cid.Cid
 	CallerTypesSignable         []cid.Cid
 	ExpertActorCodeID           cid.Cid
+	ExpertFundActorCodeID       cid.Cid
 	VoteActorCodeID             cid.Cid
 	RetrievalActorCodeID        cid.Cid
 	KnowledgeActorCodeID        cid.Cid
@@ -51,8 +52,10 @@ func init() {
 		&AccountActorCodeID:          {name: "epk/1/account", signer: true},
 		&MultisigActorCodeID:         {name: "epk/1/multisig", signer: true},
 		&ExpertActorCodeID:           {name: "epk/1/expert"},
+		&ExpertFundActorCodeID:       {name: "epk/1/expertfund"},
 		&VoteActorCodeID:             {name: "epk/1/vote"},
 		&KnowledgeActorCodeID:        {name: "epk/1/knowledge"},
+		&RetrievalActorCodeID:        {name: "epk/1/retrieval"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {

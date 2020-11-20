@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	abi "github.com/filecoin-project/go-state-types/abi"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
@@ -509,7 +510,7 @@ func (t *ChangeAddressParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufExpertDataParams = []byte{130}
+var lengthBufExpertDataParams = []byte{131}
 
 func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -526,6 +527,12 @@ func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 
 	if err := cbg.WriteCidBuf(scratch, w, t.PieceID); err != nil {
 		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
+	}
+
+	// t.PieceSize (abi.PaddedPieceSize) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.PieceSize)); err != nil {
+		return err
 	}
 
 	// t.Bounty (string) (string)
@@ -556,7 +563,7 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -572,6 +579,20 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		t.PieceID = c
 
 	}
+	// t.PieceSize (abi.PaddedPieceSize) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.PieceSize = abi.PaddedPieceSize(extra)
+
+	}
 	// t.Bounty (string) (string)
 
 	{
@@ -585,7 +606,7 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufDataOnChainInfo = []byte{130}
+var lengthBufDataOnChainInfo = []byte{132}
 
 func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -607,6 +628,18 @@ func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 	if _, err := io.WriteString(w, string(t.PieceID)); err != nil {
+		return err
+	}
+
+	// t.PieceSize (abi.PaddedPieceSize) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.PieceSize)); err != nil {
+		return err
+	}
+
+	// t.Redundancy (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Redundancy)); err != nil {
 		return err
 	}
 
@@ -638,7 +671,7 @@ func (t *DataOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -651,6 +684,34 @@ func (t *DataOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.PieceID = string(sval)
+	}
+	// t.PieceSize (abi.PaddedPieceSize) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.PieceSize = abi.PaddedPieceSize(extra)
+
+	}
+	// t.Redundancy (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Redundancy = uint64(extra)
+
 	}
 	// t.Bounty (string) (string)
 

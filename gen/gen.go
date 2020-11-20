@@ -5,6 +5,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/account"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
@@ -77,6 +78,19 @@ func main() {
 		expert.ChangeAddressParams{},
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},
+		// other types
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/expertfund/cbor_gen.go", "expertfund",
+		// actor state
+		expertfund.State{},
+		// method params
+		expertfund.ExpertInfo{},
+		expertfund.ExpertDepositParams{},
+		expertfund.ClaimFundParams{},
+		expertfund.ResetExpertParams{},
 		// other types
 	); err != nil {
 		panic(err)

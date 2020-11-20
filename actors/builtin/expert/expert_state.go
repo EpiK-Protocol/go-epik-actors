@@ -10,8 +10,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
-type AddrKey = abi.AddrKey
-
 // State of expert
 type State struct {
 	// Information not related to sectors.
@@ -36,8 +34,10 @@ type ExpertInfo struct {
 }
 
 type DataOnChainInfo struct {
-	PieceID string
-	Bounty  string
+	PieceID    string
+	PieceSize  abi.PaddedPieceSize
+	Redundancy uint64
+	Bounty     string
 }
 
 func ConstructExpertInfo(owner addr.Address, pid []byte, multiAddrs [][]byte) (*ExpertInfo, error) {
