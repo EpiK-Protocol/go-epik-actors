@@ -5,6 +5,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/math"
 )
 
@@ -34,7 +35,7 @@ var BaselineInitialValue = big.NewInt(2_888_888_880_000_000_000) // Q.0
 // BaselineInitialValue.
 func InitBaselinePower() abi.StoragePower {
 	baselineInitialValue256 := big.Lsh(BaselineInitialValue, 2*math.Precision128) // Q.0 => Q.256
-	baselineAtMinusOne := big.Div(baselineInitialValue256, BaselineExponent)   // Q.256 / Q.128 => Q.128
+	baselineAtMinusOne := big.Div(baselineInitialValue256, BaselineExponent)      // Q.256 / Q.128 => Q.128
 	return big.Rsh(baselineAtMinusOne, math.Precision128)                         // Q.128 => Q.0
 }
 
@@ -42,7 +43,7 @@ func InitBaselinePower() abi.StoragePower {
 // of the base exponent.
 func BaselinePowerFromPrev(prevEpochBaselinePower abi.StoragePower) abi.StoragePower {
 	thisEpochBaselinePower := big.Mul(prevEpochBaselinePower, BaselineExponent) // Q.0 * Q.128 => Q.128
-	return big.Rsh(thisEpochBaselinePower, math.Precision128)                      // Q.128 => Q.0
+	return big.Rsh(thisEpochBaselinePower, math.Precision128)                   // Q.128 => Q.0
 }
 
 // These numbers are estimates of the onchain constants.  They are good for initializing state in
@@ -61,9 +62,9 @@ func ComputeRTheta(effectiveNetworkTime abi.ChainEpoch, baselinePowerAtEffective
 	var rewardTheta big.Int
 	if effectiveNetworkTime != 0 {
 		rewardTheta = big.NewInt(int64(effectiveNetworkTime)) // Q.0
-		rewardTheta = big.Lsh(rewardTheta, math.Precision128)    // Q.0 => Q.128
+		rewardTheta = big.Lsh(rewardTheta, math.Precision128) // Q.0 => Q.128
 		diff := big.Sub(cumsumBaseline, cumsumRealized)
-		diff = big.Lsh(diff, math.Precision128)                      // Q.0 => Q.128
+		diff = big.Lsh(diff, math.Precision128)                   // Q.0 => Q.128
 		diff = big.Div(diff, baselinePowerAtEffectiveNetworkTime) // Q.128 / Q.0 => Q.128
 		rewardTheta = big.Sub(rewardTheta, diff)                  // Q.128
 	} else {
@@ -91,7 +92,7 @@ func computeReward(epoch abi.ChainEpoch, prevTheta, currTheta, simpleTotal, base
 	epochLam := big.Mul(big.NewInt(int64(epoch)), Lambda) // Q.0 * Q.128 => Q.128
 
 	simpleReward = big.Mul(simpleReward, big.NewFromGo(math.ExpNeg(epochLam.Int))) // Q.128 * Q.128 => Q.256
-	simpleReward = big.Rsh(simpleReward, math.Precision128)                      // Q.256 >> 128 => Q.128
+	simpleReward = big.Rsh(simpleReward, math.Precision128)                        // Q.256 >> 128 => Q.128
 
 	baselineReward := big.Sub(computeBaselineSupply(currTheta, baselineTotal), computeBaselineSupply(prevTheta, baselineTotal)) // Q.128
 
@@ -103,14 +104,14 @@ func computeReward(epoch abi.ChainEpoch, prevTheta, currTheta, simpleTotal, base
 // Computes baseline supply based on theta in Q.128 format.
 // Return is in Q.128 format
 func computeBaselineSupply(theta, baselineTotal big.Int) big.Int {
-	thetaLam := big.Mul(theta, Lambda)           // Q.128 * Q.128 => Q.256
+	thetaLam := big.Mul(theta, Lambda)              // Q.128 * Q.128 => Q.256
 	thetaLam = big.Rsh(thetaLam, math.Precision128) // Q.256 >> 128 => Q.128
 
 	eTL := big.NewFromGo(math.ExpNeg(thetaLam.Int)) // Q.128
 
 	one := big.NewInt(1)
 	one = big.Lsh(one, math.Precision128) // Q.0 => Q.128
-	oneSub := big.Sub(one, eTL)        // Q.128
+	oneSub := big.Sub(one, eTL)           // Q.128
 
 	return big.Mul(baselineTotal, oneSub) // Q.0 * Q.128 => Q.128
 }
@@ -126,4 +127,41 @@ func SlowConvenientBaselineForEpoch(targetEpoch abi.ChainEpoch) abi.StoragePower
 		baseline = BaselinePowerFromPrev(baseline) // value in block i (for epoch i+1)
 	}
 	return baseline
+}
+
+func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
+	vote, expert, knowledge, bandwidth, miner abi.TokenAmount,
+) {
+	// 1% to vote
+	vote = big.Div(blockReward, big.NewInt(100))
+	// 9% to expert
+	expert = big.Div(big.Mul(blockReward, big.NewInt(9)), big.NewInt(100))
+
+	// 15% to bandwidth and knowledge
+	kb := big.Div(big.Mul(blockReward, big.NewInt(15)), big.NewInt(100))
+
+	miner = big.Sub(blockReward, vote)
+	miner = big.Sub(miner, expert)
+	miner = big.Sub(miner, kb)
+	Assert(miner.GreaterThanEqual(big.Zero()))
+
+	// P - pledged, C - circulating
+	//
+	//                   n1      n2                       d
+	// bandwidth = min(P*100, 15*5*C) * blockReward / (C*5*100)
+	n1 := big.Mul(pledged, big.NewInt(100))
+	n2 := big.Mul(circulating, big.NewInt(75))
+	d := big.Mul(circulating, big.NewInt(500))
+
+	bandwidth = big.Div(big.Mul(min(n1, n2), blockReward), d)
+	knowledge = big.Sub(kb, bandwidth)
+	Assert(knowledge.GreaterThanEqual(big.Zero()))
+	return
+}
+
+func min(a, b abi.TokenAmount) abi.TokenAmount {
+	if a.LessThan(b) {
+		return a
+	}
+	return b
 }

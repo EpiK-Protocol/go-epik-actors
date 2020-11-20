@@ -120,6 +120,14 @@ var MethodsExpert = struct {
 	CheckData        abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}
 
+var MethodsExpertFunds = struct {
+	Constructor  abi.MethodNum
+	ApplyRewards abi.MethodNum
+	Deposit      abi.MethodNum
+	Claim        abi.MethodNum
+	Reset        abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5}
+
 var MethodsVote = struct {
 	Constructor        abi.MethodNum
 	RegisterCandidates abi.MethodNum

@@ -247,7 +247,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufAwardBlockRewardParams = []byte{132}
+var lengthBufAwardBlockRewardParams = []byte{134}
 
 func (t *AwardBlockRewardParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -285,6 +285,16 @@ func (t *AwardBlockRewardParams) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.RetrievalPledged (big.Int) (struct)
+	if err := t.RetrievalPledged.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Circulating (big.Int) (struct)
+	if err := t.Circulating.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -302,7 +312,7 @@ func (t *AwardBlockRewardParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -357,6 +367,24 @@ func (t *AwardBlockRewardParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.WinCount = int64(extraI)
+	}
+	// t.RetrievalPledged (big.Int) (struct)
+
+	{
+
+		if err := t.RetrievalPledged.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.RetrievalPledged: %w", err)
+		}
+
+	}
+	// t.Circulating (big.Int) (struct)
+
+	{
+
+		if err := t.Circulating.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Circulating: %w", err)
+		}
+
 	}
 	return nil
 }

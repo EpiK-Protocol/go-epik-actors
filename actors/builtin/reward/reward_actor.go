@@ -15,8 +15,8 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 )
 
-// PenaltyMultiplier is the factor miner penaltys are scaled up by
-const PenaltyMultiplier = 3
+// // PenaltyMultiplier is the factor miner penaltys are scaled up by
+// const PenaltyMultiplier = 3
 
 type Actor struct{}
 
@@ -60,6 +60,9 @@ type AwardBlockRewardParams struct {
 	Penalty   abi.TokenAmount // penalty for including bad messages in a block, >= 0
 	GasReward abi.TokenAmount // gas reward from all gas fees in a block, >= 0
 	WinCount  int64           // number of reward units won, > 0
+
+	RetrievalPledged abi.TokenAmount // total retrieval pledged epik
+	Circulating      abi.TokenAmount // total circulating epk
 }
 
 // Awards a reward to a block producer.
@@ -93,15 +96,20 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	if !ok {
 		rt.Abortf(exitcode.ErrNotFound, "failed to resolve given owner address")
 	}
-	// The miner penalty is scaled up by a factor of PenaltyMultiplier
-	penalty := big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty)
+	// // The miner penalty is scaled up by a factor of PenaltyMultiplier
+	// penalty := big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty)
+	penalty := big.Zero()
 	expertReward := big.Zero()
 	minerReward := big.Zero()
 	totalReward := big.Zero()
+	voteReward := big.Zero()
+	knowledgeReward := big.Zero()
+	bandwidthReward := big.Zero()
+
 	var st State
 	rt.StateTransaction(&st, func() {
 		blockReward := big.Mul(st.ThisEpochReward, big.NewInt(params.WinCount))
-		blockReward = big.Div(blockReward, big.NewInt(builtin.ExpectedLeadersPerEpoch))
+		blockReward = big.Div(blockReward, big.NewInt(builtin.ExpectedLeadersPerEpoch)) // TODO:
 		totalReward = big.Add(blockReward, params.GasReward)
 		currBalance := rt.CurrentBalance()
 		if totalReward.GreaterThan(currBalance) {
@@ -112,23 +120,22 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 			// Since we have already asserted the balance is greater than gas reward blockReward is >= 0
 			AssertMsg(blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward is %v below zero", blockReward)
 		}
-		expertReward = big.Div(blockReward, big.NewInt(10))
-		minerReward = big.Sub(totalReward, expertReward)
+
+		voteReward, expertReward, knowledgeReward, bandwidthReward, minerReward =
+			distributeBlockRewards(blockReward, params.RetrievalPledged, params.Circulating)
+
+		minerReward = big.Add(minerReward, params.GasReward)
 		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, minerReward)
 	})
 
 	AssertMsg(totalReward.LessThanEqual(priorBalance), "reward %v exceeds balance %v", totalReward, priorBalance)
-
-	// expert reward
-	code := rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodSend, nil, expertReward, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send reward to expert fund")
 
 	// if this fails, we can assume the miner is responsible and avoid failing here.
 	rewardParams := builtin.ApplyRewardParams{
 		Reward:  minerReward,
 		Penalty: penalty,
 	}
-	code = rt.Send(minerAddr, builtin.MethodsMiner.ApplyRewards, &rewardParams, minerReward, &builtin.Discard{})
+	code := rt.Send(minerAddr, builtin.MethodsMiner.ApplyRewards, &rewardParams, minerReward, &builtin.Discard{})
 	if !code.IsSuccess() {
 		rt.Log(rtt.ERROR, "failed to send ApplyRewards call to the miner actor with funds: %v, code: %v", totalReward, code)
 		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, totalReward, &builtin.Discard{})
@@ -136,6 +143,19 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 			rt.Log(rtt.ERROR, "failed to send unsent reward to the burnt funds actor, code: %v", code)
 		}
 	}
+
+	code = rt.Send(builtin.VoteFundsActorAddr, builtin.MethodsVote.ApplyRewards, nil, voteReward, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send funds to vote")
+
+	code = rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, expertReward, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send funds to expert")
+
+	code = rt.Send(builtin.KnowledgeFundsActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, knowledgeReward, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send funds to knowledge", bandwidthReward) // TODO:
+
+	//TODO:
+	// code = rt.Send(builtin.BandwidthFundsActorAddr, builtin.MethodsBandwidth.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
+	// builtin.RequireSuccess(rt, code, "failed to send funds to bandwidth")
 
 	return nil
 }

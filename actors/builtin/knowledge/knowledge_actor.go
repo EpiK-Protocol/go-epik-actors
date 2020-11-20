@@ -64,7 +64,12 @@ func (a Actor) ChangePayee(rt Runtime, params *ChangePayeeParams) *abi.EmptyValu
 
 	newPayee := params.Payee
 	if newPayee != addr.Undef {
-		newPayee, _ = resolvePayeeAddress(rt, newPayee)
+		resolved, ok := rt.ResolveAddress(newPayee)
+		builtin.RequireParam(rt, ok, "unable to resolve address %v", newPayee)
+
+		codeCID, ok := rt.GetActorCodeCID(resolved)
+		builtin.RequireParam(rt, ok, "no code for address %v", newPayee)
+		builtin.RequireParam(rt, codeCID == builtin.MultisigActorCodeID, "new payee must be a multisig address")
 	}
 
 	var st State
