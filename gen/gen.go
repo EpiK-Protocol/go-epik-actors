@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
@@ -230,6 +231,19 @@ func main() {
 		miner.ExpirationExtension{},    // Aliased from v0
 		miner.TerminationDeclaration{}, // Aliased from v0
 		miner.PoStPartition{},          // Aliased from v0
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/retrieval/cbor_gen.go", "retrieval",
+		// actor state
+		retrieval.State{},
+		// method params and returns
+		retrieval.WithdrawBalanceParams{},
+		retrieval.RetrievalDataParams{},
+		retrieval.RetrievalState{},
+		retrieval.LockedState{},
+		// other types
 	); err != nil {
 		panic(err)
 	}

@@ -128,3 +128,11 @@ var MethodsVote = struct {
 	WithdrawBalance    abi.MethodNum
 	ApplyRewards       abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6}
+
+var MethodsRetrieval = struct {
+	Constructor      abi.MethodNum
+	AddBalance       abi.MethodNum
+	ApplyForWithdraw abi.MethodNum
+	WithdrawBalance  abi.MethodNum
+	CheckAndUpdate   abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5}

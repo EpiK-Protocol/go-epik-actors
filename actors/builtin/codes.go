@@ -23,6 +23,7 @@ var (
 	CallerTypesSignable         []cid.Cid
 	ExpertActorCodeID           cid.Cid
 	VoteActorCodeID             cid.Cid
+	RetrievalActorCodeID        cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo

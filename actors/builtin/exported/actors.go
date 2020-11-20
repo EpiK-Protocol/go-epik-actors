@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
@@ -30,5 +31,6 @@ func BuiltinActors() []runtime.VMActor {
 		system.Actor{},
 		verifreg.Actor{},
 		expert.Actor{},
+		retrieval.Actor{},
 	}
 }
