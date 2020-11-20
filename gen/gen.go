@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
@@ -275,6 +276,15 @@ func main() {
 		vote.RevokeParams{},
 		vote.VoteParams{},
 		vote.RegisterCandidatesParams{},
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/knowledge/cbor_gen.go", "knowledge",
+		knowledge.State{},
+		knowledge.ChangePayeeParams{},
+		knowledge.AssignUndistributedParams{},
+		knowledge.WithdrawBalanceParams{},
 	); err != nil {
 		panic(err)
 	}

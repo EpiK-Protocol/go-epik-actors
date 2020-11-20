@@ -171,7 +171,7 @@ func (a Actor) WithdrawBalance(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	// TODO: only signable allow to vote?
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	amountWithdrawn := big.Zero()
+	amountWithdrawn := abi.NewTokenAmount(0)
 	var st State
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
@@ -218,9 +218,8 @@ func (a Actor) WithdrawBalance(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		amountWithdrawn = big.Add(unlocked, vestedRewards)
 	})
 
-	Assert(amountWithdrawn.Sign() > 0)
 	code := rt.Send(rt.Caller(), builtin.MethodSend, nil, amountWithdrawn, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to withdraw balance")
+	builtin.RequireSuccess(rt, code, "failed to send funds")
 
 	return nil
 }
@@ -282,20 +281,6 @@ func findUnlockedVotes(rt Runtime, votingRecords *adt.Map) (
 	}
 	allDelete = total == len(deletes)
 	return
-}
-
-func resolveAddress(rt Runtime, address addr.Address) (recipient addr.Address) {
-	nominal, ok := rt.ResolveAddress(address)
-	builtin.RequireParam(rt, ok, "failed to resolve address %v", address)
-
-	codeID, ok := rt.GetActorCodeCID(nominal)
-	builtin.RequireParam(rt, ok, "no code for address %v", nominal)
-
-	if codeID.Equals(builtin.StorageMinerActorCodeID) {
-		ownerAddr, _, _ := builtin.RequestMinerControlAddrs(rt, nominal)
-		return ownerAddr
-	}
-	return nominal
 }
 
 func resolveCandidateAddress(rt Runtime, raw addr.Address) addr.Address {

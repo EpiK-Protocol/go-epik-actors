@@ -24,6 +24,7 @@ var (
 	ExpertActorCodeID           cid.Cid
 	VoteActorCodeID             cid.Cid
 	RetrievalActorCodeID        cid.Cid
+	KnowledgeActorCodeID        cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -51,6 +52,7 @@ func init() {
 		&MultisigActorCodeID:         {name: "epk/1/multisig", signer: true},
 		&ExpertActorCodeID:           {name: "epk/1/expert"},
 		&VoteActorCodeID:             {name: "epk/1/vote"},
+		&KnowledgeActorCodeID:        {name: "epk/1/knowledge"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {

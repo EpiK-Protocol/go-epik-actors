@@ -56,9 +56,9 @@ const TerminationLifetimeCap = 140 // PARAM_SPEC
 // Multiplier of whole per-winner rewards for a consensus fault penalty.
 const ConsensusFaultFactor = 5
 
-// Fraction of total reward (block reward + gas reward) to be locked up as of V6
-var LockedRewardFactorNum = big.NewInt(75)
-var LockedRewardFactorDenom = big.NewInt(100)
+// // Fraction of total reward (block reward + gas reward) to be locked up as of V6
+// var LockedRewardFactorNum = big.NewInt(75)
+// var LockedRewardFactorDenom = big.NewInt(100)
 
 // The projected block reward a sector would earn over some period.
 // Also known as "BR(t)".
@@ -178,9 +178,10 @@ func ConsensusFaultPenalty(thisEpochReward abi.TokenAmount) abi.TokenAmount {
 
 // Returns the amount of a reward to vest, and the vesting schedule, for a reward amount.
 func LockedRewardFromReward(reward abi.TokenAmount, nv network.Version) (abi.TokenAmount, *VestSpec) {
-	lockAmount := reward
-	spec := &RewardVestingSpec
-	// Locked amount is 75% of award.
-	lockAmount = big.Div(big.Mul(reward, LockedRewardFactorNum), LockedRewardFactorDenom)
-	return lockAmount, spec
+	return reward, &RewardVestingSpec
+	// lockAmount := reward
+	// spec := &RewardVestingSpec
+	// // Locked amount is 75% of award.
+	// lockAmount = big.Div(big.Mul(reward, LockedRewardFactorNum), LockedRewardFactorDenom)
+	// return lockAmount, spec
 }

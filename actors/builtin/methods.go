@@ -136,3 +136,11 @@ var MethodsRetrieval = struct {
 	WithdrawBalance  abi.MethodNum
 	CheckAndUpdate   abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5}
+
+var MethodsKnowledge = struct {
+	Constructor         abi.MethodNum
+	ChangePayee         abi.MethodNum
+	AssignUndistributed abi.MethodNum
+	ApplyRewards        abi.MethodNum
+	WithdrawBalance     abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5}
