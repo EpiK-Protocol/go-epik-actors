@@ -6,10 +6,12 @@ import (
 	"io"
 
 	addr "github.com/filecoin-project/go-address"
+	address "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 )
 
@@ -74,6 +76,22 @@ func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (owne
 	RequireSuccess(rt, code, "failed fetching expert control address")
 
 	return addr.Owner
+}
+
+func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount abi.TokenAmount) {
+	params := &NotifyVote{
+		Expert: expertAddr,
+		Amount: voteAmount,
+	}
+	code := rt.Send(expertAddr, MethodsExpertFunds.CheckExpert, params, abi.NewTokenAmount(0), &builtin.Discard{})
+	RequireSuccess(rt, code, "failed to notify expert vote")
+
+}
+
+// NotifyVoteParams vote params
+type NotifyVote struct {
+	Expert address.Address
+	Amount abi.TokenAmount
 }
 
 // This type duplicates the Miner.ControlAddresses return type, to work around a circular dependency between actors.

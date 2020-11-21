@@ -41,6 +41,7 @@ func main() {
 		builtin.ExpertAddr{},
 		builtin.ConfirmSectorProofsParams{}, // Aliased from v0
 		builtin.ApplyRewardParams{},
+		builtin.NotifyVote{},
 	); err != nil {
 		panic(err)
 	}
