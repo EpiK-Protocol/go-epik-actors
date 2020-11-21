@@ -28,6 +28,12 @@ type State struct {
 
 	// Total escrow table.
 	TotalCollateral abi.TokenAmount
+
+	// TotalRetrievalReward retrieval reward
+	TotalRetrievalReward abi.TokenAmount
+
+	// PendingReward temp pending reward
+	PendingReward abi.TokenAmount
 }
 
 // RetrievalState record retrieval data statistics
@@ -150,8 +156,8 @@ func (st *State) Withdraw(rt Runtime, fromAddr addr.Address, amount abi.TokenAmo
 	return exitcode.Ok, nil
 }
 
-// CheckAndUpdateRetrieval record the retrieval data
-func (st *State) CheckAndUpdateRetrieval(rt Runtime, fromAddr addr.Address, state *RetrievalState) (exitcode.ExitCode, error) {
+// RetrievalData record the retrieval data
+func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *RetrievalState) (exitcode.ExitCode, error) {
 	mmap, err := adt.AsMultimap(adt.AsStore(rt), st.RetrievalBatch)
 	if err != nil {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval batch set: %w", err)

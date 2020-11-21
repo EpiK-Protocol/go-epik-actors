@@ -23,7 +23,9 @@ func (a Actor) Exports() []interface{} {
 		2:                         a.AddBalance,
 		3:                         a.ApplyForWithdraw,
 		4:                         a.WithdrawBalance,
-		5:                         a.CheckAndUpdate,
+		5:                         a.RetrievalData,
+		6:                         a.ApplyRewards,
+		7:                         a.TotalCollateral,
 	}
 }
 
@@ -144,13 +146,15 @@ func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, reci
 	return nominal, nominal, []addr.Address{nominal}
 }
 
+// RetrievalDataParams retrieval data params
 type RetrievalDataParams struct {
 	PieceID  abi.PeerID
 	Size     uint64
 	Provider addr.Address
 }
 
-func (a Actor) CheckAndUpdate(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
+// RetrievalData retrieval data statistics
+func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
 	nominal, _, approvedCallers := escrowAddress(rt, params.Provider)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
@@ -164,8 +168,41 @@ func (a Actor) CheckAndUpdate(rt Runtime, params *RetrievalDataParams) *abi.Empt
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
-		code, err := st.CheckAndUpdateRetrieval(rt, nominal, statistics)
+		code, err := st.RetrievalData(rt, nominal, statistics)
 		builtin.RequireNoErr(rt, err, code, "failed to Statistics")
 	})
 	return nil
+}
+
+// ApplyRewards receive data retrievel
+func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	msgValue := rt.ValueReceived()
+	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "reward to add must be greater than zero")
+
+	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		st.PendingReward = big.Add(st.PendingReward, msgValue)
+		st.TotalRetrievalReward = big.Add(st.TotalRetrievalReward, msgValue)
+	})
+
+	return nil
+}
+
+// TotalCollateralReturn return total collateral
+type TotalCollateralReturn struct {
+	TotalCollateral abi.TokenAmount
+}
+
+// TotalCollateral return total collateral
+func (a Actor) TotalCollateral(rt Runtime, _ *abi.EmptyValue) *TotalCollateralReturn {
+	rt.ValidateImmediateCallerAcceptAny()
+
+	var st State
+	rt.StateReadonly(&st)
+
+	return &TotalCollateralReturn{
+		TotalCollateral: st.TotalCollateral,
+	}
 }

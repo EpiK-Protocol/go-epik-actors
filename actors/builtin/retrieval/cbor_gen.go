@@ -510,3 +510,51 @@ func (t *LockedState) UnmarshalCBOR(r io.Reader) error {
 	}
 	return nil
 }
+
+var lengthBufTotalCollateralReturn = []byte{129}
+
+func (t *TotalCollateralReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufTotalCollateralReturn); err != nil {
+		return err
+	}
+
+	// t.TotalCollateral (big.Int) (struct)
+	if err := t.TotalCollateral.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *TotalCollateralReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = TotalCollateralReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.TotalCollateral (big.Int) (struct)
+
+	{
+
+		if err := t.TotalCollateral.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalCollateral: %w", err)
+		}
+
+	}
+	return nil
+}

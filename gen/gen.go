@@ -258,6 +258,7 @@ func main() {
 		retrieval.RetrievalDataParams{},
 		retrieval.RetrievalState{},
 		retrieval.LockedState{},
+		retrieval.TotalCollateralReturn{},
 		// other types
 	); err != nil {
 		panic(err)
