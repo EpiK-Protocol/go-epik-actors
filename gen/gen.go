@@ -90,7 +90,8 @@ func main() {
 		expertfund.ExpertInfo{},
 		expertfund.ExpertDepositParams{},
 		expertfund.ClaimFundParams{},
-		expertfund.ResetExpertParams{},
+		expertfund.ExpertParams{},
+		expertfund.NotifyVoteParams{},
 		// other types
 	); err != nil {
 		panic(err)

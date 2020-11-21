@@ -9,7 +9,6 @@ import (
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -25,6 +24,8 @@ func (a Actor) Exports() []interface{} {
 		3:                         a.Deposit,
 		4:                         a.Claim,
 		5:                         a.Reset,
+		6:                         a.NotifyVote,
+		7:                         a.CheckExpert,
 	}
 }
 
@@ -49,10 +50,13 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
+	emptyArray, err := adt.MakeEmptyArray(adt.AsStore(rt)).Root()
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create state")
+
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
-	st := ConstructState(emptyMap)
+	st := ConstructState(emptyArray, emptyMap)
 	rt.StateCreate(st)
 	return nil
 }
@@ -102,35 +106,67 @@ func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.EmptyValue {
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		var control expert.GetControlAddressReturn
-		code := rt.Send(params.Expert, builtin.MethodsExpert.ControlAddress, nil, big.Zero(), &control)
-		builtin.RequireSuccess(rt, code, "failed to get expert control address")
+		expertOwner := builtin.RequestExpertControlAddr(rt, params.Expert)
 
-		rt.ValidateImmediateCallerIs(control.Owner)
+		rt.ValidateImmediateCallerIs(expertOwner)
 
 		err := st.Claim(rt, params.Expert, params.Amount)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to claim expert fund")
 
-		code = rt.Send(control.Owner, builtin.MethodSend, nil, params.Amount, &builtin.Discard{})
+		code := rt.Send(expertOwner, builtin.MethodSend, nil, params.Amount, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send claim amount")
 	})
 	return nil
 }
 
-// ResetExpertParams params
-type ResetExpertParams struct {
+// ExpertParams params
+type ExpertParams struct {
 	Expert address.Address
 }
 
 // Reset reset the expert data.
-func (a Actor) Reset(rt Runtime, params *ResetExpertParams) *abi.EmptyValue {
+func (a Actor) Reset(rt Runtime, params *ExpertParams) *abi.EmptyValue {
 
 	var st State
 	rt.StateTransaction(&st, func() {
 		rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
-		err := st.Reset(rt, params.Expert)
+		err := st.UpdateExpert(rt, params.Expert, 0, UndefTokenAmount)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to reset expert data")
+	})
+	return nil
+}
+
+// NotifyVoteParams vote params
+type NotifyVoteParams struct {
+	Expert address.Address
+	Amount abi.TokenAmount
+}
+
+// NotifyVote notify vote
+func (a Actor) NotifyVote(rt Runtime, params *NotifyVoteParams) *abi.EmptyValue {
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		rt.ValidateImmediateCallerType(builtin.VoteActorCodeID)
+
+		err := st.UpdateExpert(rt, params.Expert, -1, params.Amount)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update expert data")
+	})
+	return nil
+}
+
+// CheckExpert check expert
+func (a Actor) CheckExpert(rt Runtime, params *ExpertParams) *abi.EmptyValue {
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		rt.ValidateImmediateCallerType(builtin.VoteActorCodeID)
+
+		builtin.RequestExpertControlAddr(rt, params.Expert)
+
+		err := st.CheckInBlacklist(rt, params.Expert)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check expert")
 	})
 	return nil
 }

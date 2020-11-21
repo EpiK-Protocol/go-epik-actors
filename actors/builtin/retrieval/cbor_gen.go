@@ -13,7 +13,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{133}
+var lengthBufState = []byte{135}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -53,6 +53,16 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	if err := t.TotalCollateral.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.TotalRetrievalReward (big.Int) (struct)
+	if err := t.TotalRetrievalReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.PendingReward (big.Int) (struct)
+	if err := t.PendingReward.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -70,7 +80,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 5 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -125,6 +135,24 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.TotalCollateral.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.TotalCollateral: %w", err)
+		}
+
+	}
+	// t.TotalRetrievalReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalRetrievalReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalRetrievalReward: %w", err)
+		}
+
+	}
+	// t.PendingReward (big.Int) (struct)
+
+	{
+
+		if err := t.PendingReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.PendingReward: %w", err)
 		}
 
 	}

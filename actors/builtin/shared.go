@@ -63,7 +63,7 @@ func RequireNoErr(rt runtime.Runtime, err error, defaultExitCode exitcode.ExitCo
 func RequestMinerControlAddrs(rt runtime.Runtime, minerAddr addr.Address) (ownerAddr addr.Address, workerAddr addr.Address, controlAddrs []addr.Address) {
 	var addrs MinerAddrs
 	code := rt.Send(minerAddr, MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &addrs)
-	RequireSuccess(rt, code, "failed fetching control addresses")
+	RequireSuccess(rt, code, "failed fetching miner control addresses")
 
 	return addrs.Owner, addrs.Worker, addrs.ControlAddrs
 }
@@ -71,7 +71,7 @@ func RequestMinerControlAddrs(rt runtime.Runtime, minerAddr addr.Address) (owner
 func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (ownerAddr addr.Address) {
 	var addr ExpertAddr
 	code := rt.Send(expertAddr, MethodsExpert.ControlAddress, nil, abi.NewTokenAmount(0), &addr)
-	RequireSuccess(rt, code, "failed fetching control address")
+	RequireSuccess(rt, code, "failed fetching expert control address")
 
 	return addr.Owner
 }
