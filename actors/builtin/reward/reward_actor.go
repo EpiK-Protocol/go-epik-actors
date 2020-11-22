@@ -15,8 +15,8 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 )
 
-// // PenaltyMultiplier is the factor miner penaltys are scaled up by
-// const PenaltyMultiplier = 3
+// PenaltyMultiplier is the factor miner penaltys are scaled up by
+const PenaltyMultiplier = 3
 
 type Actor struct{}
 
@@ -96,9 +96,8 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	if !ok {
 		rt.Abortf(exitcode.ErrNotFound, "failed to resolve given owner address")
 	}
-	// // The miner penalty is scaled up by a factor of PenaltyMultiplier
-	// penalty := big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty)
-	penalty := big.Zero()
+	// The miner penalty is scaled up by a factor of PenaltyMultiplier
+	penalty := big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty)
 	expertReward := big.Zero()
 	minerReward := big.Zero()
 	totalReward := big.Zero()
@@ -121,11 +120,12 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 			AssertMsg(blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward is %v below zero", blockReward)
 		}
 
-		voteReward, expertReward, knowledgeReward, bandwidthReward, minerReward =
+		var powerReward big.Int
+		voteReward, expertReward, knowledgeReward, bandwidthReward, powerReward =
 			distributeBlockRewards(blockReward, params.RetrievalPledged, params.Circulating)
 
-		minerReward = big.Add(minerReward, params.GasReward)
-		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, minerReward)
+		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, powerReward)
+		minerReward = big.Add(powerReward, params.GasReward)
 	})
 
 	AssertMsg(totalReward.LessThanEqual(priorBalance), "reward %v exceeds balance %v", totalReward, priorBalance)
@@ -151,11 +151,10 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	builtin.RequireSuccess(rt, code, "failed to send funds to expert")
 
 	code = rt.Send(builtin.KnowledgeFundsActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, knowledgeReward, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send funds to knowledge", bandwidthReward) // TODO:
+	builtin.RequireSuccess(rt, code, "failed to send funds to knowledge")
 
-	//TODO:
-	// code = rt.Send(builtin.BandwidthFundsActorAddr, builtin.MethodsBandwidth.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
-	// builtin.RequireSuccess(rt, code, "failed to send funds to bandwidth")
+	code = rt.Send(builtin.RetrieveFundsActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send funds to retrieval")
 
 	return nil
 }

@@ -131,22 +131,22 @@ var MethodsExpertFunds = struct {
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}
 
 var MethodsVote = struct {
-	Constructor        abi.MethodNum
-	RegisterCandidates abi.MethodNum
-	Vote               abi.MethodNum
-	Revoke             abi.MethodNum
-	WithdrawBalance    abi.MethodNum
-	ApplyRewards       abi.MethodNum
+	Constructor     abi.MethodNum
+	BlockCandidates abi.MethodNum
+	Vote            abi.MethodNum
+	Revoke          abi.MethodNum
+	Claim           abi.MethodNum
+	ApplyRewards    abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6}
 
 var MethodsRetrieval = struct {
-	Constructor       abi.MethodNum
-	AddBalance        abi.MethodNum
-	ApplyForWithdraw  abi.MethodNum
-	WithdrawBalance   abi.MethodNum
-	CheckAndUpdate    abi.MethodNum
-	ApplyRewardParams abi.MethodNum
-	TotalCollateral   abi.MethodNum
+	Constructor      abi.MethodNum
+	AddBalance       abi.MethodNum
+	ApplyForWithdraw abi.MethodNum
+	WithdrawBalance  abi.MethodNum
+	CheckAndUpdate   abi.MethodNum
+	ApplyRewards     abi.MethodNum
+	TotalCollateral  abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}
 
 var MethodsKnowledge = struct {

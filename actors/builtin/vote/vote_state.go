@@ -16,10 +16,7 @@ type State struct {
 	TotalRewards abi.TokenAmount
 
 	// Total valid votes.
-	TotalVotes abi.TokenAmount
-
-	// Total votes revoked but not withdrawn.
-	TotalRevokingVotes abi.TokenAmount
+	TotalValidVotes abi.TokenAmount
 
 	// Information each candidate.
 	Candidates cid.Cid // Map, HAMT[Candidate ID-Address]Candidate
@@ -29,11 +26,15 @@ type State struct {
 }
 
 type Candidate struct {
-	// If true, this candidate cannot be voted for but revoke votes.
-	Closed bool
+	// Epoch at which this candidate was blocked.
+	BlockedEpoch abi.ChainEpoch
 
 	// Number of votes currently received.
 	Votes abi.TokenAmount
+}
+
+func (c *Candidate) IsBlocked() bool {
+	return c.BlockedEpoch > 0
 }
 
 type Voter struct {
@@ -57,110 +58,140 @@ func ConstructState(emptyCandidateMapCid, emptyVoterMapCid cid.Cid) *State {
 	}
 }
 
-func (st *State) registerCandidates(candidates *adt.Map, candAddrs []addr.Address) error {
-	for _, candAddr := range candAddrs {
-		_, ok, err := getCandidate(candidates, candAddr)
+func (st *State) blockCandidates(candidates *adt.Map, candAddrs map[addr.Address]struct{}, cur abi.ChainEpoch) error {
+	for candAddr := range candAddrs {
+		cand, found, err := getCandidate(candidates, candAddr)
 		if err != nil {
 			return err
 		}
-		if ok {
-			return xerrors.Errorf("duplicate candidate %s", candAddr)
+		if !found || // no votes yet.
+			cand.IsBlocked() {
+			return nil
 		}
-		err = setCandidate(candidates, candAddr, &Candidate{Votes: big.Zero(), Closed: false})
+		err = setCandidate(candidates, candAddr, &Candidate{Votes: cand.Votes, BlockedEpoch: cur})
 		if err != nil {
 			return err
 		}
+		st.TotalValidVotes = big.Sub(st.TotalValidVotes, cand.Votes)
 	}
+	Assert(st.TotalValidVotes.GreaterThanEqual(big.Zero()))
 	return nil
 }
 
-func (st *State) revoke(s adt.Store, candidates, voters *adt.Map,
-	voterAddr, candAddr addr.Address, votes abi.TokenAmount, cur abi.ChainEpoch) error {
-
-	{
-		oldVoter, found, err := getVoter(voters, voterAddr)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return xerrors.Errorf("%v has no votes", voterAddr)
-		}
-		voterRecords, err := adt.AsMap(s, oldVoter.VotingRecords)
-		if err != nil {
-			return xerrors.Errorf("failed to load voting records of %s: %w", voterAddr, err)
-		}
-		oldRecord, found, err := getVotingRecord(voterRecords, candAddr)
-		if err != nil {
-			return xerrors.Errorf("failed to get voting record for %s: %w", candAddr, err)
-		}
-		if !found {
-			return xerrors.Errorf("%v has no votes for %v", voterAddr, candAddr)
-		}
-		if oldRecord.Votes.LessThan(votes) {
-			return xerrors.Errorf("not enough votes to revoke")
-		}
-
-		// update voting records
-		newRecord := &VotingRecord{
-			Votes:             big.Sub(oldRecord.Votes, votes),
-			RevokingVotes:     big.Add(oldRecord.RevokingVotes, votes),
-			LastRevokingEpoch: cur,
-		}
-		err = setVotingRecord(voterRecords, candAddr, newRecord)
-		if err != nil {
-			return err
-		}
-		newVoter := &Voter{}
-		newVoter.VotingRecords, err = voterRecords.Root()
-		err = setVoter(voters, voterAddr, newVoter)
-		if err != nil {
-			return err
-		}
-	}
-
-	oldCand, found, err := getCandidate(candidates, candAddr)
+// Returns if candidate is blocked
+func (st *State) revokeFromCandidate(
+	candidates *adt.Map,
+	candAddr addr.Address,
+	votes abi.TokenAmount,
+) (*Candidate, error) {
+	cand, found, err := getCandidate(candidates, candAddr)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	AssertMsg(found, "candidate %v not exist", candAddr)
-	AssertMsg(oldCand.Votes.GreaterThanEqual(votes), "candidate %v has no enough votes %v", candAddr, oldCand.Votes)
+	if !found {
+		return nil, xerrors.Errorf("candidate %s not exist", candAddr)
+	}
+	if cand.Votes.LessThan(votes) {
+		return nil, xerrors.Errorf("insufficient votes to revoke from %s", candAddr)
+	}
 
-	newCand := &Candidate{
-		Closed: oldCand.Closed,
-		Votes:  big.Sub(oldCand.Votes, votes),
+	cand = &Candidate{
+		BlockedEpoch: cand.BlockedEpoch,
+		Votes:        big.Sub(cand.Votes, votes),
 	}
-	return setCandidate(candidates, candAddr, newCand)
+	err = setCandidate(candidates, candAddr, cand)
+	if err != nil {
+		return nil, err
+	}
+
+	return cand, nil
 }
 
-func (st *State) vote(s adt.Store, candidates, voters *adt.Map,
-	voterAddr, candAddr addr.Address, votes abi.TokenAmount) error {
-
-	oldCand, ok, err := getCandidate(candidates, candAddr)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return xerrors.Errorf("candidate %v not exist", candAddr)
-	}
-	if oldCand.Closed {
-		return xerrors.Errorf("vote for candidate %v not allowed", candAddr)
-	}
-	newCand := &Candidate{
-		Votes: big.Add(votes, oldCand.Votes),
-	}
-	err = setCandidate(candidates, candAddr, newCand)
-	if err != nil {
-		return err
-	}
-
-	// set or update voter
-	newVoter := &Voter{}
-	var voterRecords *adt.Map
+func (st *State) updateVotingRecordForRevoking(s adt.Store, voters *adt.Map,
+	voterAddr, candAddr addr.Address, votes abi.TokenAmount, cur abi.ChainEpoch) error {
 
 	oldVoter, found, err := getVoter(voters, voterAddr)
 	if err != nil {
 		return err
 	}
+	if !found {
+		return xerrors.Errorf("voter %v not exist", voterAddr)
+	}
+	votingRecords, err := adt.AsMap(s, oldVoter.VotingRecords)
+	if err != nil {
+		return xerrors.Errorf("failed to load voting records of %s: %w", voterAddr, err)
+	}
+	oldRecord, found, err := getVotingRecord(votingRecords, candAddr)
+	if err != nil {
+		return xerrors.Errorf("failed to get record for %s: %w", candAddr, err)
+	}
+	if !found {
+		return xerrors.Errorf("record not exist for %s", candAddr)
+	}
+	if oldRecord.Votes.LessThan(votes) {
+		return xerrors.Errorf("insufficient votes in record")
+	}
+
+	// update voting records
+	newRecord := &VotingRecord{
+		Votes:             big.Sub(oldRecord.Votes, votes),
+		RevokingVotes:     big.Add(oldRecord.RevokingVotes, votes),
+		LastRevokingEpoch: cur,
+	}
+	err = setVotingRecord(votingRecords, candAddr, newRecord)
+	if err != nil {
+		return err
+	}
+	newVoter := &Voter{}
+	newVoter.VotingRecords, err = votingRecords.Root()
+	if err != nil {
+		return xerrors.Errorf("failed to flush voting records: %w", err)
+	}
+	return setVoter(voters, voterAddr, newVoter)
+}
+
+// Assuming this candidate is eligible.
+func (st *State) addToCandidate(
+	candidates *adt.Map,
+	candAddr addr.Address,
+	votes abi.TokenAmount,
+) (*Candidate, error) {
+	cand, found, err := getCandidate(candidates, candAddr)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		if cand.IsBlocked() {
+			return nil, xerrors.Errorf("cannot vote for blocked candidate")
+		}
+		cand = &Candidate{
+			Votes:        big.Add(votes, cand.Votes),
+			BlockedEpoch: cand.BlockedEpoch,
+		}
+	} else {
+		cand = &Candidate{
+			Votes:        votes,
+			BlockedEpoch: abi.ChainEpoch(0),
+		}
+	}
+	err = setCandidate(candidates, candAddr, cand)
+	if err != nil {
+		return nil, err
+	}
+	return cand, nil
+}
+
+// Assuming this candidate is eligible.
+func (st *State) addVotingRecord(s adt.Store, voters *adt.Map,
+	voterAddr, candAddr addr.Address, votes abi.TokenAmount) error {
+
+	// set or update voter
+	oldVoter, found, err := getVoter(voters, voterAddr)
+	if err != nil {
+		return err
+	}
+
+	var voterRecords *adt.Map
 	if found {
 		voterRecords, err = adt.AsMap(s, oldVoter.VotingRecords)
 		if err != nil {
@@ -170,29 +201,30 @@ func (st *State) vote(s adt.Store, candidates, voters *adt.Map,
 		voterRecords = adt.MakeEmptyMap(s)
 	}
 
-	var newRecord *VotingRecord
-	oldRecord, found, err := getVotingRecord(voterRecords, candAddr)
+	// set or update voting records
+	record, found, err := getVotingRecord(voterRecords, candAddr)
 	if err != nil {
-		return xerrors.Errorf("failed to get voting record of %s: %w", voterAddr, err)
+		return xerrors.Errorf("failed to get voting record for %s: %w", candAddr, err)
 	}
 	if found {
-		newRecord = &VotingRecord{
-			Votes:             big.Add(oldRecord.Votes, votes),
-			RevokingVotes:     oldRecord.RevokingVotes,
-			LastRevokingEpoch: oldRecord.LastRevokingEpoch,
+		record = &VotingRecord{
+			Votes:             big.Add(record.Votes, votes),
+			RevokingVotes:     record.RevokingVotes,
+			LastRevokingEpoch: record.LastRevokingEpoch,
 		}
 	} else {
-		newRecord = &VotingRecord{
+		record = &VotingRecord{
 			Votes:             votes,
 			RevokingVotes:     big.Zero(),
 			LastRevokingEpoch: abi.ChainEpoch(0),
 		}
 	}
 
-	err = setVotingRecord(voterRecords, candAddr, newRecord)
+	err = setVotingRecord(voterRecords, candAddr, record)
 	if err != nil {
-		return xerrors.Errorf("failed to put voting record of %s: %w", voterAddr, err)
+		return xerrors.Errorf("failed to put voting record for %s: %w", candAddr, err)
 	}
+	newVoter := &Voter{}
 	newVoter.VotingRecords, err = voterRecords.Root()
 	if err != nil {
 		return xerrors.Errorf("failed to flush voting records of %s for %s: %w", voterAddr, candAddr, err)

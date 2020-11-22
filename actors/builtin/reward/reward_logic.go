@@ -130,7 +130,7 @@ func SlowConvenientBaselineForEpoch(targetEpoch abi.ChainEpoch) abi.StoragePower
 }
 
 func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
-	vote, expert, knowledge, bandwidth, miner abi.TokenAmount,
+	vote, expert, knowledge, bandwidth, power abi.TokenAmount,
 ) {
 	// 1% to vote
 	vote = big.Div(blockReward, big.NewInt(100))
@@ -140,10 +140,10 @@ func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
 	// 15% to bandwidth and knowledge
 	kb := big.Div(big.Mul(blockReward, big.NewInt(15)), big.NewInt(100))
 
-	miner = big.Sub(blockReward, vote)
-	miner = big.Sub(miner, expert)
-	miner = big.Sub(miner, kb)
-	Assert(miner.GreaterThanEqual(big.Zero()))
+	power = big.Sub(blockReward, vote)
+	power = big.Sub(power, expert)
+	power = big.Sub(power, kb)
+	Assert(power.GreaterThanEqual(big.Zero()))
 
 	// P - pledged, C - circulating
 	//
@@ -165,3 +165,11 @@ func min(a, b abi.TokenAmount) abi.TokenAmount {
 	}
 	return b
 }
+
+// for 30s per epoch, 90 days
+var EpochRewardDecayNum = big.NewInt(9_999_998_318_436_727)
+var EpochRewardDecayDen = big.NewInt(10_000_000_000_000_000)
+
+// // for 25s per epoch, 90 days
+// var EpochRewardDecayNum = big.NewInt(9_999_998_598_697_253)
+// var EpochRewardDecayDen = big.NewInt(10_000_000_000_000_000)

@@ -11,7 +11,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 )
 
@@ -83,7 +82,7 @@ func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount ab
 		Expert: expertAddr,
 		Amount: voteAmount,
 	}
-	code := rt.Send(expertAddr, MethodsExpertFunds.CheckExpert, params, abi.NewTokenAmount(0), &builtin.Discard{})
+	code := rt.Send(expertAddr, MethodsExpertFunds.CheckExpert, params, abi.NewTokenAmount(0), &Discard{})
 	RequireSuccess(rt, code, "failed to notify expert vote")
 
 }
@@ -105,6 +104,18 @@ type MinerAddrs struct {
 // can instead both alias the v0 version.
 type ConfirmSectorProofsParams struct {
 	Sectors []abi.SectorNumber
+}
+
+type BlockCandidatesParams struct {
+	Candidates []addr.Address
+}
+
+func NotifyExpertsBlocked(rt runtime.Runtime, blockedExperts ...addr.Address) {
+	params := &BlockCandidatesParams{
+		Candidates: blockedExperts,
+	}
+	code := rt.Send(VoteFundsActorAddr, MethodsVote.BlockCandidates, params, big.Zero(), &Discard{})
+	RequireSuccess(rt, code, "failed to notify experts blocked")
 }
 
 // ResolveToIDAddr resolves the given address to it's ID address form.

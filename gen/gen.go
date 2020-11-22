@@ -42,6 +42,7 @@ func main() {
 		builtin.ConfirmSectorProofsParams{}, // Aliased from v0
 		builtin.ApplyRewardParams{},
 		builtin.NotifyVote{},
+		builtin.BlockCandidatesParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -292,7 +293,6 @@ func main() {
 		vote.VotingRecord{},
 		vote.RevokeParams{},
 		vote.VoteParams{},
-		vote.RegisterCandidatesParams{},
 	); err != nil {
 		panic(err)
 	}
