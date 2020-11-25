@@ -341,7 +341,7 @@ func (ic *invocationContext) Send(toAddr address.Address, methodNum abi.MethodNu
 
 // CreateActor implements runtime.ExtendedInvocationContext.
 func (ic *invocationContext) CreateActor(codeID cid.Cid, addr address.Address) {
-	act, ok := ic.rt.actorImpls[codeID]
+	act, ok := ic.rt.ActorImpls[codeID]
 	if !ok {
 		ic.Abortf(exitcode.SysErrorIllegalArgument, "Can only create built-in actors.")
 	}
