@@ -18,7 +18,6 @@ import (
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
@@ -738,15 +737,28 @@ func (st *State) SaveVestingFunds(store adt.Store, funds *VestingFunds) error {
 // Funds and vesting
 //
 
-/* func (st *State) AddPreCommitDeposit(amount abi.TokenAmount) {
+/* func (st *State) AddPreCommitDeposit(amount abi.TokenAmount) error {
 	newTotal := big.Add(st.PreCommitDeposits, amount)
-	AssertMsg(newTotal.GreaterThanEqual(big.Zero()), "negative pre-commit deposit %s after adding %s to prior %s",
-		newTotal, amount, st.PreCommitDeposits)
+	if newTotal.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative pre-commit deposit %v after adding %v to prior %v", newTotal, amount, st.PreCommitDeposits)
+	}
 	st.PreCommitDeposits = newTotal
+<<<<<<< HEAD
+}
+
+func (st *State) AddInitialPledge(amount abi.TokenAmount) error {
+	newTotal := big.Add(st.InitialPledge, amount)
+	if newTotal.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative initial pledge %v after adding %v to prior %v", newTotal, amount, st.InitialPledge)
+	}
+	st.InitialPledge = newTotal
+	return nil
 } */
 
 func (st *State) AddPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) error {
-	Assert(amount.GreaterThan(big.Zero()))
+	if amount.LessThanEqual(big.Zero()) {
+		return xerrors.Errorf("non-positive amount of pledge to add: %v", amount)
+	}
 
 	// add to pledges
 	pledges, err := adt.AsMap(store, st.Pledges)
@@ -777,7 +789,9 @@ func (st *State) AddPledge(store adt.Store, pledger addr.Address, amount abi.Tok
 }
 
 func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
-	Assert(amount.GreaterThan(big.Zero()))
+	if amount.LessThanEqual(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("non-positive amount of pledge to withdraw: %v", amount)
+	}
 
 	pledges, err := adt.AsMap(store, st.Pledges)
 	if err != nil {
@@ -793,6 +807,10 @@ func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount ab
 		return big.Zero(), errors.New("no pledge found")
 	}
 	actual := big.Min(out, amount)
+	if actual.LessThanEqual(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("non-positive actual amount of pledge to withdraw: %v", actual)
+	}
+
 	out = big.Sub(out, actual)
 
 	if out.IsZero() {
@@ -808,7 +826,9 @@ func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount ab
 	}
 
 	st.TotalPledge = big.Sub(st.TotalPledge, actual)
-	Assert(st.TotalPledge.GreaterThanEqual(big.Zero()))
+	if st.TotalPledge.LessThan(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("negative total pledge %v after subtracting %v", st.TotalPledge, actual)
+	}
 
 	st.Pledges, err = pledges.Root()
 	if err != nil {
@@ -819,7 +839,9 @@ func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount ab
 
 // AddLockedFunds first vests and unlocks the vested funds AND then locks the given funds in the vesting table.
 func (st *State) AddLockedFunds(store adt.Store, currEpoch abi.ChainEpoch, vestingSum abi.TokenAmount, spec *VestSpec) (vested abi.TokenAmount, err error) {
-	AssertMsg(vestingSum.GreaterThanEqual(big.Zero()), "negative vesting sum %s", vestingSum)
+	if vestingSum.LessThan(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("negative amount to lock %s", vestingSum)
+	}
 
 	vestingFunds, err := st.LoadVestingFunds(store)
 	if err != nil {
@@ -829,7 +851,9 @@ func (st *State) AddLockedFunds(store adt.Store, currEpoch abi.ChainEpoch, vesti
 	// unlock vested funds first
 	amountUnlocked := vestingFunds.unlockVestedFunds(currEpoch)
 	st.LockedFunds = big.Sub(st.LockedFunds, amountUnlocked)
-	Assert(st.LockedFunds.GreaterThanEqual(big.Zero()))
+	if st.LockedFunds.LessThan(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("negative locked funds %v after unlocking %v", st.LockedFunds, amountUnlocked)
+	}
 
 	// add locked funds now
 	vestingFunds.addLockedFunds(currEpoch, vestingSum, st.ProvingPeriodStart, spec)
@@ -869,7 +893,9 @@ func (st *State) RepayPartialDebtInPriorityOrder(store adt.Store, currEpoch abi.
 	}
 
 	// We should never unlock more than the debt we need to repay
-	Assert(fromVesting.LessThanEqual(st.FeeDebt))
+	if fromVesting.GreaterThan(st.FeeDebt) {
+		return big.Zero(), big.Zero(), xerrors.Errorf("unlocked more vesting funds %v than required for debt %v", fromVesting, st.FeeDebt)
+	}
 	st.FeeDebt = big.Sub(st.FeeDebt, fromVesting)
 
 	fromBalance = big.Min(unlockedBalance, st.FeeDebt)
@@ -913,7 +939,9 @@ func (st *State) UnlockUnvestedFunds(store adt.Store, currEpoch abi.ChainEpoch, 
 	amountUnlocked := vestingFunds.unlockUnvestedFunds(currEpoch, target)
 
 	st.LockedFunds = big.Sub(st.LockedFunds, amountUnlocked)
-	Assert(st.LockedFunds.GreaterThanEqual(big.Zero()))
+	if st.LockedFunds.LessThan(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("negative locked funds %v after unlocking %v", st.LockedFunds, amountUnlocked)
+	}
 
 	if err := st.SaveVestingFunds(store, vestingFunds); err != nil {
 		return big.Zero(), xerrors.Errorf("failed to save vesting funds: %w", err)
@@ -1202,7 +1230,9 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 		// Pledge for the sectors expiring early is retained to support the termination fee that will be assessed
 		// when the early termination is processed.
 		pledgeDelta = big.Sub(pledgeDelta, expired.OnTimePledge)
-		st.AddInitialPledge(expired.OnTimePledge.Neg()) */
+		if err = st.AddInitialPledge(expired.OnTimePledge.Neg()); err != nil {
+			return nil, xerrors.Errorf("failed to reduce %v initial pledge for expiring sectors: %w", expired.OnTimePledge, err)
+		} */
 
 		// Record reduction in power of the amount of expiring active power.
 		// Faulty power has already been lost, so the amount expiring can be excluded from the delta.

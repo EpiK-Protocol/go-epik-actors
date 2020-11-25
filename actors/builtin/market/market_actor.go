@@ -17,7 +17,6 @@ import (
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
@@ -226,8 +225,8 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			/* resolvedAddrs[deal.Proposal.Client] = client */
 			deal.Proposal.Client = client
 
-			/* err, code := msm.lockClientAndProviderBalances(&deal.Proposal)
-			builtin.RequireNoErr(rt, err, code, "failed to lock balance") */
+			/* err := msm.lockClientAndProviderBalances(&deal.Proposal)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to lock balance") */
 
 			id := msm.generateStorageDealID()
 
@@ -464,7 +463,7 @@ type OnMinerSectorsTerminateParams struct {
 func (a Actor) OnMinerSectorsTerminate(rt Runtime, params *OnMinerSectorsTerminateParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
 	minerAddr := rt.Caller()
-	AssertMsg(params.Epoch <= rt.CurrEpoch(), "future termination")
+	builtin.RequireState(rt, params.Epoch <= rt.CurrEpoch(), "future termination")
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -480,8 +479,8 @@ func (a Actor) OnMinerSectorsTerminate(rt Runtime, params *OnMinerSectorsTermina
 			if !found {
 				continue
 			}
-
-			AssertMsg(deal.Provider == minerAddr, "caller is not the provider of the deal")
+			builtin.RequireState(rt, deal.Provider == minerAddr, "caller %v is not the provider %v of deal %v",
+				minerAddr, deal.Provider, dealID)
 
 			/* // do not slash expired deals
 			if deal.EndEpoch <= params.Epoch {
@@ -552,7 +551,8 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 				// deal has been published but not activated yet -> terminate it as it has timed out
 				if !found {
 					// Not yet appeared in proven sector; check for timeout.
-					AssertMsg(rt.CurrEpoch() >= deal.StartEpoch, "if sector start is not set, we must be in a timed out state")
+					builtin.RequireState(rt, rt.CurrEpoch() >= deal.StartEpoch, "deal %d processed before start epoch %d",
+						dealID, deal.StartEpoch)
 
 					// no collateral required
 					/* slashed := msm.processDealInitTimedOut(rt, deal)
@@ -565,10 +565,10 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 					// we should not attempt to delete the DealState because it does NOT exist
 					err := deleteDealProposalAndState(dealID, msm.dealStates, msm.dealProposals, true, false)
-					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal")
+					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal %d", dealID)
 
 					pdErr := msm.pendingDeals.Delete(abi.CidKey(dcid))
-					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal")
+					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal %v", dcid)
 
 					return nil
 				}
@@ -576,14 +576,14 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 				// if this is the first cron tick for the deal, it should be in the pending state.
 				if state.LastUpdatedEpoch == epochUndefined {
 					pdErr := msm.pendingDeals.Delete(abi.CidKey(dcid))
-					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal")
+					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal %v", dcid)
 				} else {
-					AssertMsg(rt.CurrEpoch() >= state.LastUpdatedEpoch, "current epoch less than last update epoch")
+					builtin.RequireState(rt, rt.CurrEpoch() >= state.LastUpdatedEpoch, "current epoch less than last update epoch")
 				}
 
 				// sectors are terminated
 				if state.SlashEpoch != epochUndefined {
-					AssertMsg(rt.CurrEpoch() >= state.SlashEpoch, "current epoch less than slash epoch")
+					builtin.RequireState(rt, rt.CurrEpoch() >= state.SlashEpoch, "current epoch less than slash epoch")
 					err := deleteDealProposalAndState(dealID, msm.dealStates, msm.dealProposals, true, true)
 					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal proposal and states")
 				} else {
@@ -596,14 +596,14 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 				Assert(slashAmount.GreaterThanEqual(big.Zero()))
 
 				if removeDeal {
-					AssertMsg(nextEpoch == epochUndefined, "next scheduled epoch should be undefined as deal has been removed")
+					builtin.RequireState(rt, nextEpoch == epochUndefined, "removed deal %d should have no scheduled epoch (got %d)", dealID, nextEpoch)
 
 					amountSlashed = big.Add(amountSlashed, slashAmount)
 					err := deleteDealProposalAndState(dealID, msm.dealStates, msm.dealProposals, true, true)
 					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal proposal and states")
 				} else {
-					AssertMsg(nextEpoch > rt.CurrEpoch() && slashAmount.IsZero(), "deal should not be slashed and should have a schedule for next cron tick"+
-						" as it has not been removed")
+					builtin.RequireState(rt, nextEpoch > rt.CurrEpoch(), "continuing deal %d next epoch %d should be in future", dealID, nextEpoch)
+					builtin.RequireState(rt, slashAmount.IsZero(), "continuing deal %d should not be slashed", dealID)
 
 					// Update deal's LastUpdatedEpoch in DealStates
 					state.LastUpdatedEpoch = rt.CurrEpoch()

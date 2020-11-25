@@ -5,7 +5,6 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
@@ -131,7 +130,9 @@ func (st *State) SaveVestingFunds(store adt.Store, expert *ExpertInfo, funds *Ve
 
 // AddLockedFunds first vests and unlocks the vested funds AND then locks the given funds in the vesting table.
 func (st *State) AddLockedFunds(rt Runtime, expert *ExpertInfo, vestingSum abi.TokenAmount) (vested abi.TokenAmount, err error) {
-	AssertMsg(vestingSum.GreaterThanEqual(big.Zero()), "negative vesting sum %s", vestingSum)
+	if vestingSum.LessThan(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("negative vesting sum %s", vestingSum)
+	}
 
 	vestingFunds, err := st.LoadVestingFunds(adt.AsStore(rt), expert)
 	if err != nil {
@@ -141,7 +142,9 @@ func (st *State) AddLockedFunds(rt Runtime, expert *ExpertInfo, vestingSum abi.T
 	// unlock vested funds first
 	amountUnlocked := vestingFunds.unlockVestedFunds(rt.CurrEpoch())
 	expert.LockedFunds = big.Sub(expert.LockedFunds, amountUnlocked)
-	Assert(expert.LockedFunds.GreaterThanEqual(big.Zero()))
+	if expert.LockedFunds.LessThan(big.Zero()) {
+		return big.Zero(), xerrors.Errorf("negative locked funds %v after subtracting %v", expert.LockedFunds, amountUnlocked)
+	}
 
 	// add locked funds now
 	vestingFunds.addLockedFunds(rt.CurrEpoch(), vestingSum, rt.CurrEpoch(), &RewardVestingSpec)

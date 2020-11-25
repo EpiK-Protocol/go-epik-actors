@@ -9,7 +9,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
@@ -67,7 +66,9 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 
 // AddBalance add balance for
 func (st *State) AddBalance(rt Runtime, fromAddr addr.Address, amount abi.TokenAmount) error {
-	Assert(amount.GreaterThanEqual(big.Zero()))
+	if amount.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative amount %v of funds to add", amount)
+	}
 
 	escrow, err := adt.AsBalanceTable(adt.AsStore(rt), st.EscrowTable)
 	if err != nil {
@@ -85,7 +86,9 @@ func (st *State) AddBalance(rt Runtime, fromAddr addr.Address, amount abi.TokenA
 
 // ApplyForWithdraw apply for withdraw amount
 func (st *State) ApplyForWithdraw(rt Runtime, fromAddr addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
-	Assert(amount.GreaterThanEqual(big.Zero()))
+	if amount.LessThan(big.Zero()) {
+		return exitcode.ErrIllegalState, xerrors.Errorf("negative amount %v of funds to apply", amount)
+	}
 
 	escrowTable, err := adt.AsBalanceTable(adt.AsStore(rt), st.EscrowTable)
 	if err != nil {
@@ -132,7 +135,9 @@ func (st *State) ApplyForWithdraw(rt Runtime, fromAddr addr.Address, amount abi.
 
 // Withdraw withdraw amount
 func (st *State) Withdraw(rt Runtime, fromAddr addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
-	Assert(amount.GreaterThanEqual(big.Zero()))
+	if amount.LessThan(big.Zero()) {
+		return exitcode.ErrIllegalState, xerrors.Errorf("negative amount %v of funds to withdraw", amount)
+	}
 
 	lockedMap, err := adt.AsMap(adt.AsStore(rt), st.LockedTable)
 	if err != nil {

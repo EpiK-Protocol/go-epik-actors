@@ -3,9 +3,9 @@ package reward
 import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 )
 
 const (
@@ -137,7 +137,7 @@ func SlowConvenientBaselineForEpoch(targetEpoch abi.ChainEpoch) abi.StoragePower
 } */
 
 func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
-	vote, expert, knowledge, retrieval, power abi.TokenAmount,
+	vote, expert, knowledge, retrieval, power abi.TokenAmount, err error,
 ) {
 	// 1% to vote
 	vote = big.Div(blockReward, big.NewInt(100))
@@ -150,7 +150,10 @@ func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
 	power = big.Sub(blockReward, vote)
 	power = big.Sub(power, expert)
 	power = big.Sub(power, kb)
-	Assert(power.GreaterThanEqual(big.Zero()))
+	if power.LessThan(big.Zero()) {
+		err = xerrors.Errorf("negative power rewards %v after sub %v (vote), %v (expert), %v (kb)", power, vote, expert, kb)
+		return
+	}
 
 	// P - pledged, C - circulating
 	//
@@ -165,7 +168,9 @@ func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
 		retrieval = big.Zero()
 	}
 	knowledge = big.Sub(kb, retrieval)
-	Assert(knowledge.GreaterThanEqual(big.Zero()))
+	if knowledge.LessThan(big.Zero()) {
+		err = xerrors.Errorf("negative knowledge rewards %v after sub retrieval %v", knowledge, retrieval)
+	}
 	return
 }
 

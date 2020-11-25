@@ -7,7 +7,6 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
@@ -108,7 +107,9 @@ func (st *State) BlockCandidates(candidates *adt.Map, candAddrs map[addr.Address
 			return 0, err
 		}
 		st.TotalVotes = big.Sub(st.TotalVotes, cand.Votes)
-		Assert(st.TotalVotes.GreaterThanEqual(big.Zero()))
+		if st.TotalVotes.LessThan(big.Zero()) {
+			return 0, xerrors.Errorf("negative total votes %v after sub %v for blocking", st.TotalVotes, cand.Votes)
+		}
 
 		blocked++
 	}
@@ -128,7 +129,9 @@ func (st *State) subFromCandidate(
 	if !found {
 		return nil, xerrors.Errorf("candidate %s not exist", candAddr)
 	}
-	AssertMsg(cand.Votes.GreaterThanEqual(votes), "insufficient votes in candidate")
+	if cand.Votes.LessThan(votes) {
+		return nil, xerrors.Errorf("current votes %v of candidate %s less than expected %v", cand.Votes, candAddr, votes)
+	}
 
 	cand.Votes = big.Sub(cand.Votes, votes)
 	err = setCandidate(candidates, candAddr, cand)
@@ -308,7 +311,9 @@ func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.
 		if err != nil {
 			return err
 		}
-		AssertMsg(found, "candidate %s not found", candAddr)
+		if !found {
+			return xerrors.Errorf("candidate %s not found", candAddr)
+		}
 
 		if cand.IsBlocked() {
 			if cand.BlockedBefore(voter.SettleEpoch) {
@@ -337,17 +342,23 @@ func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.
 
 	for _, sameEpoch := range blocked {
 		deltaEarningsPerVote := big.Sub(sameEpoch[0].BlockCumEarningsPerVote, voter.SettleCumEarningsPerVote)
-		AssertMsg(deltaEarningsPerVote.GreaterThanEqual(big.Zero()), "unexpected negative delta earnigs")
+		if deltaEarningsPerVote.LessThan(big.Zero()) {
+			return xerrors.Errorf("negative delta earnigs %v after sub1 %v", deltaEarningsPerVote, voter.SettleCumEarningsPerVote)
+		}
 
 		voter.Withdrawable = big.Add(voter.Withdrawable, big.Mul(totalVotes, deltaEarningsPerVote))
 		voter.SettleCumEarningsPerVote = sameEpoch[0].BlockCumEarningsPerVote
 
 		totalVotes = big.Sub(totalVotes, blockedVotes[sameEpoch[0].BlockEpoch])
-		Assert(totalVotes.GreaterThanEqual(big.Zero()))
+		if totalVotes.LessThan(big.Zero()) {
+			return xerrors.Errorf("negative total votes %v after sub %v, blocked at %d", totalVotes, blockedVotes[sameEpoch[0].BlockEpoch], sameEpoch[0].BlockEpoch)
+		}
 	}
 	// st.CumEarningsPerVote is the value in parent epoch if invoked by Vote/Rescind/Withdraw, otherwise that in 'cur'
 	deltaEarningsPerVote := big.Sub(st.CumEarningsPerVote, voter.SettleCumEarningsPerVote)
-	AssertMsg(deltaEarningsPerVote.GreaterThanEqual(big.Zero()), "negative delta earnigs")
+	if deltaEarningsPerVote.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative delta earnings %v after sub2 %v", deltaEarningsPerVote, voter.SettleCumEarningsPerVote)
+	}
 
 	voter.Withdrawable = big.Add(voter.Withdrawable, big.Mul(totalVotes, deltaEarningsPerVote))
 	voter.SettleEpoch = cur
@@ -428,7 +439,9 @@ func (st *State) withdrawUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainE
 }
 
 func setCandidate(candidates *adt.Map, candAddr addr.Address, cand *Candidate) error {
-	Assert(cand.Votes.GreaterThanEqual(big.Zero()))
+	if cand.Votes.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative votes %v of candidate %s to put", cand.Votes, candAddr)
+	}
 
 	// Should not delete even if candidate has no votes, for it may be inspect in settle.
 	if err := candidates.Put(abi.AddrKey(candAddr), cand); err != nil {

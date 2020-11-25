@@ -11,7 +11,6 @@ import (
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 )
 
 // PenaltyMultiplier is the factor miner penaltys are scaled up by
@@ -119,12 +118,16 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	if totalReward.GreaterThan(currBalance) {
 		rt.Log(rtt.WARN, "reward actor balance %d below totalReward expected %d, paying out rest of balance", currBalance, totalReward)
 		totalReward = currBalance
-		blockReward = big.Sub(totalReward, gasReward)
-	}
-	AssertMsg(totalReward.LessThanEqual(priorBalance), "total reward %v exceeds balance %v", totalReward, priorBalance)
 
-	voteReward, expertReward, knowledgeReward, retrievalReward, powerReward :=
+		blockReward = big.Sub(totalReward, gasReward)
+		// Since we have already asserted the balance is greater than gas reward blockReward is >= 0
+		builtin.RequireState(rt, blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward %v below zero", blockReward)
+	}
+	builtin.RequireState(rt, totalReward.LessThanEqual(priorBalance), "reward %v exceeds balance %v", totalReward, priorBalance)
+
+	voteReward, expertReward, knowledgeReward, retrievalReward, powerReward, err :=
 		distributeBlockRewards(blockReward, params.ParentRetrievalPledge, params.ParentCircSupply)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to compute rewards")
 
 	sendFailed := big.Zero()
 

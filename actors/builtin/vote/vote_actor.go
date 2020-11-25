@@ -9,7 +9,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/ipfs/go-cid"
 )
@@ -204,7 +203,7 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 		// If blocked, TotalVotes has been subtracted in BlockCandidate.
 		if !afterRescind.IsBlocked() {
 			st.TotalVotes = big.Sub(st.TotalVotes, rescindedVotes)
-			Assert(st.TotalVotes.GreaterThanEqual(big.Zero()))
+			builtin.RequireState(rt, st.TotalVotes.GreaterThanEqual(big.Zero()), "negative total votes %v after sub %v", st.TotalVotes, rescindedVotes)
 		}
 	})
 
@@ -272,7 +271,7 @@ func (a Actor) Withdraw(rt Runtime, to *addr.Address) *abi.TokenAmount {
 		st.Voters, err = voters.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
 	})
-	Assert(total.LessThanEqual(rt.CurrentBalance()))
+	builtin.RequireState(rt, total.LessThanEqual(rt.CurrentBalance()), "expected withdrawn amount %v exceeds balance %v", total, rt.CurrentBalance())
 
 	if total.GreaterThan(big.Zero()) {
 		code := rt.Send(recipient, builtin.MethodSend, nil, total, &builtin.Discard{})

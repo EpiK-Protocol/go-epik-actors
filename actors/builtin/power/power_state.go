@@ -13,7 +13,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
@@ -222,7 +221,9 @@ func (st *State) addToClaim(
 		st.TotalRawBytePower = big.Add(st.TotalRawBytePower, power)
 	}
 
-	AssertMsg(st.MinerAboveMinPowerCount >= 0, "negative number of miners larger than min: %v", st.MinerAboveMinPowerCount)
+	if st.MinerAboveMinPowerCount < 0 {
+		return xerrors.Errorf("negative number of miners larger than min: %v", st.MinerAboveMinPowerCount)
+	}
 	return setClaim(claims, miner, &newClaim)
 }
 
@@ -271,7 +272,6 @@ func getClaim(claims *adt.Map, a addr.Address) (*Claim, bool, error) {
 
 func (st *State) addPledgeTotal(amount abi.TokenAmount) {
 	st.TotalPledgeCollateral = big.Add(st.TotalPledgeCollateral, amount)
-	AssertMsg(st.TotalPledgeCollateral.GreaterThanEqual(big.Zero()), "pledged amount cannot be negative")
 }
 
 func (st *State) appendCronEvent(events *adt.Multimap, epoch abi.ChainEpoch, event *CronEvent) error {
@@ -303,14 +303,18 @@ func loadCronEvents(mmap *adt.Multimap, epoch abi.ChainEpoch) ([]CronEvent, erro
 }
 
 func setClaim(claims *adt.Map, a addr.Address, claim *Claim) error {
-	AssertMsg(claim.RawBytePower.GreaterThanEqual(big.Zero()), "negative claimed raw byte power: %v", claim.RawBytePower)
-	AssertMsg(claim.QualityAdjPower.GreaterThanEqual(big.Zero()), "negative claimed quality adjusted power: %v", claim.QualityAdjPower)
-	AssertMsg(claim.TotalMiningPledge.GreaterThanEqual(big.Zero()), "negative claimed total pledge: %v", claim.TotalMiningPledge)
-
+	if claim.RawBytePower.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative claim raw power %v", claim.RawBytePower)
+	}
+	if claim.QualityAdjPower.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative claim quality-adjusted power %v", claim.QualityAdjPower)
+	}
+	if claim.TotalMiningPledge.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative claim total mining pledge %v", claim.TotalMiningPledge)
+	}
 	if err := claims.Put(abi.AddrKey(a), claim); err != nil {
 		return xerrors.Errorf("failed to put claim with address %s power %v: %w", a, claim, err)
 	}
-
 	return nil
 }
 
