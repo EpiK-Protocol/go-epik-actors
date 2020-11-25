@@ -1273,8 +1273,8 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 }
 
 // Assumes pieces are all checked before by MustNotContainAnyPiece
-func (st *State) AddPieces(store adt.Store, vds []market.ValidDealInfo, sno abi.SectorNumber) error {
-	if len(vds) == 0 {
+func (st *State) AddPieces(store adt.Store, sdi market.SectorDealInfos, sno abi.SectorNumber) error {
+	if len(sdi.PieceCIDs) == 0 {
 		return nil
 	}
 	pieces, err := adt.AsMap(store, st.Pieces)
@@ -1282,10 +1282,10 @@ func (st *State) AddPieces(store adt.Store, vds []market.ValidDealInfo, sno abi.
 		return errors.Wrap(err, "failed to load Pieces")
 	}
 	v := cbg.CborInt(sno)
-	for _, vd := range vds {
-		err = pieces.Put(abi.CidKey(vd.PieceCID), &v)
+	for _, pcid := range sdi.PieceCIDs {
+		err = pieces.Put(abi.CidKey(pcid), &v)
 		if err != nil {
-			return errors.Wrapf(err, "failed to add piece %d: %s", sno, vd.PieceCID)
+			return errors.Wrapf(err, "failed to add piece %d: %s", sno, pcid)
 		}
 	}
 	st.Pieces, err = pieces.Root()

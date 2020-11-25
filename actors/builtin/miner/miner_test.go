@@ -439,8 +439,11 @@ func TestCommitments(t *testing.T) {
 		precommitParams := actor.makePreCommit(sectorNo, precommitEpoch-1, dealIDs)
 		pieceSizes := []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)}
 		precommit := actor.preCommitSector(rt, precommitParams, preCommitConf{
-			ValidDeals: []market.ValidDealInfo{
-				{PieceSize: pieceSizes[0], PieceCID: emptyPieceCID},
+			verifiedDealInfos: []market.SectorDealInfos{
+				{
+					PieceCIDs:  []cid.Cid{emptyPieceCID},
+					PieceSizes: []abi.PaddedPieceSize{pieceSizes[0]},
+				},
 			},
 		})
 
@@ -541,8 +544,11 @@ func TestCommitments(t *testing.T) {
 
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "deals too large to fit in sector", func() {
 			actor.preCommitSector(rt, actor.makePreCommit(101, challengeEpoch, []abi.DealID{1}), preCommitConf{
-				ValidDeals: []market.ValidDealInfo{
-					{PieceSize: abi.PaddedPieceSize(actor.sectorSize + 1), PieceCID: emptyPieceCID},
+				verifiedDealInfos: []market.SectorDealInfos{
+					{
+						PieceCIDs:  []cid.Cid{emptyPieceCID},
+						PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(actor.sectorSize + 1)},
+					},
 				},
 			})
 		})
@@ -727,8 +733,11 @@ func TestCommitments(t *testing.T) {
 		sectorNo := abi.SectorNumber(100)
 		params := actor.makePreCommit(sectorNo, precommitEpoch-1, []abi.DealID{1})
 		precommit := actor.preCommitSector(rt, params, preCommitConf{
-			ValidDeals: []market.ValidDealInfo{
-				{PieceSize: abi.PaddedPieceSize(1<<10 + 1), PieceCID: tutil.MakeCID("rand", &market.PieceCIDPrefix)},
+			verifiedDealInfos: []market.SectorDealInfos{
+				{
+					PieceCIDs:  []cid.Cid{tutil.MakeCID("rand", &market.PieceCIDPrefix)},
+					PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)},
+				},
 			},
 		})
 
@@ -867,13 +876,27 @@ func TestCommitments(t *testing.T) {
 			// expiration := deadline.PeriodEnd() + defaultSectorExpiration*miner.WPoStProvingPeriod
 			precommit := actor.makePreCommit(sectorNo, rt.Epoch()-1, makeDealIDs(limit+1))
 			rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "too many deals for sector", func() {
-				actor.preCommitSector(rt, precommit, preCommitConf{})
+				actor.preCommitSector(rt, precommit, preCommitConf{
+					verifiedDealInfos: []market.SectorDealInfos{
+						{
+							PieceCIDs:  []cid.Cid{tutil.MakeCID("rand", &market.PieceCIDPrefix)},
+							PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)},
+						},
+					},
+				})
 			})
 
 			// sector at or below limit succeeds
 			rt, actor, _ = setup(proof)
 			precommit = actor.makePreCommit(sectorNo, rt.Epoch()-1, makeDealIDs(limit))
-			actor.preCommitSector(rt, precommit, preCommitConf{})
+			actor.preCommitSector(rt, precommit, preCommitConf{
+				verifiedDealInfos: []market.SectorDealInfos{
+					{
+						PieceCIDs:  []cid.Cid{tutil.MakeCID("rand", &market.PieceCIDPrefix)},
+						PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)},
+					},
+				},
+			})
 			actor.checkState(rt)
 		}
 	})
@@ -900,7 +923,14 @@ func TestCommitments(t *testing.T) {
 		})
 		rt.Reset()
 		pc.SealProof = abi.RegisteredSealProof_StackedDrg8MiBV1_1
-		actor.preCommitSector(rt, pc, preCommitConf{})
+		actor.preCommitSector(rt, pc, preCommitConf{
+			verifiedDealInfos: []market.SectorDealInfos{
+				{
+					PieceCIDs:  []cid.Cid{tutil.MakeCID("rand", &market.PieceCIDPrefix)},
+					PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)},
+				},
+			},
+		})
 
 		actor.checkState(rt)
 	})
@@ -1780,7 +1810,7 @@ func TestCCUpgrade(t *testing.T) {
 } */
 
 func TestWindowPost(t *testing.T) {
-	periodOffset := abi.ChainEpoch(100)
+	periodOffset := abi.ChainEpoch(miner.PreCommitChallengeDelay * 2 / 3)
 	actor := newHarness(t, periodOffset)
 	actor.setProofType(abi.RegisteredSealProof_StackedDrg2KiBV1_1)
 	precommitEpoch := abi.ChainEpoch(1)
@@ -2277,16 +2307,22 @@ func TestProveCommit(t *testing.T) {
 		rt.SetEpoch(precommitEpoch)
 		paramsA := actor.makePreCommit(actor.nextSectorNo, rt.Epoch()-1, []abi.DealID{1})
 		preCommitA := actor.preCommitSector(rt, paramsA, preCommitConf{
-			ValidDeals: []market.ValidDealInfo{
-				{PieceSize: abi.PaddedPieceSize(1<<10 + 1), PieceCID: emptyPieceCID},
+			verifiedDealInfos: []market.SectorDealInfos{
+				{
+					PieceCIDs:  []cid.Cid{emptyPieceCID},
+					PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)},
+				},
 			},
 		})
 		sectorNoA := actor.nextSectorNo
 		actor.nextSectorNo++
 		paramsB := actor.makePreCommit(actor.nextSectorNo, rt.Epoch()-1, []abi.DealID{2})
 		preCommitB := actor.preCommitSector(rt, paramsB, preCommitConf{
-			ValidDeals: []market.ValidDealInfo{
-				{PieceSize: abi.PaddedPieceSize(1<<10 + 2), PieceCID: emptyPieceCID},
+			verifiedDealInfos: []market.SectorDealInfos{
+				{
+					PieceCIDs:  []cid.Cid{emptyPieceCID},
+					PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 2)},
+				},
 			},
 		})
 		sectorNoB := actor.nextSectorNo
@@ -2313,7 +2349,7 @@ func TestProveCommit(t *testing.T) {
 }
 
 func TestDeadlineCron(t *testing.T) {
-	periodOffset := abi.ChainEpoch(100)
+	periodOffset := abi.ChainEpoch(miner.PreCommitChallengeDelay * 2 / 3)
 	actor := newHarness(t, periodOffset)
 	builder := builderForHarness(actor).
 		WithBalance(bigBalance, big.Zero())
@@ -2440,10 +2476,10 @@ func TestDeadlineCron(t *testing.T) {
 		dlIdx, pIdx, err := st.FindSector(rt.AdtStore(), activeSectors[0].SectorNumber)
 		require.NoError(t, err)
 
-		dlIdx2, pIdx2, err := st.FindSector(rt.AdtStore(), activeSectors2[0].SectorNumber)
+		dlIdx2, _, err := st.FindSector(rt.AdtStore(), activeSectors2[0].SectorNumber)
 		require.NoError(t, err)
 
-		fmt.Println(dlIdx, pIdx, dlIdx2, pIdx2, activeSectors2[0].SectorNumber) // dlIdx2 is 0, dlIdx is 2
+		// fmt.Println(dlIdx, pIdx, dlIdx2, pIdx2, activeSectors2[0].SectorNumber) // dlIdx2 is 0, dlIdx is 2
 		// advance to next deadline where we expect the first sectors to appear
 		dlinfo := actor.deadline(rt)
 		for dlinfo.Index != dlIdx && dlinfo.Index != dlIdx2 {
@@ -4957,7 +4993,7 @@ type preCommitConf struct {
 	// PieceSizes []abi.PaddedPieceSize
 	// PieceCIDs  []cid.Cid
 
-	ValidDeals []market.ValidDealInfo
+	verifiedDealInfos []market.SectorDealInfos
 }
 
 func (h *actorHarness) preCommitSector(rt *mock.Runtime, params *miner.PreCommitSectorParams, conf preCommitConf) *miner.SectorPreCommitOnChainInfo {
@@ -4970,12 +5006,16 @@ func (h *actorHarness) preCommitSector(rt *mock.Runtime, params *miner.PreCommit
 	if len(params.DealIDs) > 0 {
 		// If there are any deal IDs, allocate half the weight to non-verified and half to verified.
 		vdParams := market.VerifyDealsForActivationParams{
-			DealIDs:     params.DealIDs,
-			SectorStart: rt.Epoch(),
+			Sectors: []market.SectorDeals{{
+				DealIDs: params.DealIDs,
+			}},
 		}
 
+		if conf.verifiedDealInfos == nil {
+			conf.verifiedDealInfos = make([]market.SectorDealInfos, 0)
+		}
 		vdReturn := market.VerifyDealsForActivationReturn{
-			ValidDeals: conf.ValidDeals,
+			Sectors: conf.verifiedDealInfos,
 		}
 
 		rt.ExpectSend(builtin.StorageMarketActorAddr, builtin.MethodsMarket.VerifyDealsForActivation, &vdParams, big.Zero(), &vdReturn, exitcode.Ok)
@@ -5166,16 +5206,17 @@ func (h *actorHarness) commitAndProveSectors(rt *mock.Runtime, n int /* , lifeti
 		if dealIDs != nil {
 			sectorDealIDs = dealIDs[i]
 		}
-		vds := make([]market.ValidDealInfo, len(sectorDealIDs))
+		sdi := market.SectorDealInfos{
+			PieceCIDs:  make([]cid.Cid, len(sectorDealIDs)),
+			PieceSizes: make([]abi.PaddedPieceSize, len(sectorDealIDs)),
+		}
 		for j, dealID := range sectorDealIDs {
-			vds[j] = market.ValidDealInfo{
-				PieceSize: abi.PaddedPieceSize(1<<10 + dealID),
-				PieceCID:  emptyPieceCID,
-			}
+			sdi.PieceCIDs[j] = emptyPieceCID
+			sdi.PieceSizes[j] = abi.PaddedPieceSize(1<<10 + dealID)
 		}
 		params := h.makePreCommit(sectorNo, precommitEpoch-1, sectorDealIDs)
 		precommit := h.preCommitSector(rt, params, preCommitConf{
-			ValidDeals: vds,
+			verifiedDealInfos: []market.SectorDealInfos{sdi},
 		})
 		precommits[i] = precommit
 		h.nextSectorNo++

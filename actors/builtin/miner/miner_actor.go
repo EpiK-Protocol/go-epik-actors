@@ -602,7 +602,13 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 
 	rewardStats := requestCurrentEpochBlockReward(rt)
 	pwrTotal := requestCurrentTotalPower(rt) */
-	dInfos := requestDealsInfo(rt, params.DealIDs, rt.CurrEpoch())
+	dealWeights := requestDealWeights(rt, []market.SectorDeals{
+		{
+			DealIDs: params.DealIDs,
+		},
+	})
+	builtin.RequireState(rt, len(dealWeights.Sectors) != 0, "deal weight request returned no records")
+	dealWeight := dealWeights.Sectors[0]
 
 	store := adt.AsStore(rt)
 	var st State
@@ -644,12 +650,8 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 
 		// Ensure total deal space does not exceed sector size.
 		totalSpace := uint64(0)
-		pcss := make([]abi.PaddedPieceSize, 0, len(dInfos.ValidDeals))
-		pcids := make([]cid.Cid, 0, len(dInfos.ValidDeals))
-		for _, deal := range dInfos.ValidDeals {
-			totalSpace += uint64(deal.PieceSize)
-			pcss = append(pcss, deal.PieceSize)
-			pcids = append(pcids, deal.PieceCID)
+		for _, size := range dealWeight.PieceSizes {
+			totalSpace += uint64(size)
 		}
 		if totalSpace > uint64(info.SectorSize) {
 			rt.Abortf(exitcode.ErrIllegalArgument, "deals too large to fit in sector %d > %d", totalSpace, info.SectorSize)
@@ -690,8 +692,8 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 		if err := st.PutPrecommittedSector(store, &SectorPreCommitOnChainInfo{
 			Info:           SectorPreCommitInfo(*params),
 			PreCommitEpoch: rt.CurrEpoch(),
-			PieceSizes:     pcss,
-			PieceCIDs:      pcids,
+			PieceSizes:     dealWeight.PieceSizes,
+			PieceCIDs:      dealWeight.PieceCIDs,
 		}); err != nil {
 			rt.Abortf(exitcode.ErrIllegalState, "failed to write pre-committed sector %v: %v", params.SectorNumber, err)
 		}
@@ -708,7 +710,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 		err = st.AddPreCommitExpiry(store, expiryBound, params.SectorNumber)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add pre-commit expiry to queue")
 
-		err = st.AddPieces(store, dInfos.ValidDeals, params.SectorNumber)
+		err = st.AddPieces(store, dealWeight, params.SectorNumber)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add pre-piece")
 	})
 
@@ -2244,25 +2246,37 @@ func requestUnsealedSectorCID(rt Runtime, proofType abi.RegisteredSealProof, dea
 	return cid.Cid(unsealedCID)
 }
 
-func requestDealsInfo(rt Runtime, dealIDs []abi.DealID, sectorStart abi.ChainEpoch) market.VerifyDealsForActivationReturn {
-	if len(dealIDs) == 0 {
-		return market.VerifyDealsForActivationReturn{}
+func requestDealWeights(rt Runtime, sectors []market.SectorDeals) *market.VerifyDealsForActivationReturn {
+	// Short-circuit if there are no deals in any of the sectors.
+	dealCount := 0
+	for _, sector := range sectors {
+		dealCount += len(sector.DealIDs)
+	}
+	if dealCount == 0 {
+		emptyResult := &market.VerifyDealsForActivationReturn{
+			Sectors: make([]market.SectorDealInfos, len(sectors)),
+		}
+		for i := 0; i < len(sectors); i++ {
+			emptyResult.Sectors[i] = market.SectorDealInfos{
+				PieceCIDs:  make([]cid.Cid, 0),
+				PieceSizes: make([]abi.PaddedPieceSize, 0),
+			}
+		}
+		return emptyResult
 	}
 
-	var dealsInfo market.VerifyDealsForActivationReturn
-
+	var dealWeights market.VerifyDealsForActivationReturn
 	code := rt.Send(
 		builtin.StorageMarketActorAddr,
 		builtin.MethodsMarket.VerifyDealsForActivation,
 		&market.VerifyDealsForActivationParams{
-			DealIDs:     dealIDs,
-			SectorStart: sectorStart,
+			Sectors: sectors,
 		},
 		abi.NewTokenAmount(0),
-		&dealsInfo,
+		&dealWeights,
 	)
-	builtin.RequireSuccess(rt, code, "failed to verify deals and get deal info")
-	return dealsInfo
+	builtin.RequireSuccess(rt, code, "failed to verify deals and get deal weight")
+	return &dealWeights
 }
 
 // Requests the current epoch target block reward from the reward actor.
