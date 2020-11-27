@@ -137,7 +137,8 @@ var MethodsVote = struct {
 	Revoke          abi.MethodNum
 	Claim           abi.MethodNum
 	ApplyRewards    abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6}
+	OnEpochTickEnd  abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7}
 
 var MethodsRetrieval = struct {
 	Constructor      abi.MethodNum

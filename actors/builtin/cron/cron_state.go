@@ -31,5 +31,9 @@ func BuiltInEntries() []Entry {
 			Receiver:  builtin.StorageMarketActorAddr,
 			MethodNum: builtin.MethodsMarket.CronTick,
 		},
+		{
+			Receiver:  builtin.VoteFundsActorAddr,
+			MethodNum: builtin.MethodsVote.OnEpochTickEnd,
+		},
 	}
 }

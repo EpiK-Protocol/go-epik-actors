@@ -13,7 +13,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{132}
+var lengthBufState = []byte{133}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -25,16 +25,6 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
-
-	// t.TotalRewards (big.Int) (struct)
-	if err := t.TotalRewards.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.TotalValidVotes (big.Int) (struct)
-	if err := t.TotalValidVotes.MarshalCBOR(w); err != nil {
-		return err
-	}
 
 	// t.Candidates (cid.Cid) (struct)
 
@@ -48,6 +38,20 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Voters: %w", err)
 	}
 
+	// t.TotalVotes (big.Int) (struct)
+	if err := t.TotalVotes.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.UnownedFunds (big.Int) (struct)
+	if err := t.UnownedFunds.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.CumEarningsPerVote (big.Int) (struct)
+	if err := t.CumEarningsPerVote.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -65,28 +69,10 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 5 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.TotalRewards (big.Int) (struct)
-
-	{
-
-		if err := t.TotalRewards.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.TotalRewards: %w", err)
-		}
-
-	}
-	// t.TotalValidVotes (big.Int) (struct)
-
-	{
-
-		if err := t.TotalValidVotes.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.TotalValidVotes: %w", err)
-		}
-
-	}
 	// t.Candidates (cid.Cid) (struct)
 
 	{
@@ -111,10 +97,37 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		t.Voters = c
 
 	}
+	// t.TotalVotes (big.Int) (struct)
+
+	{
+
+		if err := t.TotalVotes.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalVotes: %w", err)
+		}
+
+	}
+	// t.UnownedFunds (big.Int) (struct)
+
+	{
+
+		if err := t.UnownedFunds.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.UnownedFunds: %w", err)
+		}
+
+	}
+	// t.CumEarningsPerVote (big.Int) (struct)
+
+	{
+
+		if err := t.CumEarningsPerVote.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.CumEarningsPerVote: %w", err)
+		}
+
+	}
 	return nil
 }
 
-var lengthBufCandidate = []byte{130}
+var lengthBufCandidate = []byte{131}
 
 func (t *Candidate) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -127,15 +140,20 @@ func (t *Candidate) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.BlockedEpoch (abi.ChainEpoch) (int64)
-	if t.BlockedEpoch >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.BlockedEpoch)); err != nil {
+	// t.BlockEpoch (abi.ChainEpoch) (int64)
+	if t.BlockEpoch >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.BlockEpoch)); err != nil {
 			return err
 		}
 	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.BlockedEpoch-1)); err != nil {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.BlockEpoch-1)); err != nil {
 			return err
 		}
+	}
+
+	// t.BlockCumEarningsPerVote (big.Int) (struct)
+	if err := t.BlockCumEarningsPerVote.MarshalCBOR(w); err != nil {
+		return err
 	}
 
 	// t.Votes (big.Int) (struct)
@@ -159,11 +177,11 @@ func (t *Candidate) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.BlockedEpoch (abi.ChainEpoch) (int64)
+	// t.BlockEpoch (abi.ChainEpoch) (int64)
 	{
 		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
 		var extraI int64
@@ -186,7 +204,16 @@ func (t *Candidate) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
 
-		t.BlockedEpoch = abi.ChainEpoch(extraI)
+		t.BlockEpoch = abi.ChainEpoch(extraI)
+	}
+	// t.BlockCumEarningsPerVote (big.Int) (struct)
+
+	{
+
+		if err := t.BlockCumEarningsPerVote.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.BlockCumEarningsPerVote: %w", err)
+		}
+
 	}
 	// t.Votes (big.Int) (struct)
 
@@ -200,7 +227,7 @@ func (t *Candidate) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufVoter = []byte{129}
+var lengthBufVoter = []byte{132}
 
 func (t *Voter) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -212,6 +239,27 @@ func (t *Voter) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
+
+	// t.SettleEpoch (abi.ChainEpoch) (int64)
+	if t.SettleEpoch >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.SettleEpoch)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.SettleEpoch-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.SettleCumEarningsPerVote (big.Int) (struct)
+	if err := t.SettleCumEarningsPerVote.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.UnclaimedFunds (big.Int) (struct)
+	if err := t.UnclaimedFunds.MarshalCBOR(w); err != nil {
+		return err
+	}
 
 	// t.VotingRecords (cid.Cid) (struct)
 
@@ -236,10 +284,53 @@ func (t *Voter) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
+	// t.SettleEpoch (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.SettleEpoch = abi.ChainEpoch(extraI)
+	}
+	// t.SettleCumEarningsPerVote (big.Int) (struct)
+
+	{
+
+		if err := t.SettleCumEarningsPerVote.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.SettleCumEarningsPerVote: %w", err)
+		}
+
+	}
+	// t.UnclaimedFunds (big.Int) (struct)
+
+	{
+
+		if err := t.UnclaimedFunds.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.UnclaimedFunds: %w", err)
+		}
+
+	}
 	// t.VotingRecords (cid.Cid) (struct)
 
 	{

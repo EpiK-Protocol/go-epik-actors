@@ -25,6 +25,7 @@ func (a Actor) Exports() []interface{} {
 		4:                         a.Revoke,
 		5:                         a.Claim,
 		6:                         a.ApplyRewards,
+		7:                         a.OnEpochTickEnd,
 	}
 }
 
@@ -90,7 +91,6 @@ type VoteParams struct {
 }
 
 func (a Actor) Vote(rt Runtime, params *VoteParams) *abi.EmptyValue {
-	// TODO: only signable allow to vote?
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	votes := rt.ValueReceived()
@@ -102,7 +102,6 @@ func (a Actor) Vote(rt Runtime, params *VoteParams) *abi.EmptyValue {
 	candAddr := builtin.RequestExpertControlAddr(rt, resovled)
 
 	var st State
-	notice := false
 	var afterVote *Candidate
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
@@ -112,24 +111,36 @@ func (a Actor) Vote(rt Runtime, params *VoteParams) *abi.EmptyValue {
 		voters, err := adt.AsMap(store, st.Voters)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
 
+		voter, found, err := getVoter(voters, rt.Caller())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
+		if !found {
+			voter, err = newEmptyVoter(store)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to new voter")
+		} else {
+			// settle
+			err = st.settle(store, voter, candidates, rt.CurrEpoch())
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
+		}
+
 		afterVote, err = st.addToCandidate(candidates, candAddr, votes)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add votes to candidate")
+		builtin.RequireParam(rt, !afterVote.IsBlocked(), "cannot vote for blocked candidate")
 
-		err = st.addVotingRecord(store, voters, rt.Caller(), candAddr, votes)
+		err = st.addVotingRecord(store, voter, candAddr, votes)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add voting record")
 
 		st.Candidates, err = candidates.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush candidates")
 
+		err = setVoter(voters, rt.Caller(), voter)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set voter")
 		st.Voters, err = voters.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
 
-		st.TotalValidVotes = big.Add(st.TotalValidVotes, votes)
-		notice = true
+		st.TotalVotes = big.Add(st.TotalVotes, votes)
 	})
-	if notice {
-		builtin.NotifyExpertVote(rt, candAddr, afterVote.Votes)
-	}
+
+	builtin.NotifyExpertVote(rt, candAddr, afterVote.Votes)
 	return nil
 }
 
@@ -140,16 +151,14 @@ type RevokeParams struct {
 }
 
 func (a Actor) Revoke(rt Runtime, params *RevokeParams) *abi.EmptyValue {
-	// TODO: only signable allow to vote?
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	votes := params.Votes
-	builtin.RequireParam(rt, votes.GreaterThan(big.Zero()), "non positive votes to revoke")
+	builtin.RequireParam(rt, params.Votes.GreaterThan(big.Zero()), "non positive votes to revoke")
 
-	candAddr := resolveCandidateAddress(rt, params.Candidate)
+	candAddr, ok := rt.ResolveAddress(params.Candidate)
+	builtin.RequireParam(rt, ok, "unable to resolve address %v", params.Candidate)
 
 	var st State
-	notice := false
 	var afterRevoke *Candidate
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
@@ -160,154 +169,113 @@ func (a Actor) Revoke(rt Runtime, params *RevokeParams) *abi.EmptyValue {
 		voters, err := adt.AsMap(store, st.Voters)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
 
-		afterRevoke, err = st.revokeFromCandidate(candidates, candAddr, votes)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to revoke from candidate")
+		voter, found, err := getVoter(voters, rt.Caller())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
+		builtin.RequireParam(rt, found, "voter not found")
 
-		err = st.updateVotingRecordForRevoking(store, voters, rt.Caller(), candAddr, votes, rt.CurrEpoch())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to vote")
+		// settle
+		err = st.settle(store, voter, candidates, rt.CurrEpoch())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
+
+		revokedVotes := big.Zero()
+		revokedVotes, err = st.subFromVotingRecord(store, voter, candAddr, params.Votes, rt.CurrEpoch())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract votes from voting record")
+		if revokedVotes.IsZero() {
+			return
+		}
+
+		afterRevoke, err = st.subFromCandidate(candidates, candAddr, revokedVotes)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract votes from candidate")
 
 		st.Candidates, err = candidates.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush candidates")
 
+		err = setVoter(voters, rt.Caller(), voter)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set voter")
 		st.Voters, err = voters.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
 
-		// If blocked, TotalValidVotes has been subtracted in BlockCandidate.
+		// If blocked, TotalVotes has been subtracted in BlockCandidate.
 		if !afterRevoke.IsBlocked() {
-			st.TotalValidVotes = big.Sub(st.TotalValidVotes, votes)
-			Assert(st.TotalValidVotes.GreaterThanEqual(big.Zero()))
-			notice = true
+			st.TotalVotes = big.Sub(st.TotalVotes, revokedVotes)
+			Assert(st.TotalVotes.GreaterThanEqual(big.Zero()))
 		}
 	})
-	if notice {
+	if afterRevoke != nil && !afterRevoke.IsBlocked() {
 		builtin.NotifyExpertVote(rt, candAddr, afterRevoke.Votes)
 	}
 	return nil
 }
 
-// withdraws unlocked revoking votes and vested rewards.
+// Claims unlocked revoking votes and vested rewards.
 func (a Actor) Claim(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	// TODO: only signable allow to vote?
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	totalWithdrawn := abi.NewTokenAmount(0)
+	total := abi.NewTokenAmount(0)
 	var st State
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
-		voterAddr := rt.Caller()
+
+		candidates, err := adt.AsMap(store, st.Candidates)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
 
 		voters, err := adt.AsMap(store, st.Voters)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
 
-		voter, found, err := getVoter(voters, voterAddr)
+		voter, found, err := getVoter(voters, rt.Caller())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
-		builtin.RequireParam(rt, found, "voter %s not found", voterAddr)
+		builtin.RequireParam(rt, found, "voter not found")
 
-		votingRecords, err := adt.AsMap(store, voter.VotingRecords)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voting records")
+		// settle
+		err = st.settle(store, voter, candidates, rt.CurrEpoch())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
+		total = big.Add(total, voter.UnclaimedFunds)
 
-		deletes, updates, unlocked, allDelete, err := findUnlockedVotes(rt, votingRecords)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to find unlocked votes of %s", voterAddr)
-		if allDelete {
-			err = deleteVoter(voters, voterAddr)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete voter")
-		} else {
-			err = updateVotingRecords(votingRecords, deletes, updates)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update records")
+		unlockedVotes, err := st.claimUnlockedVotes(store, voter, rt.CurrEpoch())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to claim unlocked votes")
+		total = big.Add(total, unlockedVotes)
 
-			newVoter := &Voter{}
-			newVoter.VotingRecords, err = votingRecords.Root()
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush records")
-			err = setVoter(voters, voterAddr, newVoter)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update voter")
-		}
+		voter.UnclaimedFunds = abi.NewTokenAmount(0)
+		err = setVoter(voters, rt.Caller(), voter)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update voter")
 
 		st.Voters, err = voters.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
-
-		//TODO: rewards pool
-		vestedRewards := big.Zero()
-		AssertMsg(st.TotalRewards.GreaterThanEqual(vestedRewards), "total rewards: %v, vested reward: %v", st.TotalRewards, vestedRewards)
-		st.TotalRewards = big.Sub(st.TotalRewards, vestedRewards)
-
-		totalWithdrawn = big.Add(unlocked, vestedRewards)
 	})
-	builtin.RequireParam(rt, !totalWithdrawn.IsZero(), "no balance to withdraw")
-
-	Assert(totalWithdrawn.LessThanEqual(rt.CurrentBalance()))
-	code := rt.Send(rt.Caller(), builtin.MethodSend, nil, totalWithdrawn, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send funds")
+	Assert(total.LessThanEqual(rt.CurrentBalance()))
+	if total.GreaterThan(big.Zero()) {
+		code := rt.Send(rt.Caller(), builtin.MethodSend, nil, total, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds")
+	}
 
 	return nil
 }
 
-// called by reward actor
 func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
-
 	builtin.RequireParam(rt, rt.ValueReceived().GreaterThanEqual(big.Zero()), "cannot add a negative amount of funds")
+	if rt.ValueReceived().Sign() == 0 {
+		return nil
+	}
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		st.TotalRewards = big.Add(st.TotalRewards, rt.ValueReceived())
+		st.UnownedFunds = big.Add(st.UnownedFunds, rt.ValueReceived())
 	})
 	return nil
 }
 
-func findUnlockedVotes(rt Runtime, votingRecords *adt.Map) (
-	deletes []addr.Address,
-	updates map[addr.Address]*VotingRecord,
-	totalUnlocked abi.TokenAmount,
-	allDelete bool,
-	err error,
-) {
-	deletes = make([]addr.Address, 0)
-	updates = make(map[addr.Address]*VotingRecord)
-	totalUnlocked = big.Zero()
+func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	rt.ValidateImmediateCallerIs(builtin.CronActorAddr)
 
-	var (
-		total int
-		old   VotingRecord
-	)
-	err = votingRecords.ForEach(&old, func(key string) error {
-		total++
-		if old.RevokingVotes.IsZero() || rt.CurrEpoch() <= old.LastRevokingEpoch+RevokingUnlockDelay {
-			return nil
+	var st State
+	rt.StateTransaction(&st, func() {
+		if st.UnownedFunds.IsZero() || st.TotalVotes.IsZero() {
+			return
 		}
-		totalUnlocked = big.Add(totalUnlocked, old.RevokingVotes)
 
-		candAddr, err := addr.NewFromBytes([]byte(key))
-		if err != nil {
-			return err
-		}
-		// delete
-		if old.Votes.IsZero() {
-			deletes = append(deletes, candAddr)
-			return nil
-		}
-		// update
-		updates[candAddr] = &VotingRecord{
-			Votes:             old.Votes,
-			RevokingVotes:     big.Zero(),
-			LastRevokingEpoch: old.LastRevokingEpoch,
-		}
-		return nil
+		st.CumEarningsPerVote = big.Add(st.CumEarningsPerVote, big.Div(st.UnownedFunds, st.TotalVotes))
+		st.UnownedFunds = big.Mod(st.UnownedFunds, st.TotalVotes)
 	})
-	if err != nil {
-		return nil, nil, abi.NewTokenAmount(0), false, err
-	}
-	allDelete = total == len(deletes)
-	return
-}
-
-func resolveCandidateAddress(rt Runtime, raw addr.Address) addr.Address {
-	resolved, ok := rt.ResolveAddress(raw)
-	builtin.RequireParam(rt, ok, "unable to resolve address %v", raw)
-
-	codeCID, ok := rt.GetActorCodeCID(resolved)
-	builtin.RequireParam(rt, ok, "no code for address %v", resolved)
-
-	builtin.RequireParam(rt, codeCID == builtin.ExpertActorCodeID, "actor type must be an expert, was: %v", codeCID)
-
-	return resolved
+	return nil
 }
