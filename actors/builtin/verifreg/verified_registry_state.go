@@ -4,6 +4,10 @@ package verifreg
 // 	addr "github.com/filecoin-project/go-address"
 // 	"github.com/filecoin-project/go-state-types/abi"
 // 	cid "github.com/ipfs/go-cid"
+// 	"golang.org/x/xerrors"
+
+// 	"github.com/filecoin-project/specs-actors/v3/actors/builtin"
+// 	"github.com/filecoin-project/specs-actors/v3/actors/util/adt"
 // )
 
 // // DataCap is an integer number of bytes.
@@ -32,4 +36,8 @@ package verifreg
 // 		Verifiers:       emptyMapCid,
 // 		VerifiedClients: emptyMapCid,
 // 	}
+// 		RootKey:         rootKeyAddress,
+// 		Verifiers:       emptyMapCid,
+// 		VerifiedClients: emptyMapCid,
+// 	}, nil
 // }

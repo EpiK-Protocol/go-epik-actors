@@ -606,7 +606,7 @@ func TestPledge(t *testing.T) {
 		harness.addPledge(info.Owner, addAmount)
 		assert.Equal(t, addAmount, harness.s.TotalPledge)
 
-		pledges, err := adt.AsMap(harness.store, harness.s.Pledges)
+		pledges, err := adt.AsMap(harness.store, harness.s.Pledges, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 
 		keys, err := pledges.CollectKeys()
@@ -630,7 +630,7 @@ func TestPledge(t *testing.T) {
 		require.Contains(t, err.Error(), "no pledge found")
 		require.True(t, actual.IsZero())
 
-		pledges, err := adt.AsMap(harness.store, harness.s.Pledges)
+		pledges, err := adt.AsMap(harness.store, harness.s.Pledges, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 		found, err := pledges.Get(abi.AddrKey(info.Worker), &builtin.Discard{})
 		require.NoError(t, err)
@@ -652,7 +652,7 @@ func TestPledge(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, actual.Equals(abi.NewTokenAmount(500)))
 
-		pledges, err := adt.AsMap(harness.store, harness.s.Pledges)
+		pledges, err := adt.AsMap(harness.store, harness.s.Pledges, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 
 		keys, err := pledges.CollectKeys()
@@ -996,23 +996,6 @@ func (h *stateHarness) deletePreCommit(sectorNo abi.SectorNumber) {
 func constructStateHarness(t *testing.T, periodBoundary abi.ChainEpoch) *stateHarness {
 	// store init
 	store := ipld.NewADTStore(context.Background())
-	emptyMap, err := adt.MakeEmptyMap(store).Root()
-	require.NoError(t, err)
-
-	emptyBitfield := bitfield.NewFromSet(nil)
-	emptyBitfieldCid, err := store.Put(store.Context(), emptyBitfield)
-	require.NoError(t, err)
-
-	emptyArray, err := adt.MakeEmptyArray(store).Root()
-	require.NoError(t, err)
-	emptyDeadline := miner.ConstructDeadline(emptyArray)
-	emptyDeadlineCid, err := store.Put(store.Context(), emptyDeadline)
-	require.NoError(t, err)
-
-	emptyDeadlines := miner.ConstructDeadlines(emptyDeadlineCid)
-	emptyDeadlinesCid, err := store.Put(context.Background(), emptyDeadlines)
-	require.NoError(t, err)
-
 	// state field init
 	owner := tutils.NewBLSAddr(t, 1)
 	worker := tutils.NewBLSAddr(t, 2)
@@ -1040,12 +1023,7 @@ func constructStateHarness(t *testing.T, periodBoundary abi.ChainEpoch) *stateHa
 	infoCid, err := store.Put(context.Background(), &info)
 	require.NoError(t, err)
 
-	emptyVestingFunds := miner.ConstructVestingFunds()
-	emptyVestingFundsCid, err := store.Put(context.Background(), emptyVestingFunds)
-	require.NoError(t, err)
-
-	state, err := miner.ConstructState(infoCid, periodBoundary, 0, emptyBitfieldCid, emptyArray, emptyMap, emptyDeadlinesCid,
-		emptyVestingFundsCid)
+	state, err := miner.ConstructState(store, infoCid, periodBoundary, 0)
 	require.NoError(t, err)
 
 	return &stateHarness{

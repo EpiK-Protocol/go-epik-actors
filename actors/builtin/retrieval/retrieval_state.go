@@ -51,7 +51,17 @@ type LockedState struct {
 }
 
 // ConstructState retrieval construct
-func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
+func ConstructState(store adt.Store) (*State, error) {
+
+	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+	emptyMMapCid, err := adt.MakeEmptyMultimap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty multi map: %w", err)
+	}
+
 	return &State{
 		RetrievalBatch: emptyMMapCid,
 		EscrowTable:    emptyMapCid,
@@ -61,7 +71,7 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 		TotalCollateral:       abi.NewTokenAmount(0),
 		TotalRetrievalReward:  abi.NewTokenAmount(0),
 		PendingReward:         abi.NewTokenAmount(0),
-	}
+	}, nil
 }
 
 // AddBalance add balance for
@@ -95,7 +105,7 @@ func (st *State) ApplyForWithdraw(rt Runtime, fromAddr addr.Address, amount abi.
 		return exitcode.ErrIllegalState, err
 	}
 
-	lockedMap, err := adt.AsMap(adt.AsStore(rt), st.LockedTable)
+	lockedMap, err := adt.AsMap(adt.AsStore(rt), st.LockedTable, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, err
 	}
@@ -139,7 +149,7 @@ func (st *State) Withdraw(rt Runtime, fromAddr addr.Address, amount abi.TokenAmo
 		return exitcode.ErrIllegalState, xerrors.Errorf("negative amount %v of funds to withdraw", amount)
 	}
 
-	lockedMap, err := adt.AsMap(adt.AsStore(rt), st.LockedTable)
+	lockedMap, err := adt.AsMap(adt.AsStore(rt), st.LockedTable, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, err
 	}
@@ -178,7 +188,7 @@ func (st *State) Withdraw(rt Runtime, fromAddr addr.Address, amount abi.TokenAmo
 
 // RetrievalData record the retrieval data
 func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *RetrievalState) (exitcode.ExitCode, error) {
-	mmap, err := adt.AsMultimap(adt.AsStore(rt), st.RetrievalBatch)
+	mmap, err := adt.AsMultimap(adt.AsStore(rt), st.RetrievalBatch, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
@@ -236,7 +246,7 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 
 // ConfirmData record the retrieval data
 func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr addr.Address, pieceID string) (abi.TokenAmount, error) {
-	mmap, err := adt.AsMultimap(store, st.RetrievalBatch)
+	mmap, err := adt.AsMultimap(store, st.RetrievalBatch, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
@@ -284,7 +294,7 @@ func (st *State) EscrowBalance(store adt.Store, fromAddr addr.Address) (abi.Toke
 
 // DayExpend balance for address
 func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, fromAddr addr.Address) (abi.TokenAmount, error) {
-	mmap, err := adt.AsMultimap(store, st.RetrievalBatch)
+	mmap, err := adt.AsMultimap(store, st.RetrievalBatch, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
@@ -309,7 +319,7 @@ func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, fromAddr addr.
 
 // LockedState locked state for address
 func (st *State) LockedState(store adt.Store, fromAddr addr.Address) (*LockedState, error) {
-	lockedMap, err := adt.AsMap(store, st.LockedTable)
+	lockedMap, err := adt.AsMap(store, st.LockedTable, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}

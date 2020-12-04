@@ -46,14 +46,9 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt Runtime, initialPayee *address.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	if initialPayee.Protocol() != address.ID {
-		rt.Abortf(exitcode.ErrIllegalArgument, "intial payee address must be an ID address")
-	}
-
-	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
+	st, err := ConstructState(adt.AsStore(rt), *initialPayee)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
-	st := ConstructState(emptyMap, *initialPayee)
 	rt.StateCreate(st)
 	return nil
 }
@@ -85,7 +80,7 @@ func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		tally, err := adt.AsMap(adt.AsStore(rt), st.Tally)
+		tally, err := adt.AsMap(adt.AsStore(rt), st.Tally, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load tally")
 
 		var out abi.TokenAmount

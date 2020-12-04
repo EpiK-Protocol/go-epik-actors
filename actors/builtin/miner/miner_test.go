@@ -3975,7 +3975,7 @@ func TestAddPledge(t *testing.T) {
 		st := getState(rt)
 		require.Equal(t, st.TotalPledge, abi.NewTokenAmount(1))
 
-		pledges, err := adt.AsMap(adt.AsStore(rt), st.Pledges)
+		pledges, err := adt.AsMap(adt.AsStore(rt), st.Pledges, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 		keys, err := pledges.CollectKeys()
 		require.NoError(t, err)
@@ -4062,7 +4062,7 @@ func TestWithdrawPledge(t *testing.T) {
 		st = getState(rt)
 		require.Equal(t, st.TotalPledge, big.Zero())
 
-		pledges, err := adt.AsMap(adt.AsStore(rt), st.Pledges)
+		pledges, err := adt.AsMap(adt.AsStore(rt), st.Pledges, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 		keys, err := pledges.CollectKeys()
 		require.NoError(t, err)
@@ -4083,7 +4083,7 @@ func TestWithdrawPledge(t *testing.T) {
 		st = getState(rt)
 		require.Equal(t, st.TotalPledge, big.Zero())
 
-		pledges, err := adt.AsMap(adt.AsStore(rt), st.Pledges)
+		pledges, err := adt.AsMap(adt.AsStore(rt), st.Pledges, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 		keys, err := pledges.CollectKeys()
 		require.NoError(t, err)

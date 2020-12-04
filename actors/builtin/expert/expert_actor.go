@@ -59,9 +59,6 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 
 	owner := resolveOwnerAddress(rt, params.Owner)
 
-	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct initial state")
-
 	info, err := ConstructExpertInfo(owner, ExpertType(params.Type), params.ApplicationHash)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to construct initial expert info")
 	infoCid := rt.StorePut(info)
@@ -74,7 +71,8 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 	ownerChange := rt.StorePut(&PendingOwnerChange{
 		ApplyOwner: owner,
 		ApplyEpoch: abi.ChainEpoch(-1)})
-	st := ConstructState(infoCid, emptyMap, eState, ownerChange)
+	st, err := ConstructState(adt.AsStore(rt), infoCid, eState, ownerChange)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct initial state")
 	rt.StateCreate(st)
 	return nil
 }

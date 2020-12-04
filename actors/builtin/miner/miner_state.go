@@ -1,7 +1,6 @@
 package miner
 
 import (
-	"fmt"
 	"reflect"
 	"sort"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/filecoin-project/go-state-types/dline"
 	xc "github.com/filecoin-project/go-state-types/exitcode"
 	cid "github.com/ipfs/go-cid"
-	errors "github.com/pkg/errors"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 
@@ -174,8 +172,36 @@ type SectorOnChainInfo struct {
 	ReplacedSectorAge abi.ChainEpoch // Age of sector this sector replaced or zero */
 }
 
-func ConstructState(infoCid cid.Cid, periodStart abi.ChainEpoch, deadlineIndex uint64, emptyBitfieldCid, emptyArrayCid, emptyMapCid, emptyDeadlinesCid cid.Cid,
-	emptyVestingFundsCid cid.Cid) (*State, error) {
+func ConstructState(store adt.Store, infoCid cid.Cid, periodStart abi.ChainEpoch, deadlineIndex uint64) (*State, error) {
+	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct empty map: %w", err)
+	}
+	emptyArrayCid, err := adt.MakeEmptyArray(store).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct empty array: %w", err)
+	}
+	emptyBitfield := bitfield.NewFromSet(nil)
+	emptyBitfieldCid, err := store.Put(store.Context(), emptyBitfield)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct empty bitfield: %w", err)
+	}
+	emptyDeadline := ConstructDeadline(emptyArrayCid)
+	emptyDeadlineCid, err := store.Put(store.Context(), emptyDeadline)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct empty deadline: %w", err)
+	}
+	emptyDeadlines := ConstructDeadlines(emptyDeadlineCid)
+	emptyDeadlinesCid, err := store.Put(store.Context(), emptyDeadlines)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct empty deadlines: %w", err)
+	}
+	emptyVestingFunds := ConstructVestingFunds()
+	emptyVestingFundsCid, err := store.Put(store.Context(), emptyVestingFunds)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct empty vesting funds: %w", err)
+	}
+
 	return &State{
 		Info: infoCid,
 
@@ -206,12 +232,12 @@ func ConstructMinerInfo(owner, worker, coinbase addr.Address,
 
 	sectorSize, err := sealProofType.SectorSize()
 	if err != nil {
-		return nil, err
+		return nil, xc.ErrIllegalArgument.Wrapf("invalid sector size: %w", err)
 	}
 
 	partitionSectors, err := builtin.SealProofWindowPoStPartitionSectors(sealProofType)
 	if err != nil {
-		return nil, err
+		return nil, xc.ErrIllegalArgument.Wrapf("invalid partition sectors: %w", err)
 	}
 
 	return &MinerInfo{
@@ -312,21 +338,21 @@ func (st *State) MaskSectorNumbers(store adt.Store, sectorNos bitfield.BitField)
 }
 
 func (st *State) PutPrecommittedSector(store adt.Store, info *SectorPreCommitOnChainInfo) error {
-	precommitted, err := adt.AsMap(store, st.PreCommittedSectors)
+	precommitted, err := adt.AsMap(store, st.PreCommittedSectors, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 
 	err = precommitted.Put(SectorKey(info.Info.SectorNumber), info)
 	if err != nil {
-		return errors.Wrapf(err, "failed to store precommitment for %v", info)
+		return xerrors.Errorf("failed to store precommitment for %v: %w", info, err)
 	}
 	st.PreCommittedSectors, err = precommitted.Root()
 	return err
 }
 
 func (st *State) GetPrecommittedSector(store adt.Store, sectorNo abi.SectorNumber) (*SectorPreCommitOnChainInfo, bool, error) {
-	precommitted, err := adt.AsMap(store, st.PreCommittedSectors)
+	precommitted, err := adt.AsMap(store, st.PreCommittedSectors, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, false, err
 	}
@@ -334,7 +360,7 @@ func (st *State) GetPrecommittedSector(store adt.Store, sectorNo abi.SectorNumbe
 	var info SectorPreCommitOnChainInfo
 	found, err := precommitted.Get(SectorKey(sectorNo), &info)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to load precommitment for %v", sectorNo)
+		return nil, false, xerrors.Errorf("failed to load precommitment for %v: %w", sectorNo, err)
 	}
 	return &info, found, nil
 }
@@ -342,7 +368,7 @@ func (st *State) GetPrecommittedSector(store adt.Store, sectorNo abi.SectorNumbe
 // This method gets and returns the requested pre-committed sectors, skipping
 // missing sectors.
 func (st *State) FindPrecommittedSectors(store adt.Store, sectorNos ...abi.SectorNumber) ([]*SectorPreCommitOnChainInfo, error) {
-	precommitted, err := adt.AsMap(store, st.PreCommittedSectors)
+	precommitted, err := adt.AsMap(store, st.PreCommittedSectors, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +379,7 @@ func (st *State) FindPrecommittedSectors(store adt.Store, sectorNos ...abi.Secto
 		var info SectorPreCommitOnChainInfo
 		found, err := precommitted.Get(SectorKey(sectorNo), &info)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to load precommitment for %v", sectorNo)
+			return nil, xerrors.Errorf("failed to load precommitment for %v: %w", sectorNo, err)
 		}
 		if !found {
 			// TODO #564 log: "failed to get precommitted sector on sector %d, dropping from prove commit set"
@@ -366,7 +392,7 @@ func (st *State) FindPrecommittedSectors(store adt.Store, sectorNos ...abi.Secto
 }
 
 func (st *State) DeletePrecommittedSectors(store adt.Store, sectorNos ...abi.SectorNumber) error {
-	precommitted, err := adt.AsMap(store, st.PreCommittedSectors)
+	precommitted, err := adt.AsMap(store, st.PreCommittedSectors, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
@@ -579,7 +605,7 @@ func (st *State) AssignSectorsToDeadlines(
 //
 // Returns hasMore if we still have more early terminations to process.
 func (st *State) PopEarlyTerminations(store adt.Store, maxPartitions, maxSectors uint64) (result TerminationResult, hasMore bool, err error) {
-	stopErr := errors.New("stop error")
+	stopErr := xerrors.New("stop error")
 
 	// Anything to do? This lets us avoid loading the deadlines if there's nothing to do.
 	noEarlyTerminations, err := st.EarlyTerminations.IsEmpty()
@@ -761,15 +787,15 @@ func (st *State) AddPledge(store adt.Store, pledger addr.Address, amount abi.Tok
 	}
 
 	// add to pledges
-	pledges, err := adt.AsMap(store, st.Pledges)
+	pledges, err := adt.AsMap(store, st.Pledges, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return errors.Wrapf(err, "failed to load pledges")
+		return xerrors.Errorf("failed to load pledges: %w", err)
 	}
 
 	var out abi.TokenAmount
 	found, err := pledges.Get(abi.AddrKey(pledger), &out)
 	if err != nil {
-		return errors.Wrapf(err, "failed to get pledge")
+		return xerrors.Errorf("failed to get pledge: %w", err)
 	}
 	if !found {
 		out = amount
@@ -779,11 +805,11 @@ func (st *State) AddPledge(store adt.Store, pledger addr.Address, amount abi.Tok
 	st.TotalPledge = big.Add(st.TotalPledge, amount)
 	err = pledges.Put(abi.AddrKey(pledger), &out)
 	if err != nil {
-		return errors.Wrapf(err, "failed to put pledge")
+		return xerrors.Errorf("failed to put pledge: %w", err)
 	}
 	st.Pledges, err = pledges.Root()
 	if err != nil {
-		return errors.Wrapf(err, "failed to flush pledges")
+		return xerrors.Errorf("failed to flush pledges: %w", err)
 	}
 	return nil
 }
@@ -793,18 +819,18 @@ func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount ab
 		return big.Zero(), xerrors.Errorf("non-positive amount of pledge to withdraw: %v", amount)
 	}
 
-	pledges, err := adt.AsMap(store, st.Pledges)
+	pledges, err := adt.AsMap(store, st.Pledges, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return big.Zero(), errors.Wrapf(err, "failed to load pledges")
+		return big.Zero(), xerrors.Errorf("failed to load pledges: %w", err)
 	}
 
 	var out abi.TokenAmount
 	found, err := pledges.Get(abi.AddrKey(pledger), &out)
 	if err != nil {
-		return big.Zero(), errors.Wrapf(err, "failed to get pledge")
+		return big.Zero(), xerrors.Errorf("failed to get pledge: %w", err)
 	}
 	if !found {
-		return big.Zero(), errors.New("no pledge found")
+		return big.Zero(), xerrors.New("no pledge found")
 	}
 	actual := big.Min(out, amount)
 	if actual.LessThanEqual(big.Zero()) {
@@ -816,12 +842,12 @@ func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount ab
 	if out.IsZero() {
 		err = pledges.Delete(abi.AddrKey(pledger))
 		if err != nil {
-			return big.Zero(), errors.Wrapf(err, "failed to delete pledge for zero")
+			return big.Zero(), xerrors.Errorf("failed to delete pledge for zero: %w", err)
 		}
 	} else {
 		err = pledges.Put(abi.AddrKey(pledger), &out)
 		if err != nil {
-			return big.Zero(), errors.Wrapf(err, "failed to put pledge")
+			return big.Zero(), xerrors.Errorf("failed to put pledge: %w", err)
 		}
 	}
 
@@ -832,7 +858,7 @@ func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount ab
 
 	st.Pledges, err = pledges.Root()
 	if err != nil {
-		return big.Zero(), errors.Wrapf(err, "failed to flush pledges")
+		return big.Zero(), xerrors.Errorf("failed to flush pledges: %w", err)
 	}
 	return actual, nil
 }
@@ -1117,7 +1143,7 @@ func (st *State) ExpirePreCommits(store adt.Store, currEpoch abi.ChainEpoch) ( /
 	// Actually delete it.
 	if len(precommitsToDelete) > 0 {
 		if err := st.DeletePrecommittedSectors(store, precommitsToDelete...); err != nil {
-			return /* big.Zero(), */ fmt.Errorf("failed to delete pre-commits: %w", err)
+			return /* big.Zero(), */ xerrors.Errorf("failed to delete pre-commits: %w", err)
 		}
 	}
 
@@ -1277,29 +1303,29 @@ func (st *State) AddPieces(store adt.Store, sdi market.SectorDealInfos, sno abi.
 	if len(sdi.PieceCIDs) == 0 {
 		return nil
 	}
-	pieces, err := adt.AsMap(store, st.Pieces)
+	pieces, err := adt.AsMap(store, st.Pieces, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return errors.Wrap(err, "failed to load Pieces")
+		return xerrors.Errorf("failed to load Pieces: %w", err)
 	}
 	v := cbg.CborInt(sno)
 	for _, pcid := range sdi.PieceCIDs {
 		err = pieces.Put(abi.CidKey(pcid), &v)
 		if err != nil {
-			return errors.Wrapf(err, "failed to add piece %d: %s", sno, pcid)
+			return xerrors.Errorf("failed to add piece %d, %s: %w", sno, pcid, err)
 		}
 	}
 	st.Pieces, err = pieces.Root()
 	if err != nil {
-		return errors.Wrap(err, "failed to flush Pieces")
+		return xerrors.Errorf("failed to flush Pieces: %w", err)
 	}
 	return nil
 }
 
 func (st *State) MustNotContainAnyPiece(store adt.Store, pieceCIDs []builtin.CheckedCID) error {
 
-	pieces, err := adt.AsMap(store, st.Pieces)
+	pieces, err := adt.AsMap(store, st.Pieces, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return errors.Wrap(err, "failed to load Pieces")
+		return xerrors.Errorf("failed to load Pieces: %w", err)
 	}
 
 	for _, pieceCID := range pieceCIDs {
@@ -1307,7 +1333,7 @@ func (st *State) MustNotContainAnyPiece(store adt.Store, pieceCIDs []builtin.Che
 
 		found, err := pieces.Get(abi.CidKey(pieceCID.CID), &out)
 		if err != nil {
-			return errors.Wrapf(err, "failed to get piece %s", pieceCID)
+			return xerrors.Errorf("failed to get piece %s: %w", pieceCID, err)
 		}
 		if !found {
 			continue
@@ -1317,19 +1343,19 @@ func (st *State) MustNotContainAnyPiece(store adt.Store, pieceCIDs []builtin.Che
 		sno := abi.SectorNumber(out)
 		_, found, err = st.GetPrecommittedSector(store, sno)
 		if err != nil {
-			return errors.Errorf("failed to get precommit %d: %s", sno, pieceCID)
+			return xerrors.Errorf("failed to get precommit %d: %s", sno, pieceCID)
 		}
 		if found {
-			return errors.Errorf("piece contained in precommit %d: %s", sno, pieceCID)
+			return xerrors.Errorf("piece contained in precommit %d: %s", sno, pieceCID)
 		}
 
 		// check exist in live sector
 		live, err := st.isSectorLive(store, sno)
 		if err != nil {
-			return errors.Wrapf(err, "failed to check sector live %d: %s", sno, pieceCID)
+			return xerrors.Errorf("failed to check sector live %d, %s: %w", sno, pieceCID, err)
 		}
 		if live {
-			return errors.Errorf("piece in active %d: %s", sno, pieceCID)
+			return xerrors.Errorf("piece in active %d: %s", sno, pieceCID)
 		}
 
 		// Otherwise sector already removed, but we did not remove this piece record.

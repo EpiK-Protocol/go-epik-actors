@@ -12,7 +12,7 @@ type StateSummary struct{}
 var EPK = big.NewInt(1e18)
 var StorageMiningAllocationCheck = big.Mul(big.NewInt(700_000_000), EPK)
 
-func CheckStateInvariants(st *State, store adt.Store, priorEpoch abi.ChainEpoch, balance abi.TokenAmount) (*StateSummary, *builtin.MessageAccumulator, error) {
+func CheckStateInvariants(st *State, store adt.Store, priorEpoch abi.ChainEpoch, balance abi.TokenAmount) (*StateSummary, *builtin.MessageAccumulator) {
 	acc := &builtin.MessageAccumulator{}
 
 	totalReward := big.Sum(st.TotalExpertReward, st.TotalStoragePowerReward, st.TotalVoteReward, st.TotalKnowledgeReward, st.TotalRetrievalReward)
@@ -21,5 +21,5 @@ func CheckStateInvariants(st *State, store adt.Store, priorEpoch abi.ChainEpoch,
 
 	acc.Require(st.Epoch <= priorEpoch+1, "reward state epoch %d does not match priorEpoch+1 %d", st.Epoch, priorEpoch+1)
 
-	return &StateSummary{}, acc, nil
+	return &StateSummary{}, acc
 }

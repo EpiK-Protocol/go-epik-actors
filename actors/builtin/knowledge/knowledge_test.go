@@ -33,7 +33,7 @@ func TestConstruction(t *testing.T) {
 	t.Run("initial payee not set", func(t *testing.T) {
 		rt := builder.Build(t)
 		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "must be an ID address", func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "must be an ID address", func() {
 			rt.Call(actor.Constructor, &address.Undef)
 		})
 	})
@@ -269,7 +269,7 @@ func (h *actorHarness) applyRewards(rt *mock.Runtime, rewards abi.TokenAmount, e
 
 func getPayeeTotal(t *testing.T, rt *mock.Runtime) (amt abi.TokenAmount, found bool) {
 	st := getState(rt)
-	tally, err := adt.AsMap(adt.AsStore(rt), st.Tally)
+	tally, err := adt.AsMap(adt.AsStore(rt), st.Tally, builtin.DefaultHamtBitwidth)
 	require.NoError(t, err)
 
 	amt = big.Zero()
@@ -279,7 +279,7 @@ func getPayeeTotal(t *testing.T, rt *mock.Runtime) (amt abi.TokenAmount, found b
 }
 
 func verifyEmptyMap(t *testing.T, rt *mock.Runtime, cid cid.Cid) {
-	mapChecked, err := adt.AsMap(adt.AsStore(rt), cid)
+	mapChecked, err := adt.AsMap(adt.AsStore(rt), cid, builtin.DefaultHamtBitwidth)
 	assert.NoError(t, err)
 	keys, err := mapChecked.CollectKeys()
 	require.NoError(t, err)

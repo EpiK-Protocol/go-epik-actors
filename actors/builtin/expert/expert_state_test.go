@@ -185,8 +185,6 @@ func (h *stateHarness) hasData(pieceID cid.Cid) bool {
 func constructStateHarness(t *testing.T) *stateHarness {
 	// store init
 	store := ipld.NewADTStore(context.Background())
-	emptyMap, err := adt.MakeEmptyMap(store).Root()
-	require.NoError(t, err)
 
 	// state field init
 	owner := tutils.NewBLSAddr(t, 1)
@@ -210,7 +208,9 @@ func constructStateHarness(t *testing.T) *stateHarness {
 		ApplyEpoch: abi.ChainEpoch(-1),
 	})
 	require.NoError(t, err)
-	state := expert.ConstructState(infoCid, emptyMap, eState, changeCid)
+
+	state, err := expert.ConstructState(store, infoCid, eState, changeCid)
+	require.NoError(t, err)
 
 	return &stateHarness{
 		t:     t,

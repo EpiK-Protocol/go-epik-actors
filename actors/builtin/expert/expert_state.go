@@ -3,10 +3,10 @@ package expert
 import (
 	addr "github.com/filecoin-project/go-address"
 	cid "github.com/ipfs/go-cid"
-	"github.com/pkg/errors"
 	xerrors "golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
@@ -70,7 +70,12 @@ func ConstructExpertInfo(owner addr.Address, eType ExpertType, aHash string) (*E
 	}, nil
 }
 
-func ConstructState(info cid.Cid, emptyMapCid cid.Cid, state ExpertState, emptyChange cid.Cid) *State {
+func ConstructState(store adt.Store, info cid.Cid, state ExpertState, emptyChange cid.Cid) (*State, error) {
+	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+
 	return &State{
 		Info:        info,
 		Datas:       emptyMapCid,
@@ -78,7 +83,7 @@ func ConstructState(info cid.Cid, emptyMapCid cid.Cid, state ExpertState, emptyC
 		LostEpoch:   abi.ChainEpoch(-1),
 		Status:      state,
 		OwnerChange: emptyChange,
-	}
+	}, nil
 }
 
 func (st *State) GetInfo(store adt.Store) (*ExpertInfo, error) {
@@ -99,7 +104,7 @@ func (st *State) SaveInfo(store adt.Store, info *ExpertInfo) error {
 }
 
 func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
-	pieces, err := adt.AsMap(store, st.Datas)
+	pieces, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return false, err
 	}
@@ -113,20 +118,20 @@ func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
 }
 
 func (st *State) PutData(store adt.Store, data *DataOnChainInfo) error {
-	datas, err := adt.AsMap(store, st.Datas)
+	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 
 	if err := datas.Put(adt.StringKey(data.PieceID), data); err != nil {
-		return errors.Wrapf(err, "failed to put data %v", data)
+		return xerrors.Errorf("failed to put data %v: %w", data, err)
 	}
 	st.Datas, err = datas.Root()
 	return err
 }
 
 func (st *State) GetData(store adt.Store, pieceID string) (*DataOnChainInfo, bool, error) {
-	datas, err := adt.AsMap(store, st.Datas)
+	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, false, err
 	}
@@ -134,19 +139,19 @@ func (st *State) GetData(store adt.Store, pieceID string) (*DataOnChainInfo, boo
 	var info DataOnChainInfo
 	found, err := datas.Get(adt.StringKey(pieceID), &info)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to get data %v", pieceID)
+		return nil, false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
 	}
 	return &info, found, nil
 }
 
 func (st *State) DeleteData(store adt.Store, pieceID string) error {
-	datas, err := adt.AsMap(store, st.Datas)
+	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 	err = datas.Delete(adt.StringKey(pieceID))
 	if err != nil {
-		return errors.Wrapf(err, "failed to delete data for %v", pieceID)
+		return xerrors.Errorf("failed to delete data for %v: %w", pieceID, err)
 	}
 
 	st.Datas, err = datas.Root()
@@ -154,7 +159,7 @@ func (st *State) DeleteData(store adt.Store, pieceID string) error {
 }
 
 func (st *State) ForEachData(store adt.Store, f func(*DataOnChainInfo)) error {
-	datas, err := adt.AsMap(store, st.Datas)
+	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}

@@ -5,9 +5,9 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
-	"github.com/pkg/errors"
 	xerrors "golang.org/x/xerrors"
 )
 
@@ -54,7 +54,12 @@ type PoolInfo struct {
 }
 
 // ConstructState expert fund construct
-func ConstructState(emptyMapCid cid.Cid, pool cid.Cid) *State {
+func ConstructState(store adt.Store, pool cid.Cid) (*State, error) {
+	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+
 	return &State{
 		Experts:  emptyMapCid,
 		PoolInfo: pool,
@@ -64,11 +69,11 @@ func ConstructState(emptyMapCid cid.Cid, pool cid.Cid) *State {
 		TotalExpertReward:   abi.NewTokenAmount(0),
 		LastFundBalance:     abi.NewTokenAmount(0),
 		DataStoreThreshold:  DefaultDataStoreThreshold,
-	}
+	}, nil
 }
 
 func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
-	pieces, err := adt.AsMap(store, st.Datas)
+	pieces, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return false, err
 	}
@@ -82,20 +87,20 @@ func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
 }
 
 func (st *State) PutData(store adt.Store, pieceID string, expert addr.Address) error {
-	datas, err := adt.AsMap(store, st.Datas)
+	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 
 	if err := datas.Put(adt.StringKey(pieceID), &expert); err != nil {
-		return errors.Wrapf(err, "failed to put expert %v", expert)
+		return xerrors.Errorf("failed to put expert %v: %w", expert, err)
 	}
 	st.Datas, err = datas.Root()
 	return err
 }
 
 func (st *State) GetData(store adt.Store, pieceID string) (addr.Address, bool, error) {
-	datas, err := adt.AsMap(store, st.Datas)
+	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return addr.Undef, false, err
 	}
@@ -103,7 +108,7 @@ func (st *State) GetData(store adt.Store, pieceID string) (addr.Address, bool, e
 	var expert addr.Address
 	found, err := datas.Get(adt.StringKey(pieceID), &expert)
 	if err != nil {
-		return addr.Undef, false, errors.Wrapf(err, "failed to get data %v", pieceID)
+		return addr.Undef, false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
 	}
 	return expert, found, nil
 }
@@ -170,7 +175,7 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 		return err
 	}
 
-	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts)
+	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
@@ -221,7 +226,7 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 		return err
 	}
 
-	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts)
+	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
@@ -264,7 +269,7 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 
 // UpdateExpert update expert.
 func (st *State) Reset(rt Runtime, expert addr.Address) error {
-	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts)
+	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}

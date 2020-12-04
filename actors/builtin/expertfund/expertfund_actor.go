@@ -53,13 +53,12 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
-
 	pool := rt.StorePut(&PoolInfo{
 		LastRewardBlock: abi.ChainEpoch(0),
-		AccPerShare:     abi.NewTokenAmount(0)})
-	st := ConstructState(emptyMap, pool)
+		AccPerShare:     abi.NewTokenAmount(0),
+	})
+	st, err := ConstructState(adt.AsStore(rt), pool)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	rt.StateCreate(st)
 	return nil
 }

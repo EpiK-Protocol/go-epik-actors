@@ -1,7 +1,6 @@
 package power
 
 import (
-	"fmt"
 	"reflect"
 
 	addr "github.com/filecoin-project/go-address"
@@ -9,7 +8,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	cid "github.com/ipfs/go-cid"
-	errors "github.com/pkg/errors"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
@@ -78,7 +76,16 @@ type CronEvent struct {
 	CallbackPayload []byte
 }
 
-func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
+func ConstructState(store adt.Store) (*State, error) {
+	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+	emptyMMapCid, err := adt.MakeEmptyMultimap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty multimap: %w", err)
+	}
+
 	return &State{
 		TotalRawBytePower:         abi.NewStoragePower(0),
 		TotalBytesCommitted:       abi.NewStoragePower(0),
@@ -88,15 +95,14 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 		ThisEpochRawBytePower:     abi.NewStoragePower(0),
 		ThisEpochQualityAdjPower:  abi.NewStoragePower(0),
 		ThisEpochPledgeCollateral: abi.NewTokenAmount(0),
-		// ThisEpochQAPowerSmoothed:  smoothing.NewEstimate(InitialQAPowerEstimatePosition, InitialQAPowerEstimateVelocity),
-		FirstCronEpoch:          0,
-		CronEventQueue:          emptyMMapCid,
-		Claims:                  emptyMapCid,
-		MinerCount:              0,
-		MinerAboveMinPowerCount: 0,
-		ExpertCount:             0,
-		Experts:                 emptyMapCid,
-	}
+		FirstCronEpoch:            0,
+		CronEventQueue:            emptyMMapCid,
+		Claims:                    emptyMapCid,
+		MinerCount:                0,
+		MinerAboveMinPowerCount:   0,
+		ExpertCount:               0,
+		Experts:                   emptyMapCid,
+	}, nil
 }
 
 // MinerNominalPowerMeetsConsensusMinimum is used to validate Election PoSt
@@ -104,7 +110,7 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 // the miner meets the minimum.  If the network is a below a threshold of
 // miners and has power > zero the miner meets the minimum.
 func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.Address) (bool, error) { //nolint:deadcode,unused
-	claims, err := adt.AsMap(s, st.Claims)
+	claims, err := adt.AsMap(s, st.Claims, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return false, xerrors.Errorf("failed to load claims: %w", err)
 	}
@@ -114,7 +120,7 @@ func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 		return false, err
 	}
 	if !ok {
-		return false, errors.Errorf("no claim for actor %v", miner)
+		return false, exitcode.ErrNotFound.Wrapf("no claim for actor %v", miner)
 	}
 
 	minerNominalPower := claim.RawBytePower
@@ -123,7 +129,7 @@ func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 	}
 	minerMinPower, err := builtin.ConsensusMinerMinPower(claim.SealProofType)
 	if err != nil {
-		return false, errors.Wrap(err, "could not get miner min power from proof type")
+		return false, xerrors.Errorf("could not get miner min power from proof type: %w", err)
 	}
 
 	// if miner is larger than min power requirement, we're set
@@ -142,7 +148,7 @@ func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 
 // Parameters may be negative to subtract.
 func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePower, qapower abi.StoragePower, pledge abi.TokenAmount) error {
-	claims, err := adt.AsMap(s, st.Claims)
+	claims, err := adt.AsMap(s, st.Claims, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return xerrors.Errorf("failed to load claims: %w", err)
 	}
@@ -160,7 +166,7 @@ func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePo
 }
 
 func (st *State) GetClaim(s adt.Store, a addr.Address) (*Claim, bool, error) {
-	claims, err := adt.AsMap(s, st.Claims)
+	claims, err := adt.AsMap(s, st.Claims, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to load claims: %w", err)
 	}
@@ -177,7 +183,7 @@ func (st *State) addToClaim(
 ) error {
 	oldClaim, ok, err := getClaim(claims, miner)
 	if err != nil {
-		return fmt.Errorf("failed to get claim: %w", err)
+		return xerrors.Errorf("failed to get claim: %w", err)
 	}
 	if !ok {
 		return exitcode.ErrNotFound.Wrapf("no claim for actor %v", miner)
@@ -200,7 +206,7 @@ func (st *State) addToClaim(
 
 	minPower, err := builtin.ConsensusMinerMinPower(oldClaim.SealProofType)
 	if err != nil {
-		return fmt.Errorf("could not get consensus miner min power: %w", err)
+		return xerrors.Errorf("could not get consensus miner min power: %w", err)
 	}
 	prevBelow := oldClaim.RawBytePower.LessThan(minPower)
 	stillBelow := newClaim.RawBytePower.LessThan(minPower)
@@ -230,7 +236,7 @@ func (st *State) addToClaim(
 func (st *State) updateStatsForNewMiner(sealProof abi.RegisteredSealProof) error {
 	minPower, err := builtin.ConsensusMinerMinPower(sealProof)
 	if err != nil {
-		return fmt.Errorf("could not get consensus miner min power: %w", err)
+		return xerrors.Errorf("could not get consensus miner min power: %w", err)
 	}
 
 	if minPower.LessThanEqual(big.Zero()) {
@@ -242,7 +248,7 @@ func (st *State) updateStatsForNewMiner(sealProof abi.RegisteredSealProof) error
 func (st *State) deleteClaim(claims *adt.Map, miner addr.Address) error {
 	oldClaim, ok, err := getClaim(claims, miner)
 	if err != nil {
-		return fmt.Errorf("failed to get claim: %w", err)
+		return xerrors.Errorf("failed to get claim: %w", err)
 	}
 	if !ok {
 		return nil // no record, we're done
@@ -251,7 +257,7 @@ func (st *State) deleteClaim(claims *adt.Map, miner addr.Address) error {
 	// subtract from stats as if we were simply removing power
 	err = st.addToClaim(claims, miner, oldClaim.RawBytePower.Neg(), oldClaim.QualityAdjPower.Neg(), oldClaim.TotalMiningPledge.Neg())
 	if err != nil {
-		return fmt.Errorf("failed to subtract miner power before deleting claim: %w", err)
+		return xerrors.Errorf("failed to subtract miner power before deleting claim: %w", err)
 	}
 
 	// delete claim from state to invalidate miner
@@ -262,7 +268,7 @@ func getClaim(claims *adt.Map, a addr.Address) (*Claim, bool, error) {
 	var out Claim
 	found, err := claims.Get(abi.AddrKey(a), &out)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to get claim for address %v", a)
+		return nil, false, xerrors.Errorf("failed to get claim for address %v: %w", a, err)
 	}
 	if !found {
 		return nil, false, nil
@@ -346,7 +352,7 @@ type Expert struct {
 }
 
 func (st *State) getExpert(s adt.Store, a addr.Address) (*Expert, bool, error) {
-	hm, err := adt.AsMap(s, st.Experts)
+	hm, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, false, err
 	}
@@ -354,7 +360,7 @@ func (st *State) getExpert(s adt.Store, a addr.Address) (*Expert, bool, error) {
 	var out Expert
 	found, err := hm.Get(abi.AddrKey(a), &out)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to get expert for address %v from store %s", a, st.Experts)
+		return nil, false, xerrors.Errorf("failed to get expert for address %v from store %s: %w", a, st.Experts, err)
 	}
 	if !found {
 		return nil, false, nil
@@ -363,13 +369,13 @@ func (st *State) getExpert(s adt.Store, a addr.Address) (*Expert, bool, error) {
 }
 
 func (st *State) setExpert(s adt.Store, a addr.Address, expert *Expert) error {
-	hm, err := adt.AsMap(s, st.Experts)
+	hm, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 
 	if err = hm.Put(abi.AddrKey(a), expert); err != nil {
-		return errors.Wrapf(err, "failed to put expert with address %s expert %v in store %s", a, expert, st.Experts)
+		return xerrors.Errorf("failed to put expert with address %s expert %v in store %s: %w", a, expert, st.Experts, err)
 	}
 
 	st.Experts, err = hm.Root()
@@ -380,13 +386,13 @@ func (st *State) setExpert(s adt.Store, a addr.Address, expert *Expert) error {
 }
 
 func (st *State) deleteExpert(s adt.Store, a addr.Address) error {
-	hm, err := adt.AsMap(s, st.Experts)
+	hm, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 
 	if err = hm.Delete(abi.AddrKey(a)); err != nil {
-		return errors.Wrapf(err, "failed to delete expert at address %s from store %s", a, st.Experts)
+		return xerrors.Errorf("failed to delete expert at address %s from store %s: %w", a, st.Experts, err)
 	}
 	st.Experts, err = hm.Root()
 	if err != nil {
@@ -396,7 +402,7 @@ func (st *State) deleteExpert(s adt.Store, a addr.Address) error {
 }
 
 func (st *State) ForEachExpert(store adt.Store, f func(*Expert)) error {
-	datas, err := adt.AsMap(store, st.Experts)
+	datas, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
@@ -408,7 +414,7 @@ func (st *State) ForEachExpert(store adt.Store, f func(*Expert)) error {
 }
 
 func (st *State) expertActors(store adt.Store) ([]addr.Address, error) {
-	datas, err := adt.AsMap(store, st.Experts)
+	datas, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}

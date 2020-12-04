@@ -52,12 +52,8 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
+	st, err := ConstructState(adt.AsStore(rt))
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
-	emptyMMapCid, err := adt.MakeEmptyMultimap(adt.AsStore(rt)).Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
-
-	st := ConstructState(emptyMap, emptyMMapCid)
 	rt.StateCreate(st)
 	return nil
 }

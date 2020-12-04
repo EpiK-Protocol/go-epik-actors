@@ -76,12 +76,8 @@ type MinerConstructorParams struct {
 func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
+	st, err := ConstructState(adt.AsStore(rt))
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
-	emptyMMapCid, err := adt.MakeEmptyMultimap(adt.AsStore(rt)).Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
-
-	st := ConstructState(emptyMap, emptyMMapCid)
 	rt.StateCreate(st)
 	return nil
 }
@@ -130,7 +126,7 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
+		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
 		err = setClaim(claims, addresses.IDAddress, &Claim{
@@ -169,7 +165,7 @@ func (a Actor) UpdateClaimedPower(rt Runtime, params *UpdateClaimedPowerParams) 
 	minerAddr := rt.Caller()
 	var st State
 	rt.StateTransaction(&st, func() {
-		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
+		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
 		err = st.addToClaim(claims, minerAddr, params.RawByteDelta, params.QualityAdjustedDelta, params.PledgeDelta)
@@ -201,7 +197,7 @@ func (a Actor) EnrollCronEvent(rt Runtime, params *EnrollCronEventParams) *abi.E
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		events, err := adt.AsMultimap(adt.AsStore(rt), st.CronEventQueue)
+		events, err := adt.AsMultimap(adt.AsStore(rt), st.CronEventQueue, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load cron events")
 
 		err = st.appendCronEvent(events, params.EventEpoch, &minerEvent)
@@ -273,10 +269,10 @@ func (a Actor) SubmitPoRepForBulkVerify(rt Runtime, sealInfo *proof.SealVerifyIn
 		store := adt.AsStore(rt)
 		var mmap *adt.Multimap
 		if st.ProofValidationBatch == nil {
-			mmap = adt.MakeEmptyMultimap(store)
+			mmap = adt.MakeEmptyMultimap(store, builtin.DefaultHamtBitwidth)
 		} else {
 			var err error
-			mmap, err = adt.AsMultimap(adt.AsStore(rt), *st.ProofValidationBatch)
+			mmap, err = adt.AsMultimap(adt.AsStore(rt), *st.ProofValidationBatch, builtin.DefaultHamtBitwidth)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load proof batch set")
 		}
 
@@ -330,7 +326,7 @@ func (a Actor) CurrentTotalPower(rt Runtime, _ *abi.EmptyValue) *CurrentTotalPow
 ////////////////////////////////////////////////////////////////////////////////
 
 func validateMinerHasClaim(rt Runtime, st State, minerAddr addr.Address) {
-	claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
+	claims, err := adt.AsMap(adt.AsStore(rt), st.Claims, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
 	found, err := claims.Has(abi.AddrKey(minerAddr))
@@ -351,10 +347,10 @@ func (a Actor) processBatchProofVerifies(rt Runtime) {
 		if st.ProofValidationBatch == nil {
 			return
 		}
-		mmap, err := adt.AsMultimap(store, *st.ProofValidationBatch)
+		mmap, err := adt.AsMultimap(store, *st.ProofValidationBatch, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load proofs validation batch")
 
-		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
+		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
 		err = mmap.ForAll(func(k string, arr *adt.Array) error {
@@ -433,10 +429,10 @@ func (a Actor) processDeferredCronEvents(rt Runtime) {
 	var cronEvents []CronEvent
 	var st State
 	rt.StateTransaction(&st, func() {
-		events, err := adt.AsMultimap(adt.AsStore(rt), st.CronEventQueue)
+		events, err := adt.AsMultimap(adt.AsStore(rt), st.CronEventQueue, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load cron events")
 
-		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
+		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
 		for epoch := st.FirstCronEpoch; epoch <= rtEpoch; epoch++ {
@@ -486,7 +482,7 @@ func (a Actor) processDeferredCronEvents(rt Runtime) {
 
 	if len(failedMinerCrons) > 0 {
 		rt.StateTransaction(&st, func() {
-			claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
+			claims, err := adt.AsMap(adt.AsStore(rt), st.Claims, builtin.DefaultHamtBitwidth)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
 			// Remove miner claim and leave miner frozen

@@ -7,9 +7,9 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/ipfs/go-cid"
-	"github.com/pkg/errors"
 	"golang.org/x/xerrors"
 )
 
@@ -74,7 +74,16 @@ type VotesInfo struct {
 	LastRescindEpoch abi.ChainEpoch
 }
 
-func ConstructState(emptyMapCid cid.Cid, fallback address.Address) *State {
+func ConstructState(store adt.Store, fallback address.Address) (*State, error) {
+	if fallback.Protocol() != addr.ID {
+		return nil, xerrors.New("fallback not a ID-Address")
+	}
+
+	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+
 	return &State{
 		Candidates:         emptyMapCid,
 		Voters:             emptyMapCid,
@@ -82,7 +91,7 @@ func ConstructState(emptyMapCid cid.Cid, fallback address.Address) *State {
 		UnownedFunds:       abi.NewTokenAmount(0),
 		CumEarningsPerVote: abi.NewTokenAmount(0),
 		FallbackReceiver:   fallback,
-	}
+	}, nil
 }
 
 func (st *State) BlockCandidates(candidates *adt.Map, candAddrs map[addr.Address]struct{}, cur abi.ChainEpoch) (int, error) {
@@ -93,7 +102,7 @@ func (st *State) BlockCandidates(candidates *adt.Map, candAddrs map[addr.Address
 			return 0, err
 		}
 		if !found {
-			return 0, errors.Errorf("candidate not found: %s", candAddr)
+			return 0, xerrors.Errorf("candidate not found: %s", candAddr)
 		}
 
 		if cand.IsBlocked() {
@@ -150,9 +159,9 @@ func (st *State) subFromTally(
 	cur abi.ChainEpoch,
 ) (abi.TokenAmount, error) {
 
-	tally, err := adt.AsMap(s, voter.Tally)
+	tally, err := adt.AsMap(s, voter.Tally, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return abi.NewTokenAmount(0), errors.Wrapf(err, "failed to load tally")
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load tally: %w", err)
 	}
 	info, found, err := getVotesInfo(tally, candAddr)
 	if err != nil {
@@ -175,7 +184,7 @@ func (st *State) subFromTally(
 	}
 	voter.Tally, err = tally.Root()
 	if err != nil {
-		return abi.NewTokenAmount(0), errors.Wrapf(err, "failed to flush tally")
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to flush tally: %w", err)
 	}
 	return votes, nil
 }
@@ -211,9 +220,9 @@ func (st *State) addToCandidate(
 // Assuming this candidate is eligible.
 func (st *State) addToTally(s adt.Store, voter *Voter, candAddr addr.Address, votes abi.TokenAmount) error {
 
-	tally, err := adt.AsMap(s, voter.Tally)
+	tally, err := adt.AsMap(s, voter.Tally, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return errors.Wrapf(err, "failed to load tally")
+		return xerrors.Errorf("failed to load tally: %w", err)
 	}
 
 	// set or update tally
@@ -237,19 +246,19 @@ func (st *State) addToTally(s adt.Store, voter *Voter, candAddr addr.Address, vo
 	}
 	voter.Tally, err = tally.Root()
 	if err != nil {
-		return errors.Wrapf(err, "failed to flush tally")
+		return xerrors.Errorf("failed to flush tally: %w", err)
 	}
 	return nil
 }
 
 // NOTE this method is only for test!
 func (st *State) EstimateSettleAll(s adt.Store, cur abi.ChainEpoch) (map[addr.Address]abi.TokenAmount, error) {
-	candidates, err := adt.AsMap(s, st.Candidates)
+	candidates, err := adt.AsMap(s, st.Candidates, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}
 
-	voters, err := adt.AsMap(s, st.Voters)
+	voters, err := adt.AsMap(s, st.Voters, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +287,7 @@ func (st *State) EstimateSettleAll(s adt.Store, cur abi.ChainEpoch) (map[addr.Ad
 }
 
 func (st *State) EstimateSettle(s adt.Store, voter *Voter, cur abi.ChainEpoch) error {
-	candidates, err := adt.AsMap(s, st.Candidates)
+	candidates, err := adt.AsMap(s, st.Candidates, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
@@ -293,7 +302,7 @@ func (st *State) EstimateSettle(s adt.Store, voter *Voter, cur abi.ChainEpoch) e
 
 func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.ChainEpoch) error {
 
-	tally, err := adt.AsMap(s, voter.Tally)
+	tally, err := adt.AsMap(s, voter.Tally, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return xerrors.Errorf("failed to load tally: %w", err)
 	}
@@ -330,7 +339,7 @@ func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.
 		return nil
 	})
 	if err != nil {
-		return errors.Wrap(err, "failed to count valid votes in tally")
+		return xerrors.Errorf("failed to count valid votes in tally: %w", err)
 	}
 	blocked := make([][]*Candidate, 0, len(blockedCands))
 	for _, sameEpoch := range blockedCands {
@@ -372,9 +381,9 @@ func (st *State) withdrawUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainE
 	err error,
 ) {
 
-	tally, err := adt.AsMap(s, voter.Tally)
+	tally, err := adt.AsMap(s, voter.Tally, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return abi.NewTokenAmount(0), false, errors.Wrapf(err, "failed to load tally")
+		return abi.NewTokenAmount(0), false, xerrors.Errorf("failed to load tally: %w", err)
 	}
 
 	deletes := make([]addr.Address, 0)
@@ -421,7 +430,7 @@ func (st *State) withdrawUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainE
 	for _, candAddr := range deletes {
 		err := tally.Delete(abi.AddrKey(candAddr))
 		if err != nil {
-			return abi.NewTokenAmount(0), false, errors.Wrapf(err, "failed to delete tally item")
+			return abi.NewTokenAmount(0), false, xerrors.Errorf("failed to delete tally item: %w", err)
 		}
 	}
 	for candAddr, newInfo := range updates {
@@ -433,7 +442,7 @@ func (st *State) withdrawUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainE
 
 	voter.Tally, err = tally.Root()
 	if err != nil {
-		return abi.NewTokenAmount(0), false, errors.Wrap(err, "failed to flush tally")
+		return abi.NewTokenAmount(0), false, xerrors.Errorf("failed to flush tally: %w", err)
 	}
 	return totalUnlocked, false, nil
 }
@@ -445,7 +454,7 @@ func setCandidate(candidates *adt.Map, candAddr addr.Address, cand *Candidate) e
 
 	// Should not delete even if candidate has no votes, for it may be inspect in settle.
 	if err := candidates.Put(abi.AddrKey(candAddr), cand); err != nil {
-		return errors.Wrapf(err, "failed to put candidate %s", candAddr)
+		return xerrors.Errorf("failed to put candidate %s: %w", candAddr, err)
 	}
 	return nil
 }
@@ -454,7 +463,7 @@ func getCandidate(candidates *adt.Map, candAddr addr.Address) (*Candidate, bool,
 	var out Candidate
 	found, err := candidates.Get(abi.AddrKey(candAddr), &out)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to get candidate for %v", candAddr)
+		return nil, false, xerrors.Errorf("failed to get candidate for %v: %w", candAddr, err)
 	}
 	if !found {
 		return nil, false, nil
@@ -464,14 +473,14 @@ func getCandidate(candidates *adt.Map, candAddr addr.Address) (*Candidate, bool,
 
 func setVoter(voters *adt.Map, voterAddr addr.Address, voter *Voter) error {
 	if err := voters.Put(abi.AddrKey(voterAddr), voter); err != nil {
-		return errors.Wrapf(err, "failed to put voter %s", voterAddr)
+		return xerrors.Errorf("failed to put voter %s: %w", voterAddr, err)
 	}
 	return nil
 }
 
 func deleteVoter(voters *adt.Map, voterAddr addr.Address) error {
 	if err := voters.Delete(abi.AddrKey(voterAddr)); err != nil {
-		return errors.Wrapf(err, "failed to delete voter %s", voterAddr)
+		return xerrors.Errorf("failed to delete voter %s: %w", voterAddr, err)
 	}
 	return nil
 }
@@ -480,7 +489,7 @@ func getVoter(voters *adt.Map, voterAddr addr.Address) (*Voter, bool, error) {
 	var voter Voter
 	found, err := voters.Get(abi.AddrKey(voterAddr), &voter)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to get voter %v", voterAddr)
+		return nil, false, xerrors.Errorf("failed to get voter %v: %w", voterAddr, err)
 	}
 	if !found {
 		return nil, false, nil
@@ -490,7 +499,7 @@ func getVoter(voters *adt.Map, voterAddr addr.Address) (*Voter, bool, error) {
 
 func setVotesInfo(tally *adt.Map, candAddr addr.Address, info *VotesInfo) error {
 	if err := tally.Put(abi.AddrKey(candAddr), info); err != nil {
-		return errors.Wrapf(err, "failed to put tally item for candidate %s", candAddr)
+		return xerrors.Errorf("failed to put tally item for candidate %s: %w", candAddr, err)
 	}
 	return nil
 }
@@ -499,7 +508,7 @@ func getVotesInfo(tally *adt.Map, candAddr addr.Address) (*VotesInfo, bool, erro
 	var info VotesInfo
 	found, err := tally.Get(abi.AddrKey(candAddr), &info)
 	if err != nil {
-		return nil, false, errors.Wrapf(err, "failed to get tally item for candidate %v", candAddr)
+		return nil, false, xerrors.Errorf("failed to get tally item for candidate %v: %w", candAddr, err)
 	}
 	if !found {
 		return nil, false, nil

@@ -29,8 +29,6 @@ type stateHarness struct {
 func constructStateHarness(t *testing.T) *stateHarness {
 	// store init
 	store := ipld.NewADTStore(context.Background())
-	emptyMap, err := adt.MakeEmptyMap(store).Root()
-	require.NoError(t, err)
 
 	info := &expertfund.PoolInfo{
 		LastRewardBlock: abi.ChainEpoch(0),
@@ -38,8 +36,8 @@ func constructStateHarness(t *testing.T) *stateHarness {
 	infoCid, err := store.Put(context.Background(), info)
 	require.NoError(t, err)
 
-	state := expertfund.ConstructState(emptyMap, infoCid)
-
+	state, err := expertfund.ConstructState(store, infoCid)
+	require.NoError(t, err)
 	return &stateHarness{
 		t:     t,
 		s:     state,

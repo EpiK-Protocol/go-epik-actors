@@ -41,7 +41,7 @@ func TestConstructor(t *testing.T) {
 	t.Run("construct with non-empty entries", func(t *testing.T) {
 		rt := builder.Build(t)
 
-		var entryParams = []cron.Entry{
+		var entryParams = []cron.EntryParam{
 			{Receiver: tutil.NewIDAddr(t, 1001), MethodNum: abi.MethodNum(1001)},
 			{Receiver: tutil.NewIDAddr(t, 1002), MethodNum: abi.MethodNum(1002)},
 			{Receiver: tutil.NewIDAddr(t, 1003), MethodNum: abi.MethodNum(1003)},
@@ -70,7 +70,7 @@ func TestEpochTick(t *testing.T) {
 	t.Run("epoch tick with empty entries", func(t *testing.T) {
 		rt := builder.Build(t)
 
-		var nilCronEntries = []cron.Entry(nil)
+		var nilCronEntries = []cron.EntryParam(nil)
 		actor.constructAndVerify(rt, nilCronEntries...)
 		actor.epochTickAndVerify(rt)
 		actor.checkState(rt)
@@ -79,10 +79,10 @@ func TestEpochTick(t *testing.T) {
 	t.Run("epoch tick with non-empty entries", func(t *testing.T) {
 		rt := builder.Build(t)
 
-		entry1 := cron.Entry{Receiver: tutil.NewIDAddr(t, 1001), MethodNum: abi.MethodNum(1001)}
-		entry2 := cron.Entry{Receiver: tutil.NewIDAddr(t, 1002), MethodNum: abi.MethodNum(1002)}
-		entry3 := cron.Entry{Receiver: tutil.NewIDAddr(t, 1003), MethodNum: abi.MethodNum(1003)}
-		entry4 := cron.Entry{Receiver: tutil.NewIDAddr(t, 1004), MethodNum: abi.MethodNum(1004)}
+		entry1 := cron.EntryParam{Receiver: tutil.NewIDAddr(t, 1001), MethodNum: abi.MethodNum(1001)}
+		entry2 := cron.EntryParam{Receiver: tutil.NewIDAddr(t, 1002), MethodNum: abi.MethodNum(1002)}
+		entry3 := cron.EntryParam{Receiver: tutil.NewIDAddr(t, 1003), MethodNum: abi.MethodNum(1003)}
+		entry4 := cron.EntryParam{Receiver: tutil.NewIDAddr(t, 1004), MethodNum: abi.MethodNum(1004)}
 
 		actor.constructAndVerify(rt, entry1, entry2, entry3, entry4)
 		// exit code should not matter
@@ -106,7 +106,7 @@ type cronHarness struct {
 	t testing.TB
 }
 
-func (h *cronHarness) constructAndVerify(rt *mock.Runtime, entries ...cron.Entry) {
+func (h *cronHarness) constructAndVerify(rt *mock.Runtime, entries ...cron.EntryParam) {
 	params := cron.ConstructorParams{Entries: entries}
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
 	ret := rt.Call(h.Constructor, &params)
@@ -124,7 +124,6 @@ func (h *cronHarness) epochTickAndVerify(rt *mock.Runtime) {
 func (h *cronHarness) checkState(rt *mock.Runtime) {
 	var st cron.State
 	rt.GetState(&st)
-	_, msgs, err := cron.CheckStateInvariants(&st, rt.AdtStore())
-	assert.NoError(h.t, err)
+	_, msgs := cron.CheckStateInvariants(&st, rt.AdtStore())
 	assert.True(h.t, msgs.IsEmpty())
 }

@@ -4,10 +4,11 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/ipfs/go-cid"
-	"github.com/pkg/errors"
+	xerrors "golang.org/x/xerrors"
 )
 
 type State struct {
@@ -24,12 +25,21 @@ type GrantedAuthorities struct {
 	CodeMethods cid.Cid // Map, HAMT[actor codeID]BitField
 }
 
-func ConstructState(emptyMapCid cid.Cid, supervisor address.Address) *State {
+func ConstructState(store adt.Store, supervisor address.Address) (*State, error) {
+
+	if supervisor.Protocol() != address.ID {
+		return nil, xerrors.New("supervisor address must be an ID address")
+	}
+
+	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
 
 	return &State{
 		Supervisor: supervisor,
 		Governors:  emptyMapCid,
-	}
+	}, nil
 }
 
 func (st *State) IsGranted(store adt.Store, governors *adt.Map, governor address.Address, codeID cid.Cid, method abi.MethodNum) (bool, error) {
@@ -42,14 +52,14 @@ func (st *State) IsGranted(store adt.Store, governors *adt.Map, governor address
 		return false, nil
 	}
 
-	mp, err := adt.AsMap(store, out.CodeMethods)
+	mp, err := adt.AsMap(store, out.CodeMethods, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to load CodeMethods")
+		return false, xerrors.Errorf("failed to load CodeMethods: %w", err)
 	}
 	var bf bitfield.BitField
 	found, err = mp.Get(abi.CidKey(codeID), &bf)
 	if err != nil {
-		return false, errors.Wrapf(err, "failed to get priviledges")
+		return false, xerrors.Errorf("failed to get priviledges: %w", err)
 	}
 	if !found {
 		return false, nil
@@ -75,11 +85,11 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 		if !grant { // do nothing for revoke
 			return nil
 		}
-		mp = adt.MakeEmptyMap(store)
+		mp = adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth)
 	} else {
-		mp, err = adt.AsMap(store, out.CodeMethods)
+		mp, err = adt.AsMap(store, out.CodeMethods, builtin.DefaultHamtBitwidth)
 		if err != nil {
-			return errors.Wrapf(err, "failed to load CodeMethods")
+			return xerrors.Errorf("failed to load CodeMethods: %w", err)
 		}
 	}
 
@@ -96,7 +106,7 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 		var bf bitfield.BitField
 		found, err = mp.Get(abi.CidKey(codeID), &bf)
 		if err != nil {
-			return errors.Wrapf(err, "failed to get priviledges")
+			return xerrors.Errorf("failed to get priviledges: %w", err)
 		}
 		if !found {
 			if !grant { // do nothing for revoke
@@ -107,41 +117,41 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 			if !grant {
 				bf, err = bitfield.SubtractBitField(bf, bitfield.NewFromSet(setBits))
 				if err != nil {
-					return errors.Wrapf(err, "failed to subtract bitfields")
+					return xerrors.Errorf("failed to subtract bitfields: %w", err)
 				}
 				empty, err := bf.IsEmpty()
 				if err != nil {
-					return errors.Wrapf(err, "failed to check bitfield empty(revoke)")
+					return xerrors.Errorf("failed to check bitfield empty(revoke): %w", err)
 				}
 				if empty {
 					err = mp.Delete(abi.CidKey(codeID))
 					if err != nil {
-						return errors.Wrapf(err, "failed to delete empty bitfield(revoke)")
+						return xerrors.Errorf("failed to delete empty bitfield(revoke): %w", err)
 					}
 					continue
 				}
 			} else {
 				bf, err = bitfield.MergeBitFields(bf, bitfield.NewFromSet(setBits))
 				if err != nil {
-					return errors.Wrapf(err, "failed to merge bitfields")
+					return xerrors.Errorf("failed to merge bitfields: %w", err)
 				}
 			}
 		}
 		err = mp.Put(abi.CidKey(codeID), bf)
 		if err != nil {
-			return errors.Wrapf(err, "failed to put priviledges")
+			return xerrors.Errorf("failed to put priviledges: %w", err)
 		}
 	}
 	keys, err := mp.CollectKeys()
 	if err != nil {
-		return errors.Wrapf(err, "failed to collect keys")
+		return xerrors.Errorf("failed to collect keys: %w", err)
 	}
 	if len(keys) == 0 {
 		return governors.Delete(abi.AddrKey(governor))
 	} else {
 		out.CodeMethods, err = mp.Root()
 		if err != nil {
-			return errors.Wrapf(err, "failed to flush CodeMethods")
+			return xerrors.Errorf("failed to flush CodeMethods: %w", err)
 		}
 		return governors.Put(abi.AddrKey(governor), &out)
 	}

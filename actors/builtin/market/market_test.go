@@ -47,7 +47,7 @@ func TestRemoveAllError(t *testing.T) {
 	rt := builder.Build(t)
 	store := adt.AsStore(rt)
 
-	smm := market.MakeEmptySetMultimap(store)
+	smm := market.MakeEmptySetMultimap(store, builtin.DefaultHamtBitwidth)
 
 	if err := smm.RemoveAll(42); err != nil {
 		t.Fatalf("expected no error, got: %s", err)
@@ -81,13 +81,13 @@ func TestMarketActor(t *testing.T) {
 
 		store := adt.AsStore(rt)
 
-		emptyMap, err := adt.MakeEmptyMap(store).Root()
+		emptyMap, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
 		assert.NoError(t, err)
 
 		emptyArray, err := adt.MakeEmptyArray(store).Root()
 		assert.NoError(t, err)
 
-		emptyMultiMap, err := market.MakeEmptySetMultimap(store).Root()
+		emptyMultiMap, err := market.MakeEmptySetMultimap(store, builtin.DefaultHamtBitwidth).Root()
 		assert.NoError(t, err)
 
 		var state market.State
@@ -2854,7 +2854,7 @@ func TestResetQuotas(t *testing.T) {
 		var st market.State
 		rt.GetState(&st)
 
-		quotas, err := adt.AsMap(adt.AsStore(rt), st.Quotas)
+		quotas, err := adt.AsMap(adt.AsStore(rt), st.Quotas, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 		keys, err := quotas.CollectKeys()
 		require.NoError(t, err)
@@ -2878,7 +2878,7 @@ func TestResetQuotas(t *testing.T) {
 		var st market.State
 		rt.GetState(&st)
 		
-		quotas, err := adt.AsMap(adt.AsStore(rt), st.Quotas)
+		quotas, err := adt.AsMap(adt.AsStore(rt), st.Quotas, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 		in := cbg.CborInt(1000)
 		err = quotas.Put(abi.CidKey(pieceCID), &in)
@@ -2911,7 +2911,7 @@ func TestResetQuotas(t *testing.T) {
 		var st market.State
 		rt.GetState(&st)
 		
-		quotas, err := adt.AsMap(adt.AsStore(rt), st.Quotas)
+		quotas, err := adt.AsMap(adt.AsStore(rt), st.Quotas, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 		in := cbg.CborInt(1000)
 		err = quotas.Put(abi.CidKey(pieceCID), &in)
@@ -2932,7 +2932,7 @@ func TestResetQuotas(t *testing.T) {
 
 		// check
 		rt.GetState(&st)
-		quotas, err = adt.AsMap(adt.AsStore(rt), st.Quotas)
+		quotas, err = adt.AsMap(adt.AsStore(rt), st.Quotas, builtin.DefaultHamtBitwidth)
 		require.NoError(t, err)
 
 		var out cbg.CborInt
@@ -3439,7 +3439,7 @@ func (h *marketActorTestHarness) assertDealDeleted(rt *mock.Runtime, dealId abi.
 
 	pcid, err := p.Cid()
 	require.NoError(h.t, err)
-	pending, err := adt.AsMap(adt.AsStore(rt), st.PendingProposals)
+	pending, err := adt.AsMap(adt.AsStore(rt), st.PendingProposals, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
 	found, err = pending.Get(abi.CidKey(pcid), nil)
 	require.NoError(h.t, err)
@@ -3596,8 +3596,7 @@ func (h *marketActorTestHarness) generateDealWithCollateralAndAddFunds(rt *mock.
 func (h *marketActorTestHarness) checkState(rt *mock.Runtime) *market.StateSummary {
 	var st market.State
 	rt.GetState(&st)
-	sum, msgs, err := market.CheckStateInvariants(&st, rt.AdtStore(), rt.Balance(), rt.Epoch())
-	assert.NoError(h.t, err, msgs)
+	sum, msgs := market.CheckStateInvariants(&st, rt.AdtStore(), rt.Balance(), rt.Epoch())
 	assert.True(h.t, msgs.IsEmpty(), strings.Join(msgs.Messages(), "\n"))
 	return sum
 }

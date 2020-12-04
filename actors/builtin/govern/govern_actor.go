@@ -37,14 +37,9 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt runtime.Runtime, supervisor *address.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	if supervisor.Protocol() != address.ID {
-		rt.Abortf(exitcode.ErrIllegalArgument, "supervisor address must be an ID address")
-	}
-
-	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
+	st, err := ConstructState(adt.AsStore(rt), *supervisor)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
-	st := ConstructState(emptyMap, *supervisor)
 	rt.StateCreate(st)
 	return nil
 }
@@ -62,7 +57,7 @@ func (a Actor) ValidateGranted(rt runtime.Runtime, params *builtin.ValidateGrant
 	rt.StateReadonly(&st)
 	store := adt.AsStore(rt)
 
-	governors, err := adt.AsMap(store, st.Governors)
+	governors, err := adt.AsMap(store, st.Governors, builtin.DefaultHamtBitwidth)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load governor")
 
 	granted, err := st.IsGranted(store, governors, governor, codeID, params.Method)
@@ -102,7 +97,7 @@ func (a Actor) Grant(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.Empty
 
 		store := adt.AsStore(rt)
 
-		governors, err := adt.AsMap(store, st.Governors)
+		governors, err := adt.AsMap(store, st.Governors, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load governors")
 
 		err = st.grantOrRevoke(store, governors, governor, targetCodeMethods, true)
@@ -126,7 +121,7 @@ func (a Actor) Revoke(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.Empt
 
 		store := adt.AsStore(rt)
 
-		governors, err := adt.AsMap(store, st.Governors)
+		governors, err := adt.AsMap(store, st.Governors, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load governors")
 
 		err = st.grantOrRevoke(store, governors, governor, targetCodeMethods, false)

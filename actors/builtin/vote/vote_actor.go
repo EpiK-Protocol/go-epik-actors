@@ -50,12 +50,8 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt Runtime, fallback *addr.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	builtin.RequireParam(rt, fallback.Protocol() == addr.ID, "fallback not a ID-Address")
-
-	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
+	st, err := ConstructState(adt.AsStore(rt), *fallback)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
-
-	st := ConstructState(emptyMap, *fallback)
 	rt.StateCreate(st)
 	return nil
 }
@@ -77,7 +73,7 @@ func (a Actor) BlockCandidates(rt Runtime, params *builtin.BlockCandidatesParams
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates)
+		candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
 
 		n, err := st.BlockCandidates(candidates, candAddrs, rt.CurrEpoch())
@@ -109,16 +105,16 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 	var afterVote *Candidate
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
-		candidates, err := adt.AsMap(store, st.Candidates)
+		candidates, err := adt.AsMap(store, st.Candidates, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
 
-		voters, err := adt.AsMap(store, st.Voters)
+		voters, err := adt.AsMap(store, st.Voters, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
 
 		voter, found, err := getVoter(voters, rt.Caller())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
 		if !found {
-			tally, err := adt.MakeEmptyMap(store).Root()
+			tally, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to make tally for voter")
 			voter = &Voter{
 				SettleEpoch:              rt.CurrEpoch(),
@@ -172,10 +168,10 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
 
-		candidates, err := adt.AsMap(store, st.Candidates)
+		candidates, err := adt.AsMap(store, st.Candidates, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
 
-		voters, err := adt.AsMap(store, st.Voters)
+		voters, err := adt.AsMap(store, st.Voters, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
 
 		voter, found, err := getVoter(voters, rt.Caller())
@@ -240,10 +236,10 @@ func (a Actor) Withdraw(rt Runtime, to *addr.Address) *abi.TokenAmount {
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
 
-		candidates, err := adt.AsMap(store, st.Candidates)
+		candidates, err := adt.AsMap(store, st.Candidates, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
 
-		voters, err := adt.AsMap(store, st.Voters)
+		voters, err := adt.AsMap(store, st.Voters, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
 
 		voter, found, err := getVoter(voters, rt.Caller())

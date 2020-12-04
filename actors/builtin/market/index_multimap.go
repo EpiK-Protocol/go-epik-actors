@@ -13,23 +13,24 @@ import (
 )
 
 type IndexMultimap struct {
-	mp    *adt.Map
-	store adt.Store
+	mp            *adt.Map
+	store         adt.Store
+	innerBitwidth int
 }
 
 // Interprets a store as a HAMT-based map of HAMT-based maps with root `r`.
-func AsIndexMultimap(s adt.Store, r cid.Cid) (*IndexMultimap, error) {
-	m, err := adt.AsMap(s, r)
+func AsIndexMultimap(s adt.Store, r cid.Cid, outerBitwidth, innerBitwidth int) (*IndexMultimap, error) {
+	m, err := adt.AsMap(s, r, outerBitwidth)
 	if err != nil {
 		return nil, err
 	}
-	return &IndexMultimap{mp: m, store: s}, nil
+	return &IndexMultimap{mp: m, store: s, innerBitwidth: innerBitwidth}, nil
 }
 
 // Creates a new map backed by an empty HAMT and flushes it to the store.
-func MakeEmptyIndexMultimap(s adt.Store) *IndexMultimap {
-	m := adt.MakeEmptyMap(s)
-	return &IndexMultimap{m, s}
+func MakeEmptyIndexMultimap(s adt.Store, bitwidth int) *IndexMultimap {
+	m := adt.MakeEmptyMap(s, bitwidth)
+	return &IndexMultimap{m, s, bitwidth}
 }
 
 // Returns the root cid of the underlying HAMT.
@@ -49,7 +50,7 @@ func (mm *IndexMultimap) Put(epoch abi.ChainEpoch, providerIndexes map[address.A
 		return err
 	}
 	if !found {
-		pimap = adt.MakeEmptyMap(mm.store)
+		pimap = adt.MakeEmptyMap(mm.store, mm.innerBitwidth)
 	}
 
 	for provider, indexes := range providerIndexes {
@@ -157,7 +158,7 @@ func (mm *IndexMultimap) get(key abi.Keyer) (*adt.Map, bool, error) {
 	}
 	var m *adt.Map
 	if found {
-		m, err = adt.AsMap(mm.store, cid.Cid(imRoot))
+		m, err = adt.AsMap(mm.store, cid.Cid(imRoot), mm.innerBitwidth)
 		if err != nil {
 			return nil, false, err
 		}

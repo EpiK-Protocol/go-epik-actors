@@ -37,7 +37,7 @@ type ConstructorParams struct {
 	Entries []Entry
 }
 
-// type EntryParam = Entry
+type EntryParam = Entry
 
 func (a Actor) Constructor(rt runtime.Runtime, params *ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)

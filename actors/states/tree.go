@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/ipfs/go-cid"
 
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
@@ -30,7 +31,7 @@ type Tree struct {
 
 // Initializes a new, empty state tree backed by a store.
 func NewTree(store adt.Store) (*Tree, error) {
-	emptyMap := adt.MakeEmptyMap(store)
+	emptyMap := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth)
 	return &Tree{
 		Map:   emptyMap,
 		Store: store,
@@ -39,7 +40,7 @@ func NewTree(store adt.Store) (*Tree, error) {
 
 // Loads a tree from a root CID and store.
 func LoadTree(s adt.Store, r cid.Cid) (*Tree, error) {
-	m, err := adt.AsMap(s, r)
+	m, err := adt.AsMap(s, r, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}

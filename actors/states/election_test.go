@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/stretchr/testify/assert"
@@ -88,7 +87,7 @@ func TestMinerEligibleAtLookback(t *testing.T) {
 		// get minimums
 		pow8MiBMin, err := builtin.ConsensusMinerMinPower(proofType)
 		require.NoError(t, err)
-		pow64GiBMin, err := builtin.ConsensusMinerMinPower(abi.RegisteredSealProof_StackedDrg8MiBV1_1)
+		pow64GiBMin, err := builtin.ConsensusMinerMinPower(abi.RegisteredSealProof_StackedDrg64GiBV1_1)
 		require.NoError(t, err)
 
 		for _, tc := range []struct {
@@ -127,7 +126,7 @@ func TestMinerEligibleAtLookback(t *testing.T) {
 		}, {
 			// bigger sector size requires higher minimum
 			consensusMiners: power.ConsensusMinerMinMiners,
-			minerProof:      abi.RegisteredSealProof_StackedDrg8MiBV1_1,
+			minerProof:      abi.RegisteredSealProof_StackedDrg64GiBV1_1,
 			power:           pow64GiBMin,
 			eligible:        true,
 		}} {
@@ -165,45 +164,20 @@ func constructMinerState(ctx context.Context, t *testing.T, store adt.Store, own
 
 	periodStart := abi.ChainEpoch(0)
 
-	emptyMap, err := adt.MakeEmptyMap(store).Root()
-	require.NoError(t, err)
-
-	emptyArray, err := adt.MakeEmptyArray(store).Root()
-	require.NoError(t, err)
-
-	emptyBitfield := bitfield.NewFromSet(nil)
-	emptyBitfieldCid, err := store.Put(ctx, emptyBitfield)
-	require.NoError(t, err)
-
-	emptyDeadline := miner.ConstructDeadline(emptyArray)
-	emptyDeadlineCid, err := store.Put(ctx, emptyDeadline)
-	require.NoError(t, err)
-
-	emptyDeadlines := miner.ConstructDeadlines(emptyDeadlineCid)
-	emptyVestingFunds := miner.ConstructVestingFunds()
-	emptyDeadlinesCid, err := store.Put(ctx, emptyDeadlines)
-	require.NoError(t, err)
-
-	emptyVestingFundsCid, err := store.Put(ctx, emptyVestingFunds)
-	require.NoError(t, err)
-
-	st, err := miner.ConstructState(infoCid, periodStart, 0, emptyBitfieldCid, emptyArray, emptyMap, emptyDeadlinesCid, emptyVestingFundsCid)
+	st, err := miner.ConstructState(store, infoCid, periodStart, 0)
 	require.NoError(t, err)
 
 	return st
 }
 
 func constructPowerStateWithMiner(t *testing.T, store adt.Store, maddr address.Address, pwr abi.StoragePower, proof abi.RegisteredSealProof) *power.State {
-	emptyMap, err := adt.MakeEmptyMap(store).Root()
-	require.NoError(t, err)
-	emptyMMap, err := adt.MakeEmptyMultimap(store).Root()
-	require.NoError(t, err)
-	pSt := power.ConstructState(emptyMap, emptyMMap)
-
-	claims, err := adt.AsMap(store, pSt.Claims)
+	pSt, err := power.ConstructState(store)
 	require.NoError(t, err)
 
-	claim := &power.Claim{SealProofType: proof, RawBytePower: pwr, QualityAdjPower: pwr}
+	claims, err := adt.AsMap(store, pSt.Claims, builtin.DefaultHamtBitwidth)
+	require.NoError(t, err)
+
+	claim := &power.Claim{SealProofType: proof, RawBytePower: pwr, QualityAdjPower: pwr, TotalMiningPledge: power.ConsensusMinerMinPledge}
 
 	err = claims.Put(abi.AddrKey(maddr), claim)
 	require.NoError(t, err)
