@@ -2,7 +2,7 @@ package market
 
 import (
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-hamt-ipld/v2"
+	"github.com/filecoin-project/go-hamt-ipld/v3"
 	"github.com/filecoin-project/go-state-types/abi"
 	cid "github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
@@ -30,7 +30,12 @@ func AsIndexMultimap(s adt.Store, r cid.Cid, outerBitwidth, innerBitwidth int) (
 // Creates a new map backed by an empty HAMT and flushes it to the store.
 func MakeEmptyIndexMultimap(s adt.Store, bitwidth int) *IndexMultimap {
 	m := adt.MakeEmptyMap(s, bitwidth)
-	return &IndexMultimap{m, s, bitwidth}
+	return &IndexMultimap{mp: m, store: s, innerBitwidth: bitwidth}
+}
+
+// Writes a new empty map to the store and returns its CID.
+func StoreEmptyIndexMultimap(s adt.Store, bitwidth int) (cid.Cid, error) {
+	return MakeEmptyIndexMultimap(s, bitwidth).Root()
 }
 
 // Returns the root cid of the underlying HAMT.
@@ -65,12 +70,15 @@ func (mm *IndexMultimap) Put(epoch abi.ChainEpoch, providerIndexes map[address.A
 		}
 		var arr *adt.Array
 		if found {
-			arr, err = adt.AsArray(mm.store, cid.Cid(arrRoot))
+			arr, err = adt.AsArray(mm.store, cid.Cid(arrRoot), ProviderDataIndexesAmtBitwidth)
 			if err != nil {
 				return err
 			}
 		} else {
-			arr = adt.MakeEmptyArray(mm.store)
+			arr, err = adt.MakeEmptyArray(mm.store, ProviderDataIndexesAmtBitwidth)
+			if err != nil {
+				return err
+			}
 		}
 
 		for _, index := range indexes {
@@ -136,7 +144,7 @@ func (mm *IndexMultimap) ForEach(epoch abi.ChainEpoch, fn func(provder address.A
 				return err
 			}
 
-			arr, err := adt.AsArray(mm.store, cid.Cid(arrRoot))
+			arr, err := adt.AsArray(mm.store, cid.Cid(arrRoot), ProviderDataIndexesAmtBitwidth)
 			if err != nil {
 				return err
 			}

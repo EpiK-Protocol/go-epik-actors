@@ -26,7 +26,18 @@ const DealMaxLabelSize = 256
 
 const DefaultInitialQuota = 100
 
-/* // Bounds (inclusive) on deal duration
+// Bitwidth of proposals AMT determined empirically from mutation patterns and
+// projections of mainnet data.
+const ProposalsAmtBitwidth = 5
+
+// Bitwidth of states AMT determined empirically from mutation patterns and
+// projections of mainnet data.
+const StatesAmtBitwidth = 6
+
+const ProviderDataIndexesAmtBitwidth = 5
+
+/*
+// Bounds (inclusive) on deal duration
 func DealDurationBounds(_ abi.PaddedPieceSize) (min abi.ChainEpoch, max abi.ChainEpoch) {
 	return DealMinDuration, DealMaxDuration
 }

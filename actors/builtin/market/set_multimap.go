@@ -3,7 +3,7 @@ package market
 import (
 	"reflect"
 
-	"github.com/filecoin-project/go-hamt-ipld/v2"
+	"github.com/filecoin-project/go-hamt-ipld/v3"
 	"github.com/filecoin-project/go-state-types/abi"
 	cid "github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
@@ -34,6 +34,12 @@ func AsSetMultimap(s adt.Store, r cid.Cid, outerBitwidth, innerBitwidth int) (*S
 func MakeEmptySetMultimap(s adt.Store, bitwidth int) *SetMultimap {
 	m := adt.MakeEmptyMap(s, bitwidth)
 	return &SetMultimap{mp: m, store: s, innerBitwidth: bitwidth}
+}
+
+// Writes a new empty map to the store and returns its CID.
+func StoreEmptySetMultimap(s adt.Store, bitwidth int) (cid.Cid, error) {
+	m := MakeEmptySetMultimap(s, bitwidth)
+	return m.Root()
 }
 
 // Returns the root cid of the underlying HAMT.

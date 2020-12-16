@@ -20,6 +20,18 @@ var InitialQAPowerEstimatePosition = big.Mul(big.NewInt(750_000), big.NewInt(1<<
 // max chain throughput in bytes per epoch = 120 ProveCommits / epoch = 3,840 GiB
 var InitialQAPowerEstimateVelocity = big.Mul(big.NewInt(3_840), big.NewInt(1<<30)) */
 
+// Bitwidth of CronEventQueue HAMT determined empirically from mutation
+// patterns and projections of mainnet data.
+const CronQueueHamtBitwidth = 6
+
+// Bitwidth of CronEventQueue AMT determined empirically from mutation
+// patterns and projections of mainnet data.
+const CronQueueAmtBitwidth = 6
+
+// Bitwidth of ProofValidationBatch AMT determined empirically from mutation
+// pattersn and projections of mainnet data.
+const ProofValidationBatchAmtBitwidth = 4
+
 type State struct {
 	TotalRawBytePower abi.StoragePower
 	// TotalBytesCommitted includes claims from miners below min power threshold
@@ -77,13 +89,18 @@ type CronEvent struct {
 }
 
 func ConstructState(store adt.Store) (*State, error) {
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyClaimsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+		return nil, xerrors.Errorf("failed to create empty claim map: %w", err)
 	}
-	emptyMMapCid, err := adt.MakeEmptyMultimap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyCronQueueMMapCid, err := adt.MakeEmptyMultimap(store, CronQueueHamtBitwidth, CronQueueAmtBitwidth).Root()
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty multimap: %w", err)
+	}
+
+	emptyExpertsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty expert map: %w", err)
 	}
 
 	return &State{
@@ -96,12 +113,12 @@ func ConstructState(store adt.Store) (*State, error) {
 		ThisEpochQualityAdjPower:  abi.NewStoragePower(0),
 		ThisEpochPledgeCollateral: abi.NewTokenAmount(0),
 		FirstCronEpoch:            0,
-		CronEventQueue:            emptyMMapCid,
-		Claims:                    emptyMapCid,
+		CronEventQueue:            emptyCronQueueMMapCid,
+		Claims:                    emptyClaimsMapCid,
 		MinerCount:                0,
 		MinerAboveMinPowerCount:   0,
 		ExpertCount:               0,
-		Experts:                   emptyMapCid,
+		Experts:                   emptyExpertsMapCid,
 	}, nil
 }
 

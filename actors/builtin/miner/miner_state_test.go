@@ -680,7 +680,7 @@ func TestAddPreCommitExpiry(t *testing.T) {
 
 		// assert
 		quant := harness.s.QuantSpecEveryDeadline()
-		queue, err := miner.LoadBitfieldQueue(harness.store, harness.s.PreCommittedSectorsExpiry, quant)
+		queue, err := miner.LoadBitfieldQueue(harness.store, harness.s.PreCommittedSectorsExpiry, quant, miner.PrecommitExpiryAmtBitwidth)
 		require.NoError(t, err)
 
 		require.EqualValues(t, 1, queue.Length())
@@ -700,14 +700,14 @@ func TestAddPreCommitExpiry(t *testing.T) {
 		expireEpoch := quant.QuantizeUp(epoch)
 		err = harness.s.ExpirePreCommits(harness.store, expireEpoch-1)
 		require.NoError(t, err)
-		queue, err = miner.LoadBitfieldQueue(harness.store, harness.s.PreCommittedSectorsExpiry, quant)
+		queue, err = miner.LoadBitfieldQueue(harness.store, harness.s.PreCommittedSectorsExpiry, quant, miner.PrecommitExpiryAmtBitwidth)
 		require.NoError(t, err)
 		require.EqualValues(t, 1, queue.Length())
 
 		// expired
 		err = harness.s.ExpirePreCommits(harness.store, expireEpoch)
 		require.NoError(t, err)
-		queue, err = miner.LoadBitfieldQueue(harness.store, harness.s.PreCommittedSectorsExpiry, quant)
+		queue, err = miner.LoadBitfieldQueue(harness.store, harness.s.PreCommittedSectorsExpiry, quant, miner.PrecommitExpiryAmtBitwidth)
 		require.NoError(t, err)
 		require.EqualValues(t, 0, queue.Length())
 	})

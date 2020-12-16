@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/filecoin-project/go-address"
-	hamt "github.com/filecoin-project/go-hamt-ipld/v2"
+	hamt "github.com/filecoin-project/go-hamt-ipld/v3"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"

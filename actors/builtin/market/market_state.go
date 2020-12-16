@@ -65,35 +65,54 @@ type State struct {
 }
 
 func ConstructState(store adt.Store) (*State, error) {
-	emptyArrayCid, err := adt.MakeEmptyArray(store).Root()
+	emptyProposalsArrayCid, err := adt.StoreEmptyArray(store, ProposalsAmtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty array: %w", err)
 	}
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyStatesArrayCid, err := adt.StoreEmptyArray(store, StatesAmtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty states array: %w", err)
+	}
+
+	emptyPendingProposalsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	emptyMSetCid, err := MakeEmptySetMultimap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyDealOpsHamtCid, err := StoreEmptySetMultimap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty multiset: %w", err)
 	}
+	emptyBalanceTableCid, err := adt.StoreEmptyMap(store, adt.BalanceTableBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty balance table: %w", err)
+	}
+
+	emptyQuotasMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty quota map: %w", err)
+	}
+	emptyIndexByEpochHamtCid, err := StoreEmptyIndexMultimap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty index map: %w", err)
+	}
 
 	return &State{
-		Proposals:          emptyArrayCid,
-		States:             emptyArrayCid,
-		Quotas:             emptyMapCid,
-		PendingProposals:   emptyMapCid,
-		DataIndexesByEpoch: emptyMapCid,
-		EscrowTable:        emptyMapCid,
-		LockedTable:        emptyMapCid,
-		NextID:             abi.DealID(0),
-		DealOpsByEpoch:     emptyMSetCid,
-		LastCron:           abi.ChainEpoch(-1),
-		InitialQuota:       DefaultInitialQuota,
+		Proposals:        emptyProposalsArrayCid,
+		States:           emptyStatesArrayCid,
+		PendingProposals: emptyPendingProposalsMapCid,
+		EscrowTable:      emptyBalanceTableCid,
+		LockedTable:      emptyBalanceTableCid,
+		NextID:           abi.DealID(0),
+		DealOpsByEpoch:   emptyDealOpsHamtCid,
+		LastCron:         abi.ChainEpoch(-1),
 
 		/* TotalClientLockedCollateral:   abi.NewTokenAmount(0),
 		TotalProviderLockedCollateral: abi.NewTokenAmount(0),
 		TotalClientStorageFee:         abi.NewTokenAmount(0), */
+
+		Quotas:             emptyQuotasMapCid,
+		DataIndexesByEpoch: emptyIndexByEpochHamtCid,
+		InitialQuota:       DefaultInitialQuota,
 	}, nil
 }
 

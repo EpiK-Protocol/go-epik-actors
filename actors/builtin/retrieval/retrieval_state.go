@@ -57,13 +57,13 @@ func ConstructState(store adt.Store) (*State, error) {
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	emptyMMapCid, err := adt.MakeEmptyMultimap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyRetrievalBatchMMapCid, err := adt.MakeEmptyMultimap(store, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth).Root()
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty multi map: %w", err)
 	}
 
 	return &State{
-		RetrievalBatch: emptyMMapCid,
+		RetrievalBatch: emptyRetrievalBatchMMapCid,
 		EscrowTable:    emptyMapCid,
 		LockedTable:    emptyMapCid,
 
@@ -188,7 +188,7 @@ func (st *State) Withdraw(rt Runtime, fromAddr addr.Address, amount abi.TokenAmo
 
 // RetrievalData record the retrieval data
 func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *RetrievalState) (exitcode.ExitCode, error) {
-	mmap, err := adt.AsMultimap(adt.AsStore(rt), st.RetrievalBatch, builtin.DefaultHamtBitwidth)
+	mmap, err := adt.AsMultimap(adt.AsStore(rt), st.RetrievalBatch, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
@@ -246,7 +246,7 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 
 // ConfirmData record the retrieval data
 func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr addr.Address, pieceID string) (abi.TokenAmount, error) {
-	mmap, err := adt.AsMultimap(store, st.RetrievalBatch, builtin.DefaultHamtBitwidth)
+	mmap, err := adt.AsMultimap(store, st.RetrievalBatch, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
@@ -294,7 +294,7 @@ func (st *State) EscrowBalance(store adt.Store, fromAddr addr.Address) (abi.Toke
 
 // DayExpend balance for address
 func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, fromAddr addr.Address) (abi.TokenAmount, error) {
-	mmap, err := adt.AsMultimap(store, st.RetrievalBatch, builtin.DefaultHamtBitwidth)
+	mmap, err := adt.AsMultimap(store, st.RetrievalBatch, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
