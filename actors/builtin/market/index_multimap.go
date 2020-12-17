@@ -9,6 +9,7 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
 
@@ -70,12 +71,12 @@ func (mm *IndexMultimap) Put(epoch abi.ChainEpoch, providerIndexes map[address.A
 		}
 		var arr *adt.Array
 		if found {
-			arr, err = adt.AsArray(mm.store, cid.Cid(arrRoot), ProviderDataIndexesAmtBitwidth)
+			arr, err = adt.AsArray(mm.store, cid.Cid(arrRoot), builtin.DefaultHamtBitwidth)
 			if err != nil {
 				return err
 			}
 		} else {
-			arr, err = adt.MakeEmptyArray(mm.store, ProviderDataIndexesAmtBitwidth)
+			arr, err = adt.MakeEmptyArray(mm.store, builtin.DefaultHamtBitwidth)
 			if err != nil {
 				return err
 			}
@@ -144,7 +145,7 @@ func (mm *IndexMultimap) ForEach(epoch abi.ChainEpoch, fn func(provder address.A
 				return err
 			}
 
-			arr, err := adt.AsArray(mm.store, cid.Cid(arrRoot), ProviderDataIndexesAmtBitwidth)
+			arr, err := adt.AsArray(mm.store, cid.Cid(arrRoot), builtin.DefaultHamtBitwidth)
 			if err != nil {
 				return err
 			}
