@@ -117,18 +117,24 @@ var MethodsExpert = struct {
 	ChangePeerID     abi.MethodNum
 	ChangeMultiaddrs abi.MethodNum
 	ImportData       abi.MethodNum
-	CheckData        abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7}
+	GetData          abi.MethodNum
+	StoreData        abi.MethodNum
+	Nominate         abi.MethodNum
+	NominateUpdate   abi.MethodNum
+	Block            abi.MethodNum
+	BlockUpdate      abi.MethodNum
+	FoundationChange abi.MethodNum
+	Vote             abi.MethodNum
+	Validate         abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 
 var MethodsExpertFunds = struct {
-	Constructor  abi.MethodNum
-	ApplyRewards abi.MethodNum
-	Deposit      abi.MethodNum
-	Claim        abi.MethodNum
-	Reset        abi.MethodNum
-	NotifyVote   abi.MethodNum
-	CheckExpert  abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7}
+	Constructor      abi.MethodNum
+	ApplyRewards     abi.MethodNum
+	Claim            abi.MethodNum
+	NotifyUpdate     abi.MethodNum
+	FoundationChange abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5}
 
 var MethodsVote = struct {
 	Constructor     abi.MethodNum

@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
+	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 )
@@ -77,13 +78,28 @@ func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (owne
 	return addr.Owner
 }
 
-func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount abi.TokenAmount) {
-	params := &NotifyVote{
-		Expert: expertAddr,
-		Amount: voteAmount,
+// NotifyUpdate expert params
+type NotifyUpdate struct {
+	Expert  address.Address
+	PieceID cid.Cid
+}
+
+func NotifyExpertUpdate(rt runtime.Runtime, expertAddr addr.Address, pieceID cid.Cid) {
+	params := &NotifyUpdate{
+		Expert:  expertAddr,
+		PieceID: pieceID,
 	}
-	code := rt.Send(expertAddr, MethodsExpertFunds.CheckExpert, params, abi.NewTokenAmount(0), &Discard{})
-	RequireSuccess(rt, code, "failed to notify expert vote")
+	code := rt.Send(ExpertFundsActorAddr, MethodsExpertFunds.NotifyUpdate, params, abi.NewTokenAmount(0), &Discard{})
+	RequireSuccess(rt, code, "failed to notify expert update")
+}
+
+func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount abi.TokenAmount) {
+	// params := &NotifyVote{
+	// 	Expert: expertAddr,
+	// 	Amount: voteAmount,
+	// }
+	// code := rt.Send(ExpertFundsActorAddr, MethodsExpertFunds.NotifyVote, params, abi.NewTokenAmount(0), &Discard{})
+	// RequireSuccess(rt, code, "failed to notify expert vote")
 
 }
 

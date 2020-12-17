@@ -494,9 +494,23 @@ type CreateExpertParams struct {
 	Owner      addr.Address
 	PeerId     abi.PeerID
 	Multiaddrs []abi.Multiaddrs
+	// ApplicationHash expert application hash
+	ApplicationHash string
 }
 
-type ExpertConstructorParams = CreateExpertParams
+type ExpertConstructorParams struct {
+	Owner      addr.Address
+	PeerId     abi.PeerID
+	Multiaddrs []abi.Multiaddrs
+	// ApplicationHash expert application hash
+	ApplicationHash string
+
+	// Proposer of expert
+	Proposer addr.Address
+
+	// Type expert type
+	Type uint64
+}
 
 type CreateExpertReturn struct {
 	IDAddress     addr.Address // The canonical ID-based address for the actor.
@@ -508,33 +522,23 @@ func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExper
 
 	var st State
 	rt.StateReadonly(&st)
+	caller, ok := rt.ResolveAddress(rt.Caller())
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", rt.Caller())
+	}
+
+	expertType := uint64(0)
 	if st.ExpertCount > 0 {
-		caller, ok := rt.ResolveAddress(rt.Caller())
-		if !ok {
-			rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", rt.Caller())
-		}
-		store := adt.AsStore(rt)
-		experts, err := st.expertActors(store)
-		if err != nil {
-			rt.Abortf(exitcode.ErrIllegalArgument, "failed to get expert actors: %v", err)
-		}
-		exist := false
-		for _, addr := range experts {
-			ownerAddr := builtin.RequestExpertControlAddr(rt, addr)
-			if ownerAddr == caller {
-				exist = true
-				break
-			}
-		}
-		if !exist {
-			rt.Abortf(exitcode.ErrForbidden, "failed to create expert params %v", params)
-		}
+		expertType = 1
 	}
 
 	ctorParams := ExpertConstructorParams{
-		Owner:      params.Owner,
-		PeerId:     params.PeerId,
-		Multiaddrs: params.Multiaddrs,
+		Owner:           params.Owner,
+		PeerId:          params.PeerId,
+		Multiaddrs:      params.Multiaddrs,
+		ApplicationHash: params.ApplicationHash,
+		Proposer:        caller,
+		Type:            expertType,
 	}
 	ctorParamBuf := new(bytes.Buffer)
 	err := ctorParams.MarshalCBOR(ctorParamBuf)

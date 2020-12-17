@@ -314,31 +314,35 @@ func (t *ApplyRewardParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufNotifyVote = []byte{130}
+var lengthBufNotifyUpdate = []byte{130}
 
-func (t *NotifyVote) MarshalCBOR(w io.Writer) error {
+func (t *NotifyUpdate) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufNotifyVote); err != nil {
+	if _, err := w.Write(lengthBufNotifyUpdate); err != nil {
 		return err
 	}
+
+	scratch := make([]byte, 9)
 
 	// t.Expert (address.Address) (struct)
 	if err := t.Expert.MarshalCBOR(w); err != nil {
 		return err
 	}
 
-	// t.Amount (big.Int) (struct)
-	if err := t.Amount.MarshalCBOR(w); err != nil {
-		return err
+	// t.PieceID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.PieceID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
 	}
+
 	return nil
 }
 
-func (t *NotifyVote) UnmarshalCBOR(r io.Reader) error {
-	*t = NotifyVote{}
+func (t *NotifyUpdate) UnmarshalCBOR(r io.Reader) error {
+	*t = NotifyUpdate{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -364,13 +368,16 @@ func (t *NotifyVote) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.Amount (big.Int) (struct)
+	// t.PieceID (cid.Cid) (struct)
 
 	{
 
-		if err := t.Amount.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Amount: %w", err)
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.PieceID: %w", err)
 		}
+
+		t.PieceID = c
 
 	}
 	return nil

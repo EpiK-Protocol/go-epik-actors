@@ -41,7 +41,7 @@ func main() {
 		builtin.ExpertAddr{},
 		builtin.ConfirmSectorProofsParams{}, // Aliased from v0
 		builtin.ApplyRewardParams{},
-		builtin.NotifyVote{},
+		builtin.NotifyUpdate{},
 		builtin.BlockCandidatesParams{},
 	); err != nil {
 		panic(err)
@@ -72,6 +72,7 @@ func main() {
 		// actor state
 		expert.State{},
 		expert.ExpertInfo{},
+		expert.PendingOwnerChange{},
 		// method params
 		// expert.ConstructorParams{},
 		expert.GetControlAddressReturn{},
@@ -80,6 +81,8 @@ func main() {
 		expert.ChangeAddressParams{},
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},
+		expert.FoundationChangeParams{},
+		expert.ExpertVoteParams{},
 		// other types
 	); err != nil {
 		panic(err)
@@ -88,12 +91,13 @@ func main() {
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/expertfund/cbor_gen.go", "expertfund",
 		// actor state
 		expertfund.State{},
+		expertfund.PoolInfo{},
 		// method params
 		expertfund.ExpertInfo{},
-		expertfund.ExpertDepositParams{},
 		expertfund.ClaimFundParams{},
-		expertfund.ExpertParams{},
-		expertfund.NotifyVoteParams{},
+		expertfund.NotifyUpdateParams{},
+		expertfund.VestingFunds{},
+		expertfund.VestingFund{},
 		// other types
 	); err != nil {
 		panic(err)
@@ -181,6 +185,7 @@ func main() {
 		// expert
 		power.Expert{},
 		power.CreateExpertParams{},
+		power.ExpertConstructorParams{},
 		power.CreateExpertReturn{},
 		power.DeleteExpertParams{},
 	); err != nil {

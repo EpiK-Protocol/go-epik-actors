@@ -114,7 +114,7 @@ func TestExpertData(t *testing.T) {
 
 		pieceID := tutil.MakeCID("1", &miner.SealedCIDPrefix)
 		actor.importData(rt, newExpertDataParams(pieceID))
-		actor.checkData(rt, newExpertDataParams(pieceID))
+		actor.GetData(rt, newExpertDataParams(pieceID))
 	})
 }
 
@@ -164,11 +164,11 @@ func (h *actorHarness) importData(rt *mock.Runtime, params *expert.ExpertDataPar
 	rt.Verify()
 }
 
-func (h *actorHarness) checkData(rt *mock.Runtime, params *expert.ExpertDataParams) {
+func (h *actorHarness) GetData(rt *mock.Runtime, params *expert.ExpertDataParams) {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 
-	rt.Call(h.a.CheckData, params)
+	rt.Call(h.a.GetData, params)
 	rt.Verify()
 }
 

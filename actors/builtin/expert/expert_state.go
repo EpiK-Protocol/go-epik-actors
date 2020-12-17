@@ -17,6 +17,24 @@ type State struct {
 
 	// Information for all submit rdf data.
 	Datas cid.Cid // Map, AMT[key]DataOnChainInfo (sparse)
+
+	// VoteAmount expert vote amount
+	VoteAmount abi.TokenAmount
+
+	// LostEpoch record expert votes <  epoch
+	LostEpoch abi.ChainEpoch
+
+	// Status of expert
+	Status ExpertState
+
+	// OwnerChange owner change info
+	OwnerChange cid.Cid
+}
+
+// PendingOwnerChange pending owner change
+type PendingOwnerChange struct {
+	ApplyEpoch abi.ChainEpoch
+	ApplyOwner addr.Address
 }
 
 // ExpertInfo expert info
@@ -31,6 +49,15 @@ type ExpertInfo struct {
 
 	// Slice of byte arrays representing Libp2p multi-addresses used for establishing a connection with this miner.
 	Multiaddrs []abi.Multiaddrs
+
+	// Type expert type
+	Type ExpertType
+
+	// ApplicationHash expert application hash
+	ApplicationHash string
+
+	// Proposer of expert
+	Proposer addr.Address
 }
 
 type DataOnChainInfo struct {
@@ -40,18 +67,24 @@ type DataOnChainInfo struct {
 	Bounty     string
 }
 
-func ConstructExpertInfo(owner addr.Address, pid []byte, multiAddrs [][]byte) (*ExpertInfo, error) {
+func ConstructExpertInfo(owner addr.Address, pid []byte, multiAddrs [][]byte, eType ExpertType, aHash string) (*ExpertInfo, error) {
 	return &ExpertInfo{
-		Owner:      owner,
-		PeerId:     pid,
-		Multiaddrs: multiAddrs,
+		Owner:           owner,
+		PeerId:          pid,
+		Multiaddrs:      multiAddrs,
+		Type:            eType,
+		ApplicationHash: aHash,
 	}, nil
 }
 
-func ConstructState(info cid.Cid, emptyMapCid cid.Cid) *State {
+func ConstructState(info cid.Cid, emptyMapCid cid.Cid, emptyChange cid.Cid) *State {
 	return &State{
-		Info:  info,
-		Datas: emptyMapCid,
+		Info:        info,
+		Datas:       emptyMapCid,
+		VoteAmount:  abi.NewTokenAmount(0),
+		LostEpoch:   abi.ChainEpoch(-1),
+		Status:      ExpertStateRegistered,
+		OwnerChange: emptyChange,
 	}
 }
 
@@ -137,5 +170,75 @@ func (st *State) ForEachData(store adt.Store, f func(*DataOnChainInfo)) error {
 		f(&info)
 		return nil
 	})
+	return nil
+}
+
+func (st *State) GetOwnerChange(rt Runtime) (*PendingOwnerChange, error) {
+
+	var change PendingOwnerChange
+	store := adt.AsStore(rt)
+	if err := store.Get(store.Context(), st.OwnerChange, &change); err != nil {
+		return nil, xerrors.Errorf("failed to get owner change %w", err)
+	}
+	return &change, nil
+}
+
+func (st *State) ApplyOwnerChange(rt Runtime, applyOwner addr.Address) error {
+	change := &PendingOwnerChange{
+		ApplyEpoch: rt.CurrEpoch(),
+		ApplyOwner: applyOwner,
+	}
+	store := adt.AsStore(rt)
+	c, err := store.Put(store.Context(), change)
+	if err != nil {
+		return err
+	}
+	st.OwnerChange = c
+	return nil
+}
+
+func (st *State) AutoUpdateOwnerChange(rt Runtime) error {
+	info, err := st.GetInfo(adt.AsStore(rt))
+	if err != nil {
+		return err
+	}
+
+	change, err := st.GetOwnerChange(rt)
+	if err != nil {
+		return err
+	}
+	if info.Owner != change.ApplyOwner &&
+		change.ApplyEpoch > 0 &&
+		(rt.CurrEpoch()-change.ApplyEpoch) >= ExpertVoteCheckPeriod {
+		info.Owner = change.ApplyOwner
+		if err := st.SaveInfo(adt.AsStore(rt), info); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (st *State) Validate(rt Runtime) error {
+	switch st.Status {
+	case ExpertStateNormal:
+		if st.VoteAmount.LessThan(ExpertVoteThreshold) {
+			if st.LostEpoch < 0 {
+				return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
+			} else if (st.LostEpoch + ExpertVoteCheckPeriod) < rt.CurrEpoch() {
+				return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
+			}
+		}
+	case ExpertStateImplicated:
+		if st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
+			if st.LostEpoch < 0 {
+				return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
+			} else if (st.LostEpoch + ExpertVoteCheckPeriod) < rt.CurrEpoch() {
+				return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
+			}
+		}
+	default:
+		return xerrors.Errorf("failed to validate expert status: %d", st.Status)
+	}
+
 	return nil
 }
