@@ -5,7 +5,6 @@ import (
 
 	addr "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/ipfs/go-cid"
 	mh "github.com/multiformats/go-multihash"
@@ -27,11 +26,11 @@ var PieceCIDPrefix = cid.Prefix{
 // Note: ClientCollateralPerEpoch may not be needed and removed pending future confirmation.
 // There will be a Minimum value for both client and provider deal collateral.
 type DealProposal struct {
-	PieceCID     cid.Cid `checked:"true"` // Checked in validateDeal, CommP
-	PieceSize    abi.PaddedPieceSize
-	VerifiedDeal bool
-	Client       addr.Address
-	Provider     addr.Address
+	PieceCID  cid.Cid `checked:"true"` // Checked in validateDeal, CommP
+	PieceSize abi.PaddedPieceSize
+	/* VerifiedDeal bool */
+	Client   addr.Address
+	Provider addr.Address
 
 	// Label is an arbitrary client chosen label to apply to the deal
 	// TODO: Limit the size of this: https://github.com/filecoin-project/specs-actors/issues/897
@@ -41,12 +40,12 @@ type DealProposal struct {
 	// with total amount StoragePricePerEpoch * (EndEpoch - StartEpoch).
 	// Storage deal must appear in a sealed (proven) sector no later than StartEpoch,
 	// otherwise it is invalid.
-	StartEpoch           abi.ChainEpoch
-	EndEpoch             abi.ChainEpoch
+	StartEpoch abi.ChainEpoch
+	/* EndEpoch   abi.ChainEpoch
 	StoragePricePerEpoch abi.TokenAmount
 
 	ProviderCollateral abi.TokenAmount
-	ClientCollateral   abi.TokenAmount
+	ClientCollateral   abi.TokenAmount */
 }
 
 // ClientDealProposal is a DealProposal signed by a client
@@ -55,7 +54,7 @@ type ClientDealProposal struct {
 	ClientSignature crypto.Signature
 }
 
-func (p *DealProposal) Duration() abi.ChainEpoch {
+/* func (p *DealProposal) Duration() abi.ChainEpoch {
 	return p.EndEpoch - p.StartEpoch
 }
 
@@ -69,7 +68,7 @@ func (p *DealProposal) ClientBalanceRequirement() abi.TokenAmount {
 
 func (p *DealProposal) ProviderBalanceRequirement() abi.TokenAmount {
 	return p.ProviderCollateral
-}
+} */
 
 func (p *DealProposal) Cid() (cid.Cid, error) {
 	buf := new(bytes.Buffer)

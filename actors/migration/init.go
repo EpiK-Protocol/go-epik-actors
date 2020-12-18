@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	"github.com/filecoin-project/go-state-types/big"
@@ -42,4 +42,4 @@ func (m initMigrator) MigrateState(ctx context.Context, store cbor.IpldStore, he
 func (m *initMigrator) migrateAddrs(ctx context.Context, store cbor.IpldStore, root cid.Cid) (cid.Cid, error) {
 	// The HAMT has changed, but the value type (Address) is identical.
 	return migrateHAMTRaw(ctx, store, root)
-}
+} */

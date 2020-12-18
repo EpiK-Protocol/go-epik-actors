@@ -31,14 +31,15 @@ type State struct {
 	// Information not related to sectors.
 	Info cid.Cid
 
-	PreCommitDeposits abi.TokenAmount // Total funds locked as PreCommitDeposits
-	LockedFunds       abi.TokenAmount // Total rewards and added funds locked in vesting table
+	/* PreCommitDeposits abi.TokenAmount // Total funds locked as PreCommitDeposits */
+	LockedFunds abi.TokenAmount // Total rewards and added funds locked in vesting table
 
 	VestingFunds cid.Cid // VestingFunds (Vesting Funds schedule for the miner).
 
 	FeeDebt abi.TokenAmount // Absolute value of debt this miner owes from unpaid fees
 
-	InitialPledge abi.TokenAmount // Sum of initial pledge requirements of all active sectors
+	TotalPledge abi.TokenAmount
+	Pledges     cid.Cid // HAMT[PledgerAddress]TokenAmount, PledgerAddress is ID-Address
 
 	// Sectors that have been pre-committed but not yet proven.
 	PreCommittedSectors cid.Cid // Map, HAMT[SectorNumber]SectorPreCommitOnChainInfo
@@ -91,6 +92,9 @@ type MinerInfo struct {
 	// Additional addresses that are permitted to submit messages controlling this actor (optional).
 	ControlAddresses []addr.Address // Must all be ID addresses.
 
+	// Address receives mining funds
+	Coinbase addr.Address
+
 	PendingWorkerKey *WorkerKeyChange
 
 	// Byte array representing a Libp2p identity that should be used when connecting to this miner.
@@ -126,43 +130,46 @@ type WorkerKeyChange struct {
 
 // Information provided by a miner when pre-committing a sector.
 type SectorPreCommitInfo struct {
-	SealProof       abi.RegisteredSealProof
-	SectorNumber    abi.SectorNumber
-	SealedCID       cid.Cid `checked:"true"` // CommR
-	SealRandEpoch   abi.ChainEpoch
-	DealIDs         []abi.DealID
-	Expiration      abi.ChainEpoch
+	SealProof     abi.RegisteredSealProof
+	SectorNumber  abi.SectorNumber
+	SealedCID     cid.Cid `checked:"true"` // CommR
+	SealRandEpoch abi.ChainEpoch
+	DealIDs       []abi.DealID
+	/* Expiration      abi.ChainEpoch
 	ReplaceCapacity bool // Whether to replace a "committed capacity" no-deal sector (requires non-empty DealIDs)
 	// The committed capacity sector to replace, and it's deadline/partition location
 	ReplaceSectorDeadline  uint64
 	ReplaceSectorPartition uint64
-	ReplaceSectorNumber    abi.SectorNumber
+	ReplaceSectorNumber    abi.SectorNumber */
 }
 
 // Information stored on-chain for a pre-committed sector.
 type SectorPreCommitOnChainInfo struct {
-	Info               SectorPreCommitInfo
-	PreCommitDeposit   abi.TokenAmount
-	PreCommitEpoch     abi.ChainEpoch
-	DealWeight         abi.DealWeight // Integral of active deals over sector lifetime
-	VerifiedDealWeight abi.DealWeight // Integral of active verified deals over sector lifetime
+	Info SectorPreCommitInfo
+	// PreCommitDeposit   abi.TokenAmount
+	PreCommitEpoch abi.ChainEpoch
+	DealSpaces     []uint64 // Corresponding to Info.DealIDs
+	/* DealWeight         abi.DealWeight // Integral of active deals over sector lifetime
+	VerifiedDealWeight abi.DealWeight // Integral of active verified deals over sector lifetime */
 }
 
 // Information stored on-chain for a proven sector.
 type SectorOnChainInfo struct {
-	SectorNumber          abi.SectorNumber
-	SealProof             abi.RegisteredSealProof // The seal proof type implies the PoSt proof/s
-	SealedCID             cid.Cid                 // CommR
-	DealIDs               []abi.DealID
-	Activation            abi.ChainEpoch  // Epoch during which the sector proof was accepted
-	Expiration            abi.ChainEpoch  // Epoch during which the sector expires
-	DealWeight            abi.DealWeight  // Integral of active deals over sector lifetime
-	VerifiedDealWeight    abi.DealWeight  // Integral of active verified deals over sector lifetime
+	SectorNumber abi.SectorNumber
+	SealProof    abi.RegisteredSealProof // The seal proof type implies the PoSt proof/s
+	SealedCID    cid.Cid                 // CommR
+	Activation   abi.ChainEpoch          // Epoch during which the sector proof was accepted
+	DealIDs      []abi.DealID
+	DealSpaces   []uint64            // Space size of deal corresponding to DealIDs
+	DealWins     []builtin.BoolValue // If deal wins extra power incentive corresponding to DealIDs // TODO:
+	/* Expiration         abi.ChainEpoch // Epoch during which the sector expires */
+	/* DealWeight         abi.DealWeight // Integral of active deals over sector lifetime
+	VerifiedDealWeight abi.DealWeight // Integral of active verified deals over sector lifetime
 	InitialPledge         abi.TokenAmount // Pledge collected to commit this sector
 	ExpectedDayReward     abi.TokenAmount // Expected one day projection of reward for sector computed at activation time
 	ExpectedStoragePledge abi.TokenAmount // Expected twenty day projection of reward for sector computed at activation time
-	ReplacedSectorAge     abi.ChainEpoch  // Age of sector this sector replaced or zero
-	ReplacedDayReward     abi.TokenAmount // Day reward of sector this sector replace or zero
+	ReplacedDayReward abi.TokenAmount // Day reward of sector this sector replace or zero
+	ReplacedSectorAge abi.ChainEpoch // Age of sector this sector replaced or zero */
 }
 
 func ConstructState(infoCid cid.Cid, periodStart abi.ChainEpoch, deadlineIndex uint64, emptyBitfieldCid, emptyArrayCid, emptyMapCid, emptyDeadlinesCid cid.Cid,
@@ -170,13 +177,14 @@ func ConstructState(infoCid cid.Cid, periodStart abi.ChainEpoch, deadlineIndex u
 	return &State{
 		Info: infoCid,
 
-		PreCommitDeposits: abi.NewTokenAmount(0),
-		LockedFunds:       abi.NewTokenAmount(0),
-		FeeDebt:           abi.NewTokenAmount(0),
+		/* PreCommitDeposits: abi.NewTokenAmount(0), */
+		LockedFunds: abi.NewTokenAmount(0),
+		FeeDebt:     abi.NewTokenAmount(0),
 
 		VestingFunds: emptyVestingFundsCid,
 
-		InitialPledge: abi.NewTokenAmount(0),
+		TotalPledge: abi.NewTokenAmount(0),
+		Pledges:     emptyMapCid,
 
 		PreCommittedSectors:       emptyMapCid,
 		PreCommittedSectorsExpiry: emptyArrayCid,
@@ -189,7 +197,8 @@ func ConstructState(infoCid cid.Cid, periodStart abi.ChainEpoch, deadlineIndex u
 	}, nil
 }
 
-func ConstructMinerInfo(owner addr.Address, worker addr.Address, controlAddrs []addr.Address, pid []byte,
+func ConstructMinerInfo(owner, worker, coinbase addr.Address,
+	controlAddrs []addr.Address, pid []byte,
 	multiAddrs [][]byte, sealProofType abi.RegisteredSealProof) (*MinerInfo, error) {
 
 	sectorSize, err := sealProofType.SectorSize()
@@ -205,6 +214,7 @@ func ConstructMinerInfo(owner addr.Address, worker addr.Address, controlAddrs []
 	return &MinerInfo{
 		Owner:                      owner,
 		Worker:                     worker,
+		Coinbase:                   coinbase,
 		ControlAddresses:           controlAddrs,
 		PendingWorkerKey:           nil,
 		PeerId:                     pid,
@@ -449,7 +459,7 @@ func (st *State) FindSector(store adt.Store, sno abi.SectorNumber) (uint64, uint
 	return FindSector(store, deadlines, sno)
 }
 
-// Schedules each sector to expire at its next deadline end. If it can't find
+/* // Schedules each sector to expire at its next deadline end. If it can't find
 // any given sector, it skips it.
 //
 // This method assumes that each sector's power has not changed, despite the rescheduling.
@@ -496,7 +506,7 @@ func (st *State) RescheduleSectorExpirations(
 		return nil, err
 	}
 	return allReplaced, st.SaveDeadlines(store, deadlines)
-}
+} */
 
 // Assign new sectors to deadlines.
 func (st *State) AssignSectorsToDeadlines(
@@ -542,7 +552,7 @@ func (st *State) AssignSectorsToDeadlines(
 		quant := st.QuantSpecForDeadline(uint64(dlIdx))
 		dl := deadlineArr[dlIdx]
 
-		deadlineActivatedPower, err := dl.AddSectors(store, partitionSize, false, deadlineSectors, sectorSize, quant)
+		deadlineActivatedPower, err := dl.AddSectors(store, partitionSize, true, deadlineSectors, sectorSize, quant)
 		if err != nil {
 			return NewPowerPairZero(), err
 		}
@@ -724,18 +734,70 @@ func (st *State) SaveVestingFunds(store adt.Store, funds *VestingFunds) error {
 // Funds and vesting
 //
 
-func (st *State) AddPreCommitDeposit(amount abi.TokenAmount) {
+/* func (st *State) AddPreCommitDeposit(amount abi.TokenAmount) {
 	newTotal := big.Add(st.PreCommitDeposits, amount)
 	AssertMsg(newTotal.GreaterThanEqual(big.Zero()), "negative pre-commit deposit %s after adding %s to prior %s",
 		newTotal, amount, st.PreCommitDeposits)
 	st.PreCommitDeposits = newTotal
+} */
+
+func (st *State) addPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) error {
+	Assert(amount.GreaterThan(big.Zero()))
+
+	// add to pledges
+	pledges, err := adt.AsMap(store, st.Pledges)
+	if err != nil {
+		return errors.Wrapf(err, "failed to load pledges")
+	}
+
+	var out abi.TokenAmount
+	found, err := pledges.Get(abi.AddrKey(pledger), &out)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get pledge")
+	}
+	if !found {
+		out = amount
+	} else {
+		out = big.Add(out, amount)
+	}
+	st.TotalPledge = big.Add(st.TotalPledge, amount)
+	return pledges.Put(abi.AddrKey(pledger), &out)
 }
 
-func (st *State) AddInitialPledge(amount abi.TokenAmount) {
-	newTotal := big.Add(st.InitialPledge, amount)
-	AssertMsg(newTotal.GreaterThanEqual(big.Zero()), "negative initial pledge requirement %s after adding %s to prior %s",
-		newTotal, amount, st.InitialPledge)
-	st.InitialPledge = newTotal
+func (st *State) withdrawPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
+	Assert(amount.GreaterThan(big.Zero()))
+
+	pledges, err := adt.AsMap(store, st.Pledges)
+	if err != nil {
+		return big.Zero(), errors.Wrapf(err, "failed to load pledges")
+	}
+
+	var out abi.TokenAmount
+	found, err := pledges.Get(abi.AddrKey(pledger), &out)
+	if err != nil {
+		return big.Zero(), errors.Wrapf(err, "failed to get pledge")
+	}
+	if !found {
+		return big.Zero(), errors.New("no pledge found")
+	}
+	actual := big.Min(out, amount)
+	out = big.Sub(out, actual)
+
+	if out.IsZero() {
+		err = pledges.Delete(abi.AddrKey(pledger))
+		if err != nil {
+			return big.Zero(), errors.Wrapf(err, "failed to delete pledge for zero")
+		}
+	} else {
+		err = pledges.Put(abi.AddrKey(pledger), &out)
+		if err != nil {
+			return big.Zero(), errors.Wrapf(err, "failed to put pledge")
+		}
+	}
+
+	st.TotalPledge = big.Sub(st.TotalPledge, actual)
+	Assert(st.TotalPledge.GreaterThanEqual(big.Zero()))
+	return actual, nil
 }
 
 // AddLockedFunds first vests and unlocks the vested funds AND then locks the given funds in the vesting table.
@@ -897,7 +959,7 @@ func (st *State) CheckVestedFunds(store adt.Store, currEpoch abi.ChainEpoch) (ab
 // Unclaimed funds that are not locked -- includes free funds and does not
 // account for fee debt.  Always greater than or equal to zero
 func (st *State) GetUnlockedBalance(actorBalance abi.TokenAmount) (abi.TokenAmount, error) {
-	unlockedBalance := big.Subtract(actorBalance, st.LockedFunds, st.PreCommitDeposits, st.InitialPledge)
+	unlockedBalance := big.Subtract(actorBalance, st.LockedFunds /* st.PreCommitDeposits, */, st.TotalPledge)
 	if unlockedBalance.LessThan(big.Zero()) {
 		return big.Zero(), xerrors.Errorf("negative unlocked balance %v", unlockedBalance)
 	}
@@ -915,19 +977,19 @@ func (st *State) GetAvailableBalance(actorBalance abi.TokenAmount) (abi.TokenAmo
 }
 
 func (st *State) CheckBalanceInvariants(balance abi.TokenAmount) error {
-	if st.PreCommitDeposits.LessThan(big.Zero()) {
+	/* if st.PreCommitDeposits.LessThan(big.Zero()) {
 		return xerrors.Errorf("pre-commit deposit is negative: %v", st.PreCommitDeposits)
-	}
+	} */
 	if st.LockedFunds.LessThan(big.Zero()) {
 		return xerrors.Errorf("locked funds is negative: %v", st.LockedFunds)
 	}
-	if st.InitialPledge.LessThan(big.Zero()) {
-		return xerrors.Errorf("initial pledge is negative: %v", st.InitialPledge)
+	if st.TotalPledge.LessThan(big.Zero()) {
+		return xerrors.Errorf("initial pledge is negative: %v", st.TotalPledge)
 	}
 	if st.FeeDebt.LessThan(big.Zero()) {
-		return xerrors.Errorf("fee debt is negative: %v", st.InitialPledge)
+		return xerrors.Errorf("fee debt is negative: %v", st.FeeDebt)
 	}
-	minBalance := big.Sum(st.PreCommitDeposits, st.LockedFunds, st.InitialPledge)
+	minBalance := big.Sum( /* st.PreCommitDeposits, */ st.LockedFunds, st.TotalPledge)
 	if balance.LessThan(minBalance) {
 		return xerrors.Errorf("balance %v below required %v", balance, minBalance)
 	}
@@ -964,31 +1026,31 @@ func (st *State) AddPreCommitExpiry(store adt.Store, expireEpoch abi.ChainEpoch,
 	return nil
 }
 
-func (st *State) ExpirePreCommits(store adt.Store, currEpoch abi.ChainEpoch) (depositToBurn abi.TokenAmount, err error) {
-	depositToBurn = abi.NewTokenAmount(0)
+func (st *State) ExpirePreCommits(store adt.Store, currEpoch abi.ChainEpoch) ( /* depositToBurn abi.TokenAmount, */ err error) {
+	/* depositToBurn = abi.NewTokenAmount(0) */
 
 	// expire pre-committed sectors
 	expiryQ, err := LoadBitfieldQueue(store, st.PreCommittedSectorsExpiry, st.QuantSpecEveryDeadline())
 	if err != nil {
-		return depositToBurn, xerrors.Errorf("failed to load sector expiry queue: %w", err)
+		return /* depositToBurn, */ xerrors.Errorf("failed to load sector expiry queue: %w", err)
 	}
 
 	sectors, modified, err := expiryQ.PopUntil(currEpoch)
 	if err != nil {
-		return depositToBurn, xerrors.Errorf("failed to pop expired sectors: %w", err)
+		return /* depositToBurn, */ xerrors.Errorf("failed to pop expired sectors: %w", err)
 	}
 
 	if modified {
 		st.PreCommittedSectorsExpiry, err = expiryQ.Root()
 		if err != nil {
-			return depositToBurn, xerrors.Errorf("failed to save expiry queue: %w", err)
+			return /* depositToBurn, */ xerrors.Errorf("failed to save expiry queue: %w", err)
 		}
 	}
 
 	var precommitsToDelete []abi.SectorNumber
 	if err = sectors.ForEach(func(i uint64) error {
 		sectorNo := abi.SectorNumber(i)
-		sector, found, err := st.GetPrecommittedSector(store, sectorNo)
+		_, found, err := st.GetPrecommittedSector(store, sectorNo)
 		if err != nil {
 			return err
 		}
@@ -1000,31 +1062,31 @@ func (st *State) ExpirePreCommits(store adt.Store, currEpoch abi.ChainEpoch) (de
 		// mark it for deletion
 		precommitsToDelete = append(precommitsToDelete, sectorNo)
 
-		// increment deposit to burn
-		depositToBurn = big.Add(depositToBurn, sector.PreCommitDeposit)
+		/* // increment deposit to burn
+		depositToBurn = big.Add(depositToBurn, sector.PreCommitDeposit) */
 		return nil
 	}); err != nil {
-		return big.Zero(), xerrors.Errorf("failed to check pre-commit expiries: %w", err)
+		return /* big.Zero(), */ xerrors.Errorf("failed to check pre-commit expiries: %w", err)
 	}
 
 	// Actually delete it.
 	if len(precommitsToDelete) > 0 {
 		if err := st.DeletePrecommittedSectors(store, precommitsToDelete...); err != nil {
-			return big.Zero(), fmt.Errorf("failed to delete pre-commits: %w", err)
+			return /* big.Zero(), */ fmt.Errorf("failed to delete pre-commits: %w", err)
 		}
 	}
 
-	st.PreCommitDeposits = big.Sub(st.PreCommitDeposits, depositToBurn)
+	/* st.PreCommitDeposits = big.Sub(st.PreCommitDeposits, depositToBurn)
 	if st.PreCommitDeposits.LessThan(big.Zero()) {
 		return big.Zero(), xerrors.Errorf("pre-commit expiry caused negative deposits: %v", st.PreCommitDeposits)
-	}
+	} */
 
 	// This deposit was locked separately to pledge collateral so there's no pledge change here.
-	return depositToBurn, nil
+	return /* depositToBurn, */ nil
 }
 
 type AdvanceDeadlineResult struct {
-	PledgeDelta           abi.TokenAmount
+	/* PledgeDelta           abi.TokenAmount */
 	PowerDelta            PowerPair
 	PreviouslyFaultyPower PowerPair // Power that was faulty before this advance (including recovering)
 	DetectedFaultyPower   PowerPair // Power of new faults and failed recoveries
@@ -1038,7 +1100,7 @@ type AdvanceDeadlineResult struct {
 // - Handles missed proofs.
 // - Returns the changes to power & pledge, and faulty power (both declared and undeclared).
 func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*AdvanceDeadlineResult, error) {
-	pledgeDelta := abi.NewTokenAmount(0)
+	/* pledgeDelta := abi.NewTokenAmount(0) */
 	powerDelta := NewPowerPairZero()
 
 	var totalFaultyPower PowerPair
@@ -1061,7 +1123,7 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 	// At this point, no proofs have been submitted so we can't check them.
 	if !dlInfo.PeriodStarted() {
 		return &AdvanceDeadlineResult{
-			pledgeDelta,
+			/* pledgeDelta, */
 			powerDelta,
 			NewPowerPairZero(),
 			NewPowerPairZero(),
@@ -1089,7 +1151,7 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 	// No live sectors in this deadline, nothing to do.
 	if deadline.LiveSectors == 0 {
 		return &AdvanceDeadlineResult{
-			pledgeDelta,
+			/* pledgeDelta, */
 			powerDelta,
 			previouslyFaultyPower,
 			detectedFaultyPower,
@@ -1119,11 +1181,11 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 			return nil, xerrors.Errorf("failed to load expired sectors: %w", err)
 		}
 
-		// Release pledge requirements for the sectors expiring on-time.
+		/* // Release pledge requirements for the sectors expiring on-time.
 		// Pledge for the sectors expiring early is retained to support the termination fee that will be assessed
 		// when the early termination is processed.
 		pledgeDelta = big.Sub(pledgeDelta, expired.OnTimePledge)
-		st.AddInitialPledge(expired.OnTimePledge.Neg())
+		st.AddInitialPledge(expired.OnTimePledge.Neg()) */
 
 		// Record reduction in power of the amount of expiring active power.
 		// Faulty power has already been lost, so the amount expiring can be excluded from the delta.
@@ -1155,7 +1217,7 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 	// Compute penalties all together.
 	// Be very careful when changing these as any changes can affect rounding.
 	return &AdvanceDeadlineResult{
-		PledgeDelta:           pledgeDelta,
+		/* PledgeDelta:           pledgeDelta, */
 		PowerDelta:            powerDelta,
 		PreviouslyFaultyPower: previouslyFaultyPower,
 		DetectedFaultyPower:   detectedFaultyPower,

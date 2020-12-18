@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	"github.com/filecoin-project/go-bitfield"
@@ -298,4 +298,4 @@ func (m *minerMigrator) migrateExpirationQueue(_ context.Context, _ cbor.IpldSto
 	// The AMT[ChainEpoch]ExpirationSet is unchanged, though we can't statically show this because the
 	// ExpirationSet has nested structures, which Go refuses to equate.
 	return root, nil
-}
+} */

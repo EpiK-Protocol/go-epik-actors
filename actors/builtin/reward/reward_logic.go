@@ -6,19 +6,26 @@ import (
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/math"
 )
 
 const (
-	// This number is not exported because it's not suitable for
+	/* // This number is not exported because it's not suitable for
 	// calculations outside reward calculations. Importantly, there are more
 	// than 365 days in a year so this number cannot be used to calculate
 	// sector lifetimes, etc.
 	daysInYear   = 365
-	epochsInYear = daysInYear * builtin.EpochsInDay
+	epochsInYear = daysInYear * builtin.EpochsInDay */
+	decayPeriod = 90 * builtin.EpochsInDay
 )
 
-// Baseline function = BaselineInitialValue * (BaselineExponent) ^(t), t in epochs
+var (
+	DecayTarget = builtin.BigFrac{
+		Numerator:   big.NewInt(9573501),
+		Denominator: big.NewInt(10000000),
+	}
+)
+
+/* // Baseline function = BaselineInitialValue * (BaselineExponent) ^(t), t in epochs
 // Note: we compute exponential iteratively using recurrence e(n) = e * e(n-1).
 // Caller of baseline power function is responsible for keeping track of intermediate,
 // state e(n-1), the baseline power function just does the next multiplication
@@ -127,7 +134,7 @@ func SlowConvenientBaselineForEpoch(targetEpoch abi.ChainEpoch) abi.StoragePower
 		baseline = BaselinePowerFromPrev(baseline) // value in block i (for epoch i+1)
 	}
 	return baseline
-}
+} */
 
 func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
 	vote, expert, knowledge, bandwidth, power abi.TokenAmount,
@@ -152,8 +159,11 @@ func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
 	n1 := big.Mul(pledged, big.NewInt(100))
 	n2 := big.Mul(circulating, big.NewInt(75))
 	d := big.Mul(circulating, big.NewInt(500))
-
-	bandwidth = big.Div(big.Mul(min(n1, n2), blockReward), d)
+	if !d.IsZero() {
+		bandwidth = big.Div(big.Mul(min(n1, n2), blockReward), d)
+	} else {
+		bandwidth = big.Zero()
+	}
 	knowledge = big.Sub(kb, bandwidth)
 	Assert(knowledge.GreaterThanEqual(big.Zero()))
 	return
@@ -165,11 +175,3 @@ func min(a, b abi.TokenAmount) abi.TokenAmount {
 	}
 	return b
 }
-
-// for 30s per epoch, 90 days
-var EpochRewardDecayNum = big.NewInt(9_999_998_318_436_727)
-var EpochRewardDecayDen = big.NewInt(10_000_000_000_000_000)
-
-// // for 25s per epoch, 90 days
-// var EpochRewardDecayNum = big.NewInt(9_999_998_598_697_253)
-// var EpochRewardDecayDen = big.NewInt(10_000_000_000_000_000)

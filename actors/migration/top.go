@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 	"sync"
 
@@ -450,4 +450,4 @@ func InputTreeBurntFunds(ctx context.Context, store cbor.IpldStore, stateRootIn 
 		return big.Zero(), xerrors.Errorf("burnt funds actor not found")
 	}
 	return bf.Balance, nil
-}
+} */

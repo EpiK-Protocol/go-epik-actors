@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	"golang.org/x/xerrors"
@@ -159,4 +159,4 @@ func (m rewardMigrator) MigrateState(ctx context.Context, store cbor.IpldStore, 
 		NewHead:  newHead,
 		Transfer: big.Zero(),
 	}, err
-}
+} */

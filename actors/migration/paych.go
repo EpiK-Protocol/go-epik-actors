@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	addr "github.com/filecoin-project/go-address"
@@ -58,3 +58,4 @@ func (m *paychMigrator) migrateLaneStates(_ context.Context, _ cbor.IpldStore, r
 
 	return root, nil
 }
+*/

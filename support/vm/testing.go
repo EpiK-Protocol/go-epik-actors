@@ -26,11 +26,9 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/states"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 	"github.com/filecoin-project/specs-actors/v2/support/ipld"
 	actor_testing "github.com/filecoin-project/specs-actors/v2/support/testing"
 )
@@ -87,8 +85,8 @@ func NewVMWithSingletons(ctx context.Context, t *testing.T) *VM {
 
 	// this will need to be replaced with the address of a multisig actor for the verified registry to be tested accurately
 	initializeActor(ctx, t, vm, &account.State{Address: VerifregRoot}, builtin.AccountActorCodeID, VerifregRoot, big.Zero())
-	vrState := verifreg.ConstructState(emptyMapCID, VerifregRoot)
-	initializeActor(ctx, t, vm, vrState, builtin.VerifiedRegistryActorCodeID, builtin.VerifiedRegistryActorAddr, big.Zero())
+	/* vrState := verifreg.ConstructState(emptyMapCID, VerifregRoot)
+	initializeActor(ctx, t, vm, vrState, builtin.VerifiedRegistryActorCodeID, builtin.VerifiedRegistryActorAddr, big.Zero()) */
 
 	// burnt funds
 	initializeActor(ctx, t, vm, &account.State{Address: builtin.BurntFundsActorAddr}, builtin.AccountActorCodeID, builtin.BurntFundsActorAddr, big.Zero())
@@ -356,7 +354,7 @@ type MinerBalances struct {
 	AvailableBalance abi.TokenAmount
 	VestingBalance   abi.TokenAmount
 	InitialPledge    abi.TokenAmount
-	PreCommitDeposit abi.TokenAmount
+	/* PreCommitDeposit abi.TokenAmount */
 }
 
 func GetMinerBalances(t *testing.T, vm *VM, minerIdAddr address.Address) MinerBalances {
@@ -369,10 +367,10 @@ func GetMinerBalances(t *testing.T, vm *VM, minerIdAddr address.Address) MinerBa
 	require.NoError(t, err)
 
 	return MinerBalances{
-		AvailableBalance: big.Subtract(a.Balance, state.PreCommitDeposits, state.InitialPledge, state.LockedFunds, state.FeeDebt),
-		PreCommitDeposit: state.PreCommitDeposits,
-		VestingBalance:   state.LockedFunds,
-		InitialPledge:    state.InitialPledge,
+		AvailableBalance: big.Subtract(a.Balance /* state.PreCommitDeposits, */, state.TotalPledge, state.LockedFunds, state.FeeDebt),
+		/* PreCommitDeposit: state.PreCommitDeposits, */
+		VestingBalance: state.LockedFunds,
+		InitialPledge:  state.TotalPledge,
 	}
 }
 
@@ -404,23 +402,23 @@ func MinerPower(t *testing.T, vm *VM, minerIdAddr address.Address) miner.PowerPa
 
 type NetworkStats struct {
 	power.State
-	TotalRawBytePower             abi.StoragePower
-	TotalBytesCommitted           abi.StoragePower
-	TotalQualityAdjPower          abi.StoragePower
-	TotalQABytesCommitted         abi.StoragePower
-	TotalPledgeCollateral         abi.TokenAmount
-	ThisEpochRawBytePower         abi.StoragePower
-	ThisEpochQualityAdjPower      abi.StoragePower
-	ThisEpochPledgeCollateral     abi.TokenAmount
-	MinerCount                    int64
-	MinerAboveMinPowerCount       int64
-	ThisEpochReward               abi.TokenAmount
-	ThisEpochRewardSmoothed       smoothing.FilterEstimate
-	ThisEpochBaselinePower        abi.StoragePower
-	TotalStoragePowerReward       abi.TokenAmount
-	TotalClientLockedCollateral   abi.TokenAmount
+	TotalRawBytePower         abi.StoragePower
+	TotalBytesCommitted       abi.StoragePower
+	TotalQualityAdjPower      abi.StoragePower
+	TotalQABytesCommitted     abi.StoragePower
+	TotalPledgeCollateral     abi.TokenAmount
+	ThisEpochRawBytePower     abi.StoragePower
+	ThisEpochQualityAdjPower  abi.StoragePower
+	ThisEpochPledgeCollateral abi.TokenAmount
+	MinerCount                int64
+	MinerAboveMinPowerCount   int64
+	ThisEpochReward           abi.TokenAmount
+	/* ThisEpochRewardSmoothed       smoothing.FilterEstimate
+	ThisEpochBaselinePower        abi.StoragePower */
+	TotalStoragePowerReward abi.TokenAmount
+	/* TotalClientLockedCollateral   abi.TokenAmount
 	TotalProviderLockedCollateral abi.TokenAmount
-	TotalClientStorageFee         abi.TokenAmount
+	TotalClientStorageFee         abi.TokenAmount */
 }
 
 func GetNetworkStats(t *testing.T, vm *VM) NetworkStats {
@@ -437,23 +435,23 @@ func GetNetworkStats(t *testing.T, vm *VM) NetworkStats {
 	require.NoError(t, err)
 
 	return NetworkStats{
-		TotalRawBytePower:             powerState.TotalRawBytePower,
-		TotalBytesCommitted:           powerState.TotalBytesCommitted,
-		TotalQualityAdjPower:          powerState.TotalQualityAdjPower,
-		TotalQABytesCommitted:         powerState.TotalQABytesCommitted,
-		TotalPledgeCollateral:         powerState.TotalPledgeCollateral,
-		ThisEpochRawBytePower:         powerState.ThisEpochRawBytePower,
-		ThisEpochQualityAdjPower:      powerState.ThisEpochQualityAdjPower,
-		ThisEpochPledgeCollateral:     powerState.ThisEpochPledgeCollateral,
-		MinerCount:                    powerState.MinerCount,
-		MinerAboveMinPowerCount:       powerState.MinerAboveMinPowerCount,
-		ThisEpochReward:               rewardState.ThisEpochReward,
-		ThisEpochRewardSmoothed:       rewardState.ThisEpochRewardSmoothed,
-		ThisEpochBaselinePower:        rewardState.ThisEpochBaselinePower,
-		TotalStoragePowerReward:       rewardState.TotalStoragePowerReward,
-		TotalClientLockedCollateral:   marketState.TotalClientLockedCollateral,
+		TotalRawBytePower:         powerState.TotalRawBytePower,
+		TotalBytesCommitted:       powerState.TotalBytesCommitted,
+		TotalQualityAdjPower:      powerState.TotalQualityAdjPower,
+		TotalQABytesCommitted:     powerState.TotalQABytesCommitted,
+		TotalPledgeCollateral:     powerState.TotalPledgeCollateral,
+		ThisEpochRawBytePower:     powerState.ThisEpochRawBytePower,
+		ThisEpochQualityAdjPower:  powerState.ThisEpochQualityAdjPower,
+		ThisEpochPledgeCollateral: powerState.ThisEpochPledgeCollateral,
+		MinerCount:                powerState.MinerCount,
+		MinerAboveMinPowerCount:   powerState.MinerAboveMinPowerCount,
+		ThisEpochReward:           rewardState.ThisEpochReward,
+		/* ThisEpochRewardSmoothed:       rewardState.ThisEpochRewardSmoothed,
+		ThisEpochBaselinePower:        rewardState.ThisEpochBaselinePower, */
+		TotalStoragePowerReward: rewardState.TotalStoragePowerReward,
+		/* TotalClientLockedCollateral:   marketState.TotalClientLockedCollateral,
 		TotalProviderLockedCollateral: marketState.TotalProviderLockedCollateral,
-		TotalClientStorageFee:         marketState.TotalClientStorageFee,
+		TotalClientStorageFee:         marketState.TotalClientStorageFee, */
 	}
 }
 

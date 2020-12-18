@@ -24,15 +24,15 @@ func sectorsArr(t *testing.T, store adt.Store, sectors []*miner.SectorOnChainInf
 func TestSectors(t *testing.T) {
 	makeSector := func(t *testing.T, i uint64) *miner.SectorOnChainInfo {
 		return &miner.SectorOnChainInfo{
-			SectorNumber:          abi.SectorNumber(i),
-			SealProof:             abi.RegisteredSealProof_StackedDrg32GiBV1,
-			SealedCID:             tutil.MakeCID(fmt.Sprintf("commR-%d", i), &miner.SealedCIDPrefix),
-			DealWeight:            big.Zero(),
-			VerifiedDealWeight:    big.Zero(),
-			InitialPledge:         big.Zero(),
+			SectorNumber:       abi.SectorNumber(i),
+			SealProof:          abi.RegisteredSealProof_StackedDrg32GiBV1,
+			SealedCID:          tutil.MakeCID(fmt.Sprintf("commR-%d", i), &miner.SealedCIDPrefix),
+			DealWeight:         big.Zero(),
+			VerifiedDealWeight: big.Zero(),
+			/* InitialPledge:         big.Zero(),
 			ExpectedDayReward:     big.Zero(),
 			ExpectedStoragePledge: big.Zero(),
-			ReplacedDayReward:     big.Zero(),
+			ReplacedDayReward:     big.Zero(), */
 		}
 	}
 	setupSectors := func(t *testing.T) miner.Sectors {

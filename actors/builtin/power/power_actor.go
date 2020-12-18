@@ -15,7 +15,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 )
 
 type Runtime = runtime.Runtime
@@ -64,6 +63,7 @@ var _ runtime.VMActor = Actor{}
 type MinerConstructorParams struct {
 	OwnerAddr     addr.Address
 	WorkerAddr    addr.Address
+	Coinbase      addr.Address
 	ControlAddrs  []addr.Address
 	SealProofType abi.RegisteredSealProof
 	PeerId        abi.PeerID
@@ -90,6 +90,7 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 type CreateMinerParams struct {
 	Owner         addr.Address
 	Worker        addr.Address
+	Coinbase      addr.Address
 	SealProofType abi.RegisteredSealProof
 	Peer          abi.PeerID
 	Multiaddrs    []abi.Multiaddrs
@@ -106,6 +107,7 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 	ctorParams := MinerConstructorParams{
 		OwnerAddr:     params.Owner,
 		WorkerAddr:    params.Worker,
+		Coinbase:      params.Coinbase,
 		SealProofType: params.SealProofType,
 		PeerId:        params.Peer,
 		Multiaddrs:    params.Multiaddrs,
@@ -132,7 +134,7 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
-		err = setClaim(claims, addresses.IDAddress, &Claim{params.SealProofType, abi.NewStoragePower(0), abi.NewStoragePower(0)})
+		err = setClaim(claims, addresses.IDAddress, &Claim{params.SealProofType, abi.NewStoragePower(0), abi.NewStoragePower(0), false})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put power in claimed table while creating miner")
 
 		st.MinerCount += 1
@@ -149,6 +151,7 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 type UpdateClaimedPowerParams struct {
 	RawByteDelta         abi.StoragePower
 	QualityAdjustedDelta abi.StoragePower
+	PledgeSufficient     bool
 }
 
 // Adds or removes claimed power for the calling actor.
@@ -161,8 +164,8 @@ func (a Actor) UpdateClaimedPower(rt Runtime, params *UpdateClaimedPowerParams) 
 		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
-		err = st.addToClaim(claims, minerAddr, params.RawByteDelta, params.QualityAdjustedDelta)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update power raw %s, qa %s", params.RawByteDelta, params.QualityAdjustedDelta)
+		err = st.addToClaim(claims, minerAddr, params.RawByteDelta, params.QualityAdjustedDelta, params.PledgeSufficient)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update power raw %s, qa %s, pl %t", params.RawByteDelta, params.QualityAdjustedDelta, params.PledgeSufficient)
 
 		st.Claims, err = claims.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush claims")
@@ -218,8 +221,8 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		st.ThisEpochPledgeCollateral = st.TotalPledgeCollateral
 		st.ThisEpochQualityAdjPower = qaPower
 		st.ThisEpochRawBytePower = rawBytePower
-		// we can now assume delta is one since cron is invoked on every epoch.
-		st.updateSmoothedEstimate(abi.ChainEpoch(1))
+		/* // we can now assume delta is one since cron is invoked on every epoch.
+		st.updateSmoothedEstimate(abi.ChainEpoch(1)) */
 	})
 
 	// update network KPI in RewardActor
@@ -290,10 +293,10 @@ func (a Actor) SubmitPoRepForBulkVerify(rt Runtime, sealInfo *proof.SealVerifyIn
 // Changed since v0:
 // - QualityAdjPowerSmoothed is not a pointer
 type CurrentTotalPowerReturn struct {
-	RawBytePower            abi.StoragePower
-	QualityAdjPower         abi.StoragePower
-	PledgeCollateral        abi.TokenAmount
-	QualityAdjPowerSmoothed smoothing.FilterEstimate
+	RawBytePower     abi.StoragePower
+	QualityAdjPower  abi.StoragePower
+	PledgeCollateral abi.TokenAmount
+	/* QualityAdjPowerSmoothed smoothing.FilterEstimate */
 }
 
 // Returns the total power and pledge recorded by the power actor.
@@ -306,10 +309,10 @@ func (a Actor) CurrentTotalPower(rt Runtime, _ *abi.EmptyValue) *CurrentTotalPow
 	rt.StateReadonly(&st)
 
 	return &CurrentTotalPowerReturn{
-		RawBytePower:            st.ThisEpochRawBytePower,
-		QualityAdjPower:         st.ThisEpochQualityAdjPower,
-		PledgeCollateral:        st.ThisEpochPledgeCollateral,
-		QualityAdjPowerSmoothed: st.ThisEpochQAPowerSmoothed,
+		RawBytePower:     st.ThisEpochRawBytePower,
+		QualityAdjPower:  st.ThisEpochQualityAdjPower,
+		PledgeCollateral: st.ThisEpochPledgeCollateral,
+		/* QualityAdjPowerSmoothed: st.ThisEpochQAPowerSmoothed, */
 	}
 }
 

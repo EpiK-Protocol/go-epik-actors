@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	"github.com/filecoin-project/go-state-types/big"
@@ -21,4 +21,4 @@ func (m systemMigrator) MigrateState(ctx context.Context, store cbor.IpldStore, 
 		NewHead:  head,
 		Transfer: big.Zero(),
 	}, nil
-}
+} */

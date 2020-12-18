@@ -22,12 +22,12 @@ func TestExpirations(t *testing.T) {
 		epoch:   13,
 		sectors: []uint64{1, 2, 4},
 		power:   NewPowerPair(big.NewIntUnsigned(2048*3), big.NewIntUnsigned(2048*3)),
-		pledge:  big.Zero(),
+		/* pledge:  big.Zero(), */
 	}, {
 		epoch:   23,
 		sectors: []uint64{3},
 		power:   NewPowerPair(big.NewIntUnsigned(2048), big.NewIntUnsigned(2048)),
-		pledge:  big.Zero(),
+		/* pledge:  big.Zero(), */
 	}}
 	require.Equal(t, len(expected), len(result))
 	for i, ex := range expected {
@@ -46,7 +46,7 @@ func assertSectorSet(t *testing.T, expected, actual *sectorEpochSet) {
 	assert.Equal(t, expected.epoch, actual.epoch)
 	assert.Equal(t, expected.sectors, actual.sectors)
 	assert.True(t, expected.power.Equals(actual.power), "expected %v, actual %v", expected.power, actual.power)
-	assert.True(t, expected.pledge.Equals(actual.pledge), "expected %v, actual %v", expected.pledge, actual.pledge)
+	/* assert.True(t, expected.pledge.Equals(actual.pledge), "expected %v, actual %v", expected.pledge, actual.pledge) */
 }
 
 func testSector(expiration, number, weight, vweight, pledge int64) *SectorOnChainInfo {
@@ -55,6 +55,6 @@ func testSector(expiration, number, weight, vweight, pledge int64) *SectorOnChai
 		SectorNumber:       abi.SectorNumber(number),
 		DealWeight:         big.NewInt(weight),
 		VerifiedDealWeight: big.NewInt(vweight),
-		InitialPledge:      abi.NewTokenAmount(pledge),
+		/* InitialPledge:      abi.NewTokenAmount(pledge), */
 	}
 }

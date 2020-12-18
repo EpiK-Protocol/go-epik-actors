@@ -955,8 +955,8 @@ func constructStateHarness(t *testing.T, periodBoundary abi.ChainEpoch) *stateHa
 func newSectorPreCommitOnChainInfo(sectorNo abi.SectorNumber, sealed cid.Cid, deposit abi.TokenAmount, epoch abi.ChainEpoch) *miner.SectorPreCommitOnChainInfo {
 	info := newSectorPreCommitInfo(sectorNo, sealed)
 	return &miner.SectorPreCommitOnChainInfo{
-		Info:               *info,
-		PreCommitDeposit:   deposit,
+		Info: *info,
+		/* PreCommitDeposit:   deposit, */
 		PreCommitEpoch:     epoch,
 		DealWeight:         big.Zero(),
 		VerifiedDealWeight: big.Zero(),
@@ -971,19 +971,19 @@ const (
 // returns a unique SectorOnChainInfo with each invocation with SectorNumber set to `sectorNo`.
 func newSectorOnChainInfo(sectorNo abi.SectorNumber, sealed cid.Cid, weight big.Int, activation abi.ChainEpoch) *miner.SectorOnChainInfo {
 	return &miner.SectorOnChainInfo{
-		SectorNumber:          sectorNo,
-		SealProof:             abi.RegisteredSealProof_StackedDrg32GiBV1,
-		SealedCID:             sealed,
-		DealIDs:               nil,
-		Activation:            activation,
-		Expiration:            sectorExpiration,
-		DealWeight:            weight,
-		VerifiedDealWeight:    weight,
-		InitialPledge:         abi.NewTokenAmount(0),
+		SectorNumber:       sectorNo,
+		SealProof:          abi.RegisteredSealProof_StackedDrg32GiBV1,
+		SealedCID:          sealed,
+		DealIDs:            nil,
+		Activation:         activation,
+		Expiration:         sectorExpiration,
+		DealWeight:         weight,
+		VerifiedDealWeight: weight,
+		/* InitialPledge:         abi.NewTokenAmount(0),
 		ExpectedDayReward:     abi.NewTokenAmount(0),
-		ExpectedStoragePledge: abi.NewTokenAmount(0),
-		ReplacedSectorAge:     abi.ChainEpoch(0),
-		ReplacedDayReward:     big.Zero(),
+		ExpectedStoragePledge: abi.NewTokenAmount(0), */
+		ReplacedSectorAge: abi.ChainEpoch(0),
+		/* ReplacedDayReward:     big.Zero(), */
 	}
 }
 

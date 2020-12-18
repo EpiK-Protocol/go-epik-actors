@@ -116,7 +116,7 @@ func (p *Partition) AddSectors(
 	if err != nil {
 		return NewPowerPairZero(), xerrors.Errorf("failed to load sector expirations: %w", err)
 	}
-	snos, power, _, err := expirations.AddActiveSectors(sectors, ssize)
+	snos, power, err := expirations.AddActiveSectors(sectors, ssize)
 	if err != nil {
 		return NewPowerPairZero(), xerrors.Errorf("failed to record new sector expirations: %w", err)
 	}
@@ -402,7 +402,7 @@ func (p *Partition) removeRecoveries(sectorNos bitfield.BitField, power PowerPai
 	return nil
 }
 
-// RescheduleExpirations moves expiring sectors to the target expiration,
+/* // RescheduleExpirations moves expiring sectors to the target expiration,
 // skipping any sectors it can't find.
 //
 // The power of the rescheduled sectors is assumed to have not changed since
@@ -506,7 +506,7 @@ func (p *Partition) ReplaceSectors(store adt.Store, oldSectors, newSectors []*Se
 	// No change to faults, recoveries, or terminations.
 	// No change to faulty or recovering power.
 	return powerDelta, pledgeDelta, nil
-}
+} */
 
 // Record the epoch of any sectors expiring early, for termination fee calculation later.
 func (p *Partition) recordEarlyTermination(store adt.Store, epoch abi.ChainEpoch, sectors bitfield.BitField) error {

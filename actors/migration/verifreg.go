@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	addr "github.com/filecoin-project/go-address"
@@ -146,4 +146,4 @@ func (m *verifregMigrator) resolveAndMaybeCreateAccount(ctx context.Context, inA
 
 	err = m.actorsOut.SetActor(idInAddr, &acctActor)
 	return idInAddr, err
-}
+} */

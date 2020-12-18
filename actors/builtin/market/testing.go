@@ -3,6 +3,7 @@ package market
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
@@ -16,28 +17,57 @@ import (
 )
 
 type DealSummary struct {
-	Provider         address.Address
-	StartEpoch       abi.ChainEpoch
-	EndEpoch         abi.ChainEpoch
+	Provider   address.Address
+	StartEpoch abi.ChainEpoch
+	PieceCID   cid.Cid
+	/* EndEpoch         abi.ChainEpoch */
 	SectorStartEpoch abi.ChainEpoch
 	LastUpdatedEpoch abi.ChainEpoch
 	SlashEpoch       abi.ChainEpoch
 }
 
+func (ds *DealSummary) String() string {
+	return fmt.Sprintf(`{
+		Provider: %s,
+		StartEpoch: %d,
+		PieceCID: %s,
+		SectorStartEpoch: %d,
+		LastUpdatedEpoch: %d,
+		SlashEpoch: %d,
+	}`, ds.Provider, ds.StartEpoch, ds.PieceCID, ds.SectorStartEpoch, ds.LastUpdatedEpoch, ds.SlashEpoch)
+}
+
 type StateSummary struct {
 	Deals                map[abi.DealID]*DealSummary
+	Quotas               map[cid.Cid]uint64
+	DanglingQuotas       map[cid.Cid]uint64
 	PendingProposalCount uint64
 	DealStateCount       uint64
 	LockTableCount       uint64
-	DealOpEpochCount     uint64
+	DealOpEpochStats     map[abi.ChainEpoch]map[abi.DealID]struct{}
 	DealOpCount          uint64
+	DealNotFound         uint64
+}
+
+func (ss *StateSummary) String() string {
+	return fmt.Sprintf(`{
+	Deals: %v,
+	Quotas: %v,
+	DanglingQuotas: %v,
+	PendingProposalCount: %d,
+	DealStateCount: %d,
+	LockTableCount: %d,
+	DealOpEpochStats: %d,
+	DealOpCount: %d,
+	DealNotFound: %d,
+}`, ss.Deals, ss.Quotas, ss.DanglingQuotas, ss.PendingProposalCount, ss.DealStateCount, ss.LockTableCount, ss.DealOpEpochStats, ss.DealOpCount, ss.DealNotFound)
 }
 
 // Checks internal invariants of market state.
 func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, currEpoch abi.ChainEpoch) (*StateSummary, *builtin.MessageAccumulator, error) {
 	acc := &builtin.MessageAccumulator{}
 
-	acc.Require(
+	/* acc.Require(
 		st.TotalClientLockedCollateral.GreaterThanEqual(big.Zero()),
 		"negative total client locked collateral: %v", st.TotalClientLockedCollateral)
 
@@ -47,7 +77,7 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 
 	acc.Require(
 		st.TotalClientStorageFee.GreaterThanEqual(big.Zero()),
-		"negative total client storage fee: %v", st.TotalClientLockedCollateral)
+		"negative total client storage fee: %v", st.TotalClientLockedCollateral) */
 
 	//
 	// Proposals
@@ -56,23 +86,24 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 	proposalCids := make(map[cid.Cid]struct{})
 	maxDealID := int64(-1)
 	proposalStats := make(map[abi.DealID]*DealSummary)
-	expectedDealOps := make(map[abi.DealID]struct{})
+	// expectedDealOps := make(map[abi.DealID]struct{})
+	pieceToDeal := make(map[cid.Cid]abi.DealID)
 
 	proposals, err := adt.AsArray(store, st.Proposals)
 	if err != nil {
 		return nil, acc, err
 	}
 	var proposal DealProposal
-	totalProposalCollateral := abi.NewTokenAmount(0)
+	/* totalProposalCollateral := abi.NewTokenAmount(0) */
 	err = proposals.ForEach(&proposal, func(dealID int64) error {
 		pcid, err := proposal.Cid()
 		if err != nil {
 			return err
 		}
 
-		if proposal.StartEpoch >= currEpoch {
-			expectedDealOps[abi.DealID(dealID)] = struct{}{}
-		}
+		// if proposal.StartEpoch >= currEpoch {
+		// 	expectedDealOps[abi.DealID(dealID)] = struct{}{}
+		// }
 
 		// keep some state
 		proposalCids[pcid] = struct{}{}
@@ -80,15 +111,17 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 			maxDealID = dealID
 		}
 		proposalStats[abi.DealID(dealID)] = &DealSummary{
-			Provider:         proposal.Provider,
-			StartEpoch:       proposal.StartEpoch,
-			EndEpoch:         proposal.EndEpoch,
+			Provider:   proposal.Provider,
+			StartEpoch: proposal.StartEpoch,
+			PieceCID:   proposal.PieceCID,
+			/* EndEpoch:         proposal.EndEpoch, */
 			SectorStartEpoch: abi.ChainEpoch(-1),
 			LastUpdatedEpoch: abi.ChainEpoch(-1),
 			SlashEpoch:       abi.ChainEpoch(-1),
 		}
+		pieceToDeal[proposal.PieceCID] = abi.DealID(dealID)
 
-		totalProposalCollateral = big.Sum(totalProposalCollateral, proposal.ClientCollateral, proposal.ProviderCollateral)
+		/* totalProposalCollateral = big.Sum(totalProposalCollateral, proposal.ClientCollateral, proposal.ProviderCollateral) */
 
 		acc.Require(proposal.Client.Protocol() == address.ID, "client address for deal %d is not an ID address", dealID)
 		acc.Require(proposal.Provider.Protocol() == address.ID, "provider address for deal %d is not an ID address", dealID)
@@ -220,11 +253,11 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 		return nil, acc, err
 	}
 
-	// lockTable total should be sum of client and provider locked plus client storage fee
+	/* // lockTable total should be sum of client and provider locked plus client storage fee
 	expectedLockTotal := big.Sum(st.TotalProviderLockedCollateral, st.TotalClientLockedCollateral, st.TotalClientStorageFee)
 	acc.Require(lockedTotal.Equals(expectedLockTotal),
 		"locked total, %s, does not sum to provider locked, %s, client locked, %s, and client storage fee, %s",
-		lockedTotal, st.TotalProviderLockedCollateral, st.TotalClientLockedCollateral, st.TotalClientStorageFee)
+		lockedTotal, st.TotalProviderLockedCollateral, st.TotalClientLockedCollateral, st.TotalClientStorageFee) */
 
 	// assert escrow <= actor balance
 	// lockTable item <= escrow item and escrowTotal <= balance implies lockTable total <= balance
@@ -233,14 +266,15 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 		return nil, acc, err
 	}
 	acc.Require(escrowTotal.LessThanEqual(balance), "escrow total, %v, greater than actor balance, %v", escrowTotal, balance)
-	acc.Require(escrowTotal.GreaterThanEqual(totalProposalCollateral), "escrow total, %v, less than sum of proposal collateral, %v", escrowTotal, totalProposalCollateral)
+	/* acc.Require(escrowTotal.GreaterThanEqual(totalProposalCollateral), "escrow total, %v, less than sum of proposal collateral, %v", escrowTotal, totalProposalCollateral) */
 
 	//
 	// Deal Ops by Epoch
 	//
 
-	dealOpEpochCount := uint64(0)
+	dealOpEpochStats := make(map[abi.ChainEpoch]map[abi.DealID]struct{})
 	dealOpCount := uint64(0)
+	dealNotFound := uint64(0)
 	dealOps, err := AsSetMultimap(store, st.DealOpsByEpoch)
 	if err != nil {
 		return nil, acc, err
@@ -254,12 +288,20 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 			return errors.Wrapf(err, "deal ops has key that is not an int: %s", key)
 		}
 
-		dealOpEpochCount++
+		mp, ok := dealOpEpochStats[abi.ChainEpoch(epoch)]
+		if !ok {
+			mp = make(map[abi.DealID]struct{})
+			dealOpEpochStats[abi.ChainEpoch(epoch)] = mp
+		}
 		return dealOps.ForEach(abi.ChainEpoch(epoch), func(id abi.DealID) error {
 			_, found := proposalStats[id]
-			acc.Require(found, "deal op found for deal id %d with missing proposal at epoch %d", id, epoch)
-			delete(expectedDealOps, id)
+			if !found {
+				dealNotFound++
+				// acc.Require(found, "deal op found for deal id %d with missing proposal at epoch %d", id, epoch)
+			}
+			// delete(expectedDealOps, id)
 			dealOpCount++
+			mp[id] = struct{}{}
 			return nil
 		})
 	})
@@ -267,14 +309,48 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 		return nil, acc, err
 	}
 
-	acc.Require(len(expectedDealOps) == 0, "missing deal ops for proposals: %v", expectedDealOps)
+	// acc.Require(len(expectedDealOps) == 0, "missing deal ops for proposals: %v", expectedDealOps)
+
+	//
+	// Quotas
+	//
+	quotaStats := make(map[cid.Cid]uint64)
+	quotas, err := adt.AsMap(store, st.Quotas)
+	danglingQuotas := make(map[cid.Cid]uint64)
+
+	if err != nil {
+		return nil, acc, err
+	}
+	var quota cbg.CborInt
+	err = quotas.ForEach(&quota, func(key string) error {
+		pieceCid, err := cid.Parse([]byte(key))
+		if err != nil {
+			return err
+		}
+		acc.Require(quota >= 0, "negative quota %d for piece %v", quota, pieceCid)
+
+		_, found := pieceToDeal[pieceCid]
+		if !found {
+			danglingQuotas[pieceCid] = uint64(quota)
+			// acc.Require(found, "piece for quota missing %v", pieceCid)
+		}
+
+		quotaStats[pieceCid] = uint64(quota)
+		return nil
+	})
+	if err != nil {
+		return nil, acc, err
+	}
 
 	return &StateSummary{
 		Deals:                proposalStats,
+		Quotas:               quotaStats,
+		DanglingQuotas:       danglingQuotas,
 		PendingProposalCount: pendingProposalCount,
 		DealStateCount:       dealStateCount,
 		LockTableCount:       lockTableCount,
-		DealOpEpochCount:     dealOpEpochCount,
+		DealOpEpochStats:     dealOpEpochStats,
 		DealOpCount:          dealOpCount,
+		DealNotFound:         dealNotFound,
 	}, acc, nil
 }

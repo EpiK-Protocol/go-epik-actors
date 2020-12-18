@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	"github.com/filecoin-project/go-state-types/big"
@@ -99,4 +99,4 @@ func (m *marketMigrator) migrateBalanceTable(ctx context.Context, store cbor.Ipl
 func (m *marketMigrator) migrateDealOps(ctx context.Context, store cbor.IpldStore, root cid.Cid) (cid.Cid, error) {
 	// The HAMT has changed, at each level, but the final value type (abi.DealID) is identical.
 	return migrateHAMTHAMTRaw(ctx, store, root)
-}
+} */

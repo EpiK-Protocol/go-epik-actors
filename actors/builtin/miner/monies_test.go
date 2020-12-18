@@ -7,13 +7,12 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 )
 
 // Test termination fee
-func TestPledgePenaltyForTermination(t *testing.T) {
+/* func TestPledgePenaltyForTermination(t *testing.T) {
 	epochTargetReward := abi.NewTokenAmount(1 << 50)
 	qaSectorPower := abi.NewStoragePower(1 << 36)
 	networkQAPower := abi.NewStoragePower(1 << 50)
@@ -141,7 +140,7 @@ func TestPledgePenaltyForTermination(t *testing.T) {
 
 		assert.Equal(t, expectedFee, fee)
 	})
-}
+} */
 
 func TestNegativeBRClamp(t *testing.T) {
 	epochTargetReward := abi.NewTokenAmount(1 << 50)

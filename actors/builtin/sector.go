@@ -8,42 +8,42 @@ import (
 // Metadata about a seal proof type.
 type SealProofPolicy struct {
 	WindowPoStPartitionSectors uint64
-	SectorMaxLifetime          stabi.ChainEpoch
-	ConsensusMinerMinPower     stabi.StoragePower
+	/* SectorMaxLifetime          stabi.ChainEpoch */
+	ConsensusMinerMinPower stabi.StoragePower
 }
 
-// For all Stacked DRG sectors, the max is 5 years
+/* // For all Stacked DRG sectors, the max is 5 years
 const epochsPerYear = 1_051_200
-const fiveYears = stabi.ChainEpoch(5 * epochsPerYear)
+const fiveYears = stabi.ChainEpoch(5 * epochsPerYear) */
 
 // Partition sizes must match those used by the proofs library.
 // See https://github.com/filecoin-project/rust-fil-proofs/blob/master/filecoin-proofs/src/constants.rs#L85
 var SealProofPolicies = map[stabi.RegisteredSealProof]*SealProofPolicy{
 	stabi.RegisteredSealProof_StackedDrg2KiBV1: {
 		WindowPoStPartitionSectors: 2,
-		SectorMaxLifetime:          fiveYears,
-		ConsensusMinerMinPower:     stabi.NewStoragePower(0),
+		/* SectorMaxLifetime:          fiveYears, */
+		ConsensusMinerMinPower: stabi.NewStoragePower(0),
 	},
 	stabi.RegisteredSealProof_StackedDrg8MiBV1: {
 		WindowPoStPartitionSectors: 2,
-		SectorMaxLifetime:          fiveYears,
-		ConsensusMinerMinPower:     stabi.NewStoragePower(1),
+		/* SectorMaxLifetime:          fiveYears, */
+		ConsensusMinerMinPower: stabi.NewStoragePower(1),
 	},
 	stabi.RegisteredSealProof_StackedDrg512MiBV1: {
 		WindowPoStPartitionSectors: 2,
-		SectorMaxLifetime:          fiveYears,
-		ConsensusMinerMinPower:     stabi.NewStoragePower(1 << 30),
+		/* SectorMaxLifetime:          fiveYears, */
+		ConsensusMinerMinPower: stabi.NewStoragePower(1 << 30),
 	},
 	stabi.RegisteredSealProof_StackedDrg32GiBV1: {
 
 		WindowPoStPartitionSectors: 2349,
-		SectorMaxLifetime:          fiveYears,
-		ConsensusMinerMinPower:     stabi.NewStoragePower(10 << 40),
+		/* SectorMaxLifetime:          fiveYears, */
+		ConsensusMinerMinPower: stabi.NewStoragePower(10 << 40),
 	},
 	stabi.RegisteredSealProof_StackedDrg64GiBV1: {
 		WindowPoStPartitionSectors: 2300,
-		SectorMaxLifetime:          fiveYears,
-		ConsensusMinerMinPower:     stabi.NewStoragePower(20 << 40),
+		/* SectorMaxLifetime:          fiveYears, */
+		ConsensusMinerMinPower: stabi.NewStoragePower(20 << 40),
 	},
 }
 
@@ -57,14 +57,14 @@ func SealProofWindowPoStPartitionSectors(p stabi.RegisteredSealProof) (uint64, e
 	return info.WindowPoStPartitionSectors, nil
 }
 
-// SectorMaximumLifetime is the maximum duration a sector sealed with this proof may exist between activation and expiration
+/* // SectorMaximumLifetime is the maximum duration a sector sealed with this proof may exist between activation and expiration
 func SealProofSectorMaximumLifetime(p stabi.RegisteredSealProof) (stabi.ChainEpoch, error) {
 	info, ok := SealProofPolicies[p]
 	if !ok {
 		return 0, errors.Errorf("unsupported proof type: %v", p)
 	}
 	return info.SectorMaxLifetime, nil
-}
+} */
 
 // The minimum power of an individual miner to meet the threshold for leader election (in bytes).
 // Motivation:

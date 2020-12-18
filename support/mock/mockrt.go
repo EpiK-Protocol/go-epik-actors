@@ -351,7 +351,9 @@ func (rt *Runtime) Send(toAddr addr.Address, methodNum abi.MethodNum, params cbo
 	// pop the expectedMessage from the queue and modify the mockrt balance to reflect the send.
 	defer func() {
 		rt.expectSends = rt.expectSends[1:]
-		rt.balance = big.Sub(rt.balance, value)
+		if exp.exitCode == exitcode.Ok {
+			rt.balance = big.Sub(rt.balance, value)
+		}
 	}()
 
 	// populate the output argument

@@ -1,16 +1,14 @@
 package market
 
 import (
-	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
-
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
 
 // The number of epochs between payment and other state processing for deals.
 const DealUpdatesInterval = builtin.EpochsInDay // PARAM_SPEC //TODO:
+const DealTerminateLatency = 240                // 4 deadlines
 
-// The percentage of normalized cirulating
+/* // The percentage of normalized cirulating
 // supply that must be covered by provider collateral in a deal
 var ProviderCollateralSupplyTarget = builtin.BigFrac{
 	Numerator:   big.NewInt(1), // PARAM_SPEC
@@ -21,12 +19,14 @@ var ProviderCollateralSupplyTarget = builtin.BigFrac{
 var DealMinDuration = abi.ChainEpoch(180 * builtin.EpochsInDay) // PARAM_SPEC
 
 // Maximum deal duration
-var DealMaxDuration = abi.ChainEpoch(1050 * builtin.EpochsInDay) // PARAM_SPEC
+var DealMaxDuration = abi.ChainEpoch(1050 * builtin.EpochsInDay) // PARAM_SPEC */
 
 // DealMaxLabelSize is the maximum size of a deal label.
 const DealMaxLabelSize = 256
 
-// Bounds (inclusive) on deal duration
+const DefaultInitialQuota = 3000
+
+/* // Bounds (inclusive) on deal duration
 func DealDurationBounds(_ abi.PaddedPieceSize) (min abi.ChainEpoch, max abi.ChainEpoch) {
 	return DealMinDuration, DealMaxDuration
 }
@@ -67,4 +67,4 @@ func DealWeight(proposal *DealProposal) abi.DealWeight {
 	dealSize := big.NewIntUnsigned(uint64(proposal.PieceSize))
 	dealSpaceTime := big.Mul(dealDuration, dealSize)
 	return dealSpaceTime
-}
+}*/

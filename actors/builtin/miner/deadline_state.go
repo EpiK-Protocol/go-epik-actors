@@ -189,7 +189,7 @@ func (dl *Deadline) PopExpiredSectors(store adt.Store, until abi.ChainEpoch, qua
 
 	var onTimeSectors []bitfield.BitField
 	var earlySectors []bitfield.BitField
-	allOnTimePledge := big.Zero()
+	/* allOnTimePledge := big.Zero() */
 	allActivePower := NewPowerPairZero()
 	allFaultyPower := NewPowerPairZero()
 	var partitionsWithEarlyTerminations []uint64
@@ -212,7 +212,7 @@ func (dl *Deadline) PopExpiredSectors(store adt.Store, until abi.ChainEpoch, qua
 		earlySectors = append(earlySectors, partExpiration.EarlySectors)
 		allActivePower = allActivePower.Add(partExpiration.ActivePower)
 		allFaultyPower = allFaultyPower.Add(partExpiration.FaultyPower)
-		allOnTimePledge = big.Add(allOnTimePledge, partExpiration.OnTimePledge)
+		/* allOnTimePledge = big.Add(allOnTimePledge, partExpiration.OnTimePledge) */
 
 		if empty, err := partExpiration.EarlySectors.IsEmpty(); err != nil {
 			return xerrors.Errorf("failed to count early expirations from partition %d: %w", partIdx, err)
@@ -256,7 +256,7 @@ func (dl *Deadline) PopExpiredSectors(store adt.Store, until abi.ChainEpoch, qua
 
 	dl.FaultyPower = dl.FaultyPower.Sub(allFaultyPower)
 
-	return NewExpirationSet(allOnTimeSectors, allEarlySectors, allOnTimePledge, allActivePower, allFaultyPower), nil
+	return NewExpirationSet(allOnTimeSectors, allEarlySectors /* allOnTimePledge, */, allActivePower, allFaultyPower), nil
 }
 
 // Adds sectors to a deadline. It's the caller's responsibility to make sure
@@ -272,7 +272,7 @@ func (dl *Deadline) AddSectors(
 	}
 
 	// First update partitions, consuming the sectors
-	partitionDeadlineUpdates := make(map[abi.ChainEpoch][]uint64)
+	/* partitionDeadlineUpdates := make(map[abi.ChainEpoch][]uint64) */
 	activatedPower = NewPowerPairZero()
 	dl.LiveSectors += uint64(len(sectors))
 	dl.TotalSectors += uint64(len(sectors))
@@ -330,7 +330,7 @@ func (dl *Deadline) AddSectors(
 				return NewPowerPairZero(), err
 			}
 
-			// Record deadline -> partition mapping so we can later update the deadlines.
+			/* // Record deadline -> partition mapping so we can later update the deadlines.
 			for _, sector := range partitionNewSectors {
 				partitionUpdate := partitionDeadlineUpdates[sector.Expiration]
 				// Record each new partition once.
@@ -338,7 +338,7 @@ func (dl *Deadline) AddSectors(
 					continue
 				}
 				partitionDeadlineUpdates[sector.Expiration] = append(partitionUpdate, partIdx)
-			}
+			} */
 		}
 
 		// Save partitions back.
@@ -348,7 +348,7 @@ func (dl *Deadline) AddSectors(
 		}
 	}
 
-	// Next, update the expiration queue.
+	/* // Next, update the expiration queue.
 	{
 		deadlineExpirations, err := LoadBitfieldQueue(store, dl.ExpirationsEpochs, quant)
 		if err != nil {
@@ -362,7 +362,7 @@ func (dl *Deadline) AddSectors(
 		if dl.ExpirationsEpochs, err = deadlineExpirations.Root(); err != nil {
 			return NewPowerPairZero(), err
 		}
-	}
+	} */
 
 	return activatedPower, nil
 }
@@ -996,7 +996,7 @@ func (dl *Deadline) RecordProvenSectors(
 	}, nil
 }
 
-// RescheduleSectorExpirations reschedules the expirations of the given sectors
+/* // RescheduleSectorExpirations reschedules the expirations of the given sectors
 // to the target epoch, skipping any sectors it can't find.
 //
 // The power of the rescheduled sectors is assumed to have not changed since
@@ -1058,7 +1058,7 @@ func (dl *Deadline) RescheduleSectorExpirations(
 	}
 
 	return allReplaced, nil
-}
+} */
 
 func (d *Deadline) ValidateState() error {
 	if d.LiveSectors > d.TotalSectors {

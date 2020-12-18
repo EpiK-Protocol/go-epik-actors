@@ -7,11 +7,9 @@ import (
 	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/math"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 )
 
-// Projection period of expected sector block reward for deposit required to pre-commit a sector.
+/* // Projection period of expected sector block reward for deposit required to pre-commit a sector.
 // This deposit is lost if the pre-commitment is not timely followed up by a commitment proof.
 var PreCommitDepositFactor = 20 // PARAM_SPEC
 var PreCommitDepositProjectionPeriod = abi.ChainEpoch(PreCommitDepositFactor) * builtin.EpochsInDay
@@ -24,7 +22,7 @@ var InitialPledgeProjectionPeriod = abi.ChainEpoch(InitialPledgeFactor) * builti
 // Cap on initial pledge requirement for sectors.
 // The target is 1 FIL (10**18 attoFIL) per 32GiB.
 // This does not divide evenly, so the result is fractionally smaller.
-var InitialPledgeMaxPerByte = big.Div(big.NewInt(1e18), big.NewInt(8<<20))
+var InitialPledgeMaxPerByte = big.Div(big.NewInt(1e18), big.NewInt(32<<30))
 
 // Multiplier of share of circulating money supply for consensus pledge required to commit a sector.
 // This pledge is lost if a sector is terminated before its full committed lifetime.
@@ -51,12 +49,12 @@ var TerminationRewardFactor = builtin.BigFrac{ // PARAM_SPEC
 }
 
 // Maximum number of lifetime days penalized when a sector is terminated.
-const TerminationLifetimeCap = 140 // PARAM_SPEC
+const TerminationLifetimeCap = 140 // PARAM_SPEC */
 
 // Multiplier of whole per-winner rewards for a consensus fault penalty.
 const ConsensusFaultFactor = 5
 
-// // Fraction of total reward (block reward + gas reward) to be locked up as of V6
+/* // // Fraction of total reward (block reward + gas reward) to be locked up as of V6
 // var LockedRewardFactorNum = big.NewInt(75)
 // var LockedRewardFactorDenom = big.NewInt(100)
 
@@ -80,8 +78,7 @@ func ExpectedRewardForPower(rewardEstimate, networkQAPowerEstimate smoothing.Fil
 // It is a projection of the expected reward earned by the sector.
 // Also known as "FF(t)"
 func PledgePenaltyForContinuedFault(rewardEstimate, networkQAPowerEstimate smoothing.FilterEstimate, qaSectorPower abi.StoragePower) abi.TokenAmount {
-	// return ExpectedRewardForPower(rewardEstimate, networkQAPowerEstimate, qaSectorPower, ContinuedFaultProjectionPeriod)
-	return big.Zero()
+	return ExpectedRewardForPower(rewardEstimate, networkQAPowerEstimate, qaSectorPower, ContinuedFaultProjectionPeriod)
 }
 
 // Lower bound on the penalty for a terminating sector.
@@ -120,7 +117,8 @@ func PledgePenaltyForTermination(dayReward abi.TokenAmount, sectorAge abi.ChainE
 				big.Mul(big.NewInt(builtin.EpochsInDay), TerminationRewardFactor.Denominator)))) // (epochs*AttoFIL/day -> AttoFIL)
 }
 
-// Computes the PreCommit deposit given sector qa weight and current network conditions.
+// no PreCommit deposit required
+ // Computes the PreCommit deposit given sector qa weight and current network conditions.
 // PreCommit Deposit = BR(PreCommitDepositProjectionPeriod)
 func PreCommitDepositForPower(rewardEstimate, networkQAPowerEstimate smoothing.FilterEstimate, qaSectorPower abi.StoragePower) abi.TokenAmount {
 	return ExpectedRewardForPower(rewardEstimate, networkQAPowerEstimate, qaSectorPower, PreCommitDepositProjectionPeriod)
@@ -152,7 +150,7 @@ func InitialPledgeForPower(qaPower, baselinePower abi.StoragePower, rewardEstima
 	nominalPledge := big.Add(ipBase, additionalIP)
 	spaceRacePledgeCap := big.Mul(InitialPledgeMaxPerByte, qaPower)
 	return big.Min(nominalPledge, spaceRacePledgeCap)
-}
+}*/
 
 // Repays all fee debt and then verifies that the miner has amount needed to cover
 // the pledge requirement after burning all fee debt.  If not aborts.

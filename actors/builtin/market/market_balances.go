@@ -1,6 +1,6 @@
 package market
 
-import (
+/* import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -8,9 +8,9 @@ import (
 	"golang.org/x/xerrors"
 
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
-)
+) */
 
-// if the returned error is not nil, the Runtime will exit with the returned exit code.
+/* // if the returned error is not nil, the Runtime will exit with the returned exit code.
 // if the error is nil, we don't care about the exitcode.
 func (m *marketStateMutation) lockClientAndProviderBalances(proposal *DealProposal) (error, exitcode.ExitCode) {
 	err, code := m.maybeLockBalance(proposal.Client, proposal.ClientBalanceRequirement())
@@ -99,4 +99,4 @@ func (m *marketStateMutation) maybeLockBalance(addr addr.Address, amount abi.Tok
 		return xerrors.Errorf("failed to add locked balance: %w", err), exitcode.ErrIllegalState
 	}
 	return nil, exitcode.Ok
-}
+} */

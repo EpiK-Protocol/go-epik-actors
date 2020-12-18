@@ -1,6 +1,6 @@
 package test_test
 
-import (
+/* import (
 	"context"
 	"strings"
 	"testing"
@@ -452,4 +452,4 @@ func publishDeal(t *testing.T, v *vm0.VM, provider, dealClient, minerID addr.Add
 	}.Matches(t, v.LastInvocation())
 
 	return ret.(*market.PublishStorageDealsReturn)
-}
+} */

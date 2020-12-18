@@ -17,7 +17,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
 )
 
 // Within this code, Go errors are not expected, but are often converted to messages so that execution
@@ -28,7 +27,7 @@ func CheckStateInvariants(tree *Tree, expectedBalanceTotal abi.TokenAmount, prio
 	totalFIl := big.Zero()
 	var initSummary *init_.StateSummary
 	var cronSummary *cron.StateSummary
-	var verifregSummary *verifreg.StateSummary
+	// var verifregSummary *verifreg.StateSummary
 	var marketSummary *market.StateSummary
 	var accountSummaries []*account.StateSummary
 	var powerSummary *power.StateSummary
@@ -137,17 +136,17 @@ func CheckStateInvariants(tree *Tree, expectedBalanceTotal abi.TokenAmount, prio
 
 		case builtin.RewardActorCodeID:
 
-		case builtin.VerifiedRegistryActorCodeID:
-			var st verifreg.State
-			if err := tree.Store.Get(tree.Store.Context(), actor.Head, &st); err != nil {
-				return err
-			}
-			if summary, msgs, err := verifreg.CheckStateInvariants(&st, tree.Store); err != nil {
-				return err
-			} else {
-				acc.WithPrefix("verifreg: ").AddAll(msgs)
-				verifregSummary = summary
-			}
+		// case builtin.VerifiedRegistryActorCodeID:
+		// 	var st verifreg.State
+		// 	if err := tree.Store.Get(tree.Store.Context(), actor.Head, &st); err != nil {
+		// 		return err
+		// 	}
+		// 	if summary, msgs, err := verifreg.CheckStateInvariants(&st, tree.Store); err != nil {
+		// 		return err
+		// 	} else {
+		// 		acc.WithPrefix("verifreg: ").AddAll(msgs)
+		// 		verifregSummary = summary
+		// 	}
 		default:
 			return xerrors.Errorf("unexpected actor code CID %v for address %v", actor.Code, key)
 
@@ -165,7 +164,7 @@ func CheckStateInvariants(tree *Tree, expectedBalanceTotal abi.TokenAmount, prio
 	CheckDealStatesAgainstSectors(acc, minerSummaries, marketSummary)
 
 	_ = initSummary
-	_ = verifregSummary
+	// _ = verifregSummary
 	_ = cronSummary
 	_ = marketSummary
 
@@ -242,7 +241,7 @@ func CheckDealStatesAgainstSectors(acc *builtin.MessageAccumulator, minerSummari
 			"deal state start %d does not match sector start %d for miner %v",
 			deal.SectorStartEpoch, sectorDeal.SectorStart, deal.Provider)
 
-		acc.Require(deal.SectorStartEpoch <= sectorDeal.SectorExpiration,
+		/* acc.Require(deal.SectorStartEpoch <= sectorDeal.SectorExpiration,
 			"deal state start %d activated after sector expiration %d for miner %v",
 			deal.SectorStartEpoch, sectorDeal.SectorExpiration, deal.Provider)
 
@@ -252,6 +251,6 @@ func CheckDealStatesAgainstSectors(acc *builtin.MessageAccumulator, minerSummari
 
 		acc.Require(deal.SlashEpoch <= sectorDeal.SectorExpiration,
 			"deal state slashed at %d after sector expiration %d for miner %v",
-			deal.SlashEpoch, sectorDeal.SectorExpiration, deal.Provider)
+			deal.SlashEpoch, sectorDeal.SectorExpiration, deal.Provider) */
 	}
 }

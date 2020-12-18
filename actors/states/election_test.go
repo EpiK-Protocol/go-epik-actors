@@ -32,7 +32,7 @@ func TestMinerEligibleForElection(t *testing.T) {
 	t.Run("miner eligible", func(t *testing.T) {
 		mstate := constructMinerState(ctx, t, store, owner)
 		pstate := constructPowerStateWithMiner(t, store, maddr, pwr, proofType)
-		assert.Equal(t, big.Zero(), mstate.InitialPledge) // Not directly relevant.
+		assert.Equal(t, big.Zero(), mstate.TotalPledge) // Not directly relevant.
 
 		currEpoch := abi.ChainEpoch(100000)
 		eligible, err := states.MinerEligibleForElection(store, mstate, pstate, maddr, currEpoch)

@@ -1,6 +1,6 @@
 package test_test
 
-import (
+/* import (
 	"context"
 	"testing"
 
@@ -104,3 +104,4 @@ func TestParallelMigrationCalls(t *testing.T) {
 	assert.Equal(t, endRootSerial, endRootParallel1)
 	assert.Equal(t, endRootParallel1, endRootParallel2)
 }
+*/

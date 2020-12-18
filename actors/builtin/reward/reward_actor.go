@@ -12,7 +12,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 )
 
 // PenaltyMultiplier is the factor miner penaltys are scaled up by
@@ -59,10 +58,11 @@ type AwardBlockRewardParams struct {
 	Miner     address.Address
 	Penalty   abi.TokenAmount // penalty for including bad messages in a block, >= 0
 	GasReward abi.TokenAmount // gas reward from all gas fees in a block, >= 0
-	WinCount  int64           // number of reward units won, > 0
+	// WinCount   int64           // number of reward units won, > 0
+
+	ShareCount int64 // number of blocks in current tipset, sharing ThisEpochReward
 
 	RetrievalPledged abi.TokenAmount // total retrieval pledged epik
-	Circulating      abi.TokenAmount // total circulating epk
 }
 
 // Awards a reward to a block producer.
@@ -88,8 +88,8 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 		rt.Abortf(exitcode.ErrIllegalState, "actor current balance %v insufficient to pay gas reward %v",
 			priorBalance, params.GasReward)
 	}
-	if params.WinCount <= 0 {
-		rt.Abortf(exitcode.ErrIllegalArgument, "invalid win count %d", params.WinCount)
+	if params.ShareCount <= 0 {
+		rt.Abortf(exitcode.ErrIllegalArgument, "non-positive share count %d", params.ShareCount)
 	}
 
 	minerAddr, ok := rt.ResolveAddress(params.Miner)
@@ -100,35 +100,34 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	penalty := big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty)
 	expertReward := big.Zero()
 	minerReward := big.Zero()
-	totalReward := big.Zero()
 	voteReward := big.Zero()
 	knowledgeReward := big.Zero()
 	bandwidthReward := big.Zero()
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		blockReward := big.Mul(st.ThisEpochReward, big.NewInt(params.WinCount))
-		blockReward = big.Div(blockReward, big.NewInt(builtin.ExpectedLeadersPerEpoch)) // TODO:
-		totalReward = big.Add(blockReward, params.GasReward)
+		// blockReward := big.Mul(st.ThisEpochReward, big.NewInt(params.WinCount))
+		// blockReward = big.Div(blockReward, big.NewInt(builtin.ExpectedLeadersPerEpoch))
+		blockReward := big.Div(st.ThisEpochReward, big.NewInt(params.ShareCount))
+		totalReward := big.Add(blockReward, params.GasReward)
 		currBalance := rt.CurrentBalance()
 		if totalReward.GreaterThan(currBalance) {
 			rt.Log(rtt.WARN, "reward actor balance %d below totalReward expected %d, paying out rest of balance", currBalance, totalReward)
 			totalReward = currBalance
 
 			blockReward = big.Sub(totalReward, params.GasReward)
-			// Since we have already asserted the balance is greater than gas reward blockReward is >= 0
-			AssertMsg(blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward is %v below zero", blockReward)
+			// // Since we have already asserted the balance is greater than gas reward blockReward is >= 0
+			// AssertMsg(blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward is %v below zero", blockReward)
 		}
+		AssertMsg(totalReward.LessThanEqual(priorBalance), "total reward %v exceeds balance %v", totalReward, priorBalance)
 
 		var powerReward big.Int
 		voteReward, expertReward, knowledgeReward, bandwidthReward, powerReward =
-			distributeBlockRewards(blockReward, params.RetrievalPledged, params.Circulating)
+			distributeBlockRewards(blockReward, params.RetrievalPledged, rt.TotalFilCircSupply())
 
 		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, powerReward)
 		minerReward = big.Add(powerReward, params.GasReward)
 	})
-
-	AssertMsg(totalReward.LessThanEqual(priorBalance), "reward %v exceeds balance %v", totalReward, priorBalance)
 
 	// if this fails, we can assume the miner is responsible and avoid failing here.
 	rewardParams := builtin.ApplyRewardParams{
@@ -137,33 +136,40 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	}
 	code := rt.Send(minerAddr, builtin.MethodsMiner.ApplyRewards, &rewardParams, minerReward, &builtin.Discard{})
 	if !code.IsSuccess() {
-		rt.Log(rtt.ERROR, "failed to send ApplyRewards call to the miner actor with funds: %v, code: %v", totalReward, code)
-		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, totalReward, &builtin.Discard{})
+		rt.Log(rtt.ERROR, "failed to send ApplyRewards call to the miner actor with funds: %v, code: %v", minerReward, code)
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, minerReward, &builtin.Discard{})
 		if !code.IsSuccess() {
 			rt.Log(rtt.ERROR, "failed to send unsent reward to the burnt funds actor, code: %v", code)
 		}
 	}
 
-	code = rt.Send(builtin.VoteFundsActorAddr, builtin.MethodsVote.ApplyRewards, nil, voteReward, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send funds to vote")
+	if !voteReward.IsZero() {
+		code = rt.Send(builtin.VoteFundsActorAddr, builtin.MethodsVote.ApplyRewards, nil, voteReward, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds to vote")
+	}
 
-	code = rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, expertReward, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send funds to expert")
+	if !expertReward.IsZero() {
+		code = rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, expertReward, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds to expert")
+	}
 
-	code = rt.Send(builtin.KnowledgeFundsActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, knowledgeReward, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send funds to knowledge")
+	if !knowledgeReward.IsZero() {
+		code = rt.Send(builtin.KnowledgeFundsActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, knowledgeReward, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds to knowledge")
+	}
 
-	code = rt.Send(builtin.RetrieveFundsActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send funds to retrieval")
+	if !bandwidthReward.IsZero() {
+		code = rt.Send(builtin.RetrieveFundsActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds to retrieval")
+	}
 
 	return nil
 }
 
-// Changed since v0:
-// - removed ThisEpochReward (unsmoothed)
 type ThisEpochRewardReturn struct {
-	ThisEpochRewardSmoothed smoothing.FilterEstimate
-	ThisEpochBaselinePower  abi.StoragePower
+	Epoch                   abi.ChainEpoch
+	ThisEpochReward         abi.TokenAmount
+	TotalStoragePowerReward abi.TokenAmount
 }
 
 // The award value used for the current epoch, updated at the end of an epoch
@@ -175,8 +181,9 @@ func (a Actor) ThisEpochReward(rt runtime.Runtime, _ *abi.EmptyValue) *ThisEpoch
 	var st State
 	rt.StateReadonly(&st)
 	return &ThisEpochRewardReturn{
-		ThisEpochRewardSmoothed: st.ThisEpochRewardSmoothed,
-		ThisEpochBaselinePower:  st.ThisEpochBaselinePower,
+		Epoch:                   st.Epoch,
+		ThisEpochReward:         st.ThisEpochReward,
+		TotalStoragePowerReward: st.TotalStoragePowerReward,
 	}
 }
 
@@ -185,13 +192,17 @@ func (a Actor) ThisEpochReward(rt runtime.Runtime, _ *abi.EmptyValue) *ThisEpoch
 // epochs to compute the next epoch reward.
 func (a Actor) UpdateNetworkKPI(rt runtime.Runtime, currRealizedPower *abi.StoragePower) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.StoragePowerActorAddr)
-	if currRealizedPower == nil {
+	/* if currRealizedPower == nil {
 		rt.Abortf(exitcode.ErrIllegalArgument, "arugment should not be nil")
-	}
+	} */
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		prev := st.Epoch
+		if rt.CurrEpoch()+1 >= st.Epoch+decayPeriod {
+			st.ThisEpochReward = big.Div(big.Mul(st.ThisEpochReward, DecayTarget.Numerator), DecayTarget.Denominator)
+			st.Epoch = rt.CurrEpoch() + 1
+		}
+		/* prev := st.Epoch
 		// if there were null runs catch up the computation until
 		// st.Epoch == rt.CurrEpoch()
 		for st.Epoch < rt.CurrEpoch() {
@@ -201,7 +212,7 @@ func (a Actor) UpdateNetworkKPI(rt runtime.Runtime, currRealizedPower *abi.Stora
 
 		st.updateToNextEpochWithReward(*currRealizedPower)
 		// only update smoothed estimates after updating reward and epoch
-		st.updateSmoothedEstimates(st.Epoch - prev)
+		st.updateSmoothedEstimates(st.Epoch - prev) */
 	})
 	return nil
 }

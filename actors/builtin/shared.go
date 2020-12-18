@@ -181,3 +181,7 @@ func (d *Discard) UnmarshalCBOR(_ io.Reader) error {
 type ExpertAddr struct {
 	Owner addr.Address
 }
+
+type BoolValue struct {
+	Bool bool
+}

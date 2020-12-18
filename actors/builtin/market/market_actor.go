@@ -3,7 +3,6 @@ package market
 import (
 	"bytes"
 	"encoding/binary"
-	"sort"
 
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -11,16 +10,12 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	rtt "github.com/filecoin-project/go-state-types/rt"
 	"github.com/ipfs/go-cid"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -41,6 +36,7 @@ func (a Actor) Exports() []interface{} {
 		7:                         a.OnMinerSectorsTerminate,
 		8:                         a.ComputeDataCommitment,
 		9:                         a.CronTick,
+		10:                        a.ResetQuotas,
 	}
 }
 
@@ -207,21 +203,20 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	)
 	builtin.RequireSuccess(rt, code, "failed to check expert data")
 
-	resolvedAddrs := make(map[addr.Address]addr.Address, len(params.Deals))
+	/* resolvedAddrs := make(map[addr.Address]addr.Address, len(params.Deals))
 	baselinePower := requestCurrentBaselinePower(rt)
-	networkRawPower, networkQAPower := requestCurrentNetworkPower(rt)
+	networkRawPower, networkQAPower := requestCurrentNetworkPower(rt) */
 
 	var newDealIds []abi.DealID
 	var st State
 	rt.StateTransaction(&st, func() {
 		msm, err := st.mutator(adt.AsStore(rt)).withPendingProposals(WritePermission).
-			withDealProposals(WritePermission).withDealsByEpoch(WritePermission).withEscrowTable(WritePermission).
-			withLockedTable(WritePermission).build()
+			withDealProposals(WritePermission).withDealsByEpoch(WritePermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
 		// All storage dealProposals will be added in an atomic transaction; this operation will be unrolled if any of them fails.
 		for di, deal := range params.Deals {
-			validateDeal(rt, deal, networkRawPower, networkQAPower, baselinePower)
+			validateDeal(rt, deal /* networkRawPower, networkQAPower , baselinePower */)
 
 			if deal.Proposal.Provider != provider && deal.Proposal.Provider != providerRaw {
 				rt.Abortf(exitcode.ErrIllegalArgument, "cannot publish deals from different providers at the same time")
@@ -233,11 +228,11 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			}
 			// Normalise provider and client addresses in the proposal stored on chain (after signature verification).
 			deal.Proposal.Provider = provider
-			resolvedAddrs[deal.Proposal.Client] = client
+			/* resolvedAddrs[deal.Proposal.Client] = client */
 			deal.Proposal.Client = client
 
-			err, code := msm.lockClientAndProviderBalances(&deal.Proposal)
-			builtin.RequireNoErr(rt, err, code, "failed to lock balance")
+			/* err, code := msm.lockClientAndProviderBalances(&deal.Proposal)
+			builtin.RequireNoErr(rt, err, code, "failed to lock balance") */
 
 			id := msm.generateStorageDealID()
 
@@ -271,7 +266,7 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
 	})
 
-	for _, deal := range params.Deals {
+	/* for _, deal := range params.Deals {
 		// Check VerifiedClient allowed cap and deduct PieceSize from cap.
 		// Either the DealSize is within the available DataCap of the VerifiedClient
 		// or this message will fail. We do not allow a deal that is partially verified.
@@ -291,23 +286,23 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			)
 			builtin.RequireSuccess(rt, code, "failed to add verified deal for client: %v", deal.Proposal.Client)
 		}
-	}
+	} */
 
 	return &PublishStorageDealsReturn{IDs: newDealIds}
 }
 
 type VerifyDealsForActivationParams struct {
-	DealIDs      []abi.DealID
-	SectorExpiry abi.ChainEpoch
-	SectorStart  abi.ChainEpoch
+	DealIDs []abi.DealID
+	/* SectorExpiry abi.ChainEpoch */
+	SectorStart abi.ChainEpoch
 }
 
 // Changed since v0:
 // - Added DealSpace
 type VerifyDealsForActivationReturn struct {
-	DealWeight         abi.DealWeight
-	VerifiedDealWeight abi.DealWeight
-	DealSpace          uint64
+	/* DealWeight abi.DealWeight
+	VerifiedDealWeight abi.DealWeight */
+	DealSpaces []uint64
 }
 
 // Verify that a given set of storage deals is valid for a sector currently being PreCommitted
@@ -321,41 +316,50 @@ func (A Actor) VerifyDealsForActivation(rt Runtime, params *VerifyDealsForActiva
 	rt.StateReadonly(&st)
 	store := adt.AsStore(rt)
 
-	dealWeight, verifiedWeight, dealSpace, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr, params.SectorExpiry, params.SectorStart)
+	/* dealWeight verifiedWeight, */
+	dealSpaces, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, params.SectorStart)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to validate dealProposals for activation")
 
 	return &VerifyDealsForActivationReturn{
-		DealWeight:         dealWeight,
-		VerifiedDealWeight: verifiedWeight,
-		DealSpace:          dealSpace,
+		/* DealWeight: dealWeight,
+		VerifiedDealWeight: verifiedWeight, */
+		DealSpaces: dealSpaces,
 	}
 }
 
 type ActivateDealsParams struct {
-	DealIDs      []abi.DealID
-	SectorExpiry abi.ChainEpoch
+	DealIDs []abi.DealID
+	/* SectorExpiry abi.ChainEpoch */
+}
+
+type ActivateDealsReturn struct {
+	DealWins []builtin.BoolValue
 }
 
 // Verify that a given set of storage deals is valid for a sector currently being ProveCommitted,
 // update the market's internal state accordingly.
-func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *abi.EmptyValue {
+func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateDealsReturn {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
 	minerAddr := rt.Caller()
 	currEpoch := rt.CurrEpoch()
+
+	ret := &ActivateDealsReturn{
+		DealWins: make([]builtin.BoolValue, len(params.DealIDs)),
+	}
 
 	var st State
 	store := adt.AsStore(rt)
 
 	// Update deal dealStates.
 	rt.StateTransaction(&st, func() {
-		_, _, _, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr, params.SectorExpiry, currEpoch)
+		_, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, currEpoch)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to validate dealProposals for activation")
 
-		msm, err := st.mutator(adt.AsStore(rt)).withDealStates(WritePermission).
+		msm, err := st.mutator(adt.AsStore(rt)).withDealStates(WritePermission).withQuotas(WritePermission).
 			withPendingProposals(ReadOnlyPermission).withDealProposals(ReadOnlyPermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
-		for _, dealID := range params.DealIDs {
+		for i, dealID := range params.DealIDs {
 			// This construction could be replaced with a single "update deal state" state method, possibly batched
 			// over all deal ids at once.
 			_, found, err := msm.dealStates.Get(dealID)
@@ -383,13 +387,27 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *abi.Empty
 				SlashEpoch:       epochUndefined,
 			})
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set deal state %d", dealID)
+
+			var quota cbg.CborInt
+			found, err = msm.quotas.Get(abi.CidKey(proposal.PieceCID), &quota)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get quota %d", dealID)
+			if !found { // first activation
+				quota = cbg.CborInt(DefaultInitialQuota)
+			}
+
+			ret.DealWins[i] = builtin.BoolValue{Bool: quota > 0}
+			if quota > 0 {
+				quota--
+				err = msm.quotas.Put(abi.CidKey(proposal.PieceCID), &quota)
+				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set quota %d", dealID)
+			}
 		}
 
 		err = msm.commitState()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
 	})
 
-	return nil
+	return ret
 }
 
 type ComputeDataCommitmentParams struct {
@@ -435,11 +453,12 @@ type OnMinerSectorsTerminateParams struct {
 func (a Actor) OnMinerSectorsTerminate(rt Runtime, params *OnMinerSectorsTerminateParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
 	minerAddr := rt.Caller()
+	AssertMsg(params.Epoch <= rt.CurrEpoch(), "future termination")
 
 	var st State
 	rt.StateTransaction(&st, func() {
 		msm, err := st.mutator(adt.AsStore(rt)).withDealStates(WritePermission).
-			withDealProposals(ReadOnlyPermission).build()
+			withDealProposals(ReadOnlyPermission).withDealsByEpoch(WritePermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load deal state")
 
 		for _, dealID := range params.DealIDs {
@@ -453,10 +472,10 @@ func (a Actor) OnMinerSectorsTerminate(rt Runtime, params *OnMinerSectorsTermina
 
 			AssertMsg(deal.Provider == minerAddr, "caller is not the provider of the deal")
 
-			// do not slash expired deals
+			/* // do not slash expired deals
 			if deal.EndEpoch <= params.Epoch {
 				continue
-			}
+			} */
 
 			state, found, err := msm.dealStates.Get(dealID)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get deal state %v", dealID)
@@ -475,6 +494,12 @@ func (a Actor) OnMinerSectorsTerminate(rt Runtime, params *OnMinerSectorsTermina
 
 			err = msm.dealStates.Set(dealID, state)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set deal state %v", dealID)
+
+			processEpoch, err := genTerminateEpoch(rt.CurrEpoch(), dealID)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to generate random process epoch for termination")
+
+			err = msm.dealsByEpoch.Put(processEpoch, dealID)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set deal ops by epoch")
 		}
 
 		err = msm.commitState()
@@ -485,23 +510,27 @@ func (a Actor) OnMinerSectorsTerminate(rt Runtime, params *OnMinerSectorsTermina
 
 func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.CronActorAddr)
-	amountSlashed := big.Zero()
+	/* amountSlashed := big.Zero()
 
-	var timedOutVerifiedDeals []*DealProposal
+	var timedOutVerifiedDeals []*DealProposal */
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		updatesNeeded := make(map[abi.ChainEpoch][]abi.DealID)
+		/* updatesNeeded := make(map[abi.ChainEpoch][]abi.DealID) */
 
-		msm, err := st.mutator(adt.AsStore(rt)).withDealStates(WritePermission).
-			withLockedTable(WritePermission).withEscrowTable(WritePermission).withDealsByEpoch(WritePermission).
+		msm, err := st.mutator(adt.AsStore(rt)).withDealStates(WritePermission).withDealsByEpoch(WritePermission).
 			withDealProposals(WritePermission).withPendingProposals(WritePermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
 		for i := st.LastCron + 1; i <= rt.CurrEpoch(); i++ {
 			err = msm.dealsByEpoch.ForEach(i, func(dealID abi.DealID) error {
-				deal, err := getDealProposal(msm.dealProposals, dealID)
+				deal, found, err := msm.dealProposals.Get(dealID)
 				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get dealId %d", dealID)
+				// deal could have terminated and hence deleted before the sector is terminated.
+				// we should simply continue instead of aborting execution here if a deal is not found.
+				if !found {
+					return nil
+				}
 
 				dcid, err := deal.Cid()
 				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate CID for proposal %v", dealID)
@@ -514,18 +543,18 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 					// Not yet appeared in proven sector; check for timeout.
 					AssertMsg(rt.CurrEpoch() >= deal.StartEpoch, "if sector start is not set, we must be in a timed out state")
 
-					slashed := msm.processDealInitTimedOut(rt, deal)
+					// no collateral required
+					/* slashed := msm.processDealInitTimedOut(rt, deal)
 					if !slashed.IsZero() {
 						amountSlashed = big.Add(amountSlashed, slashed)
 					}
 					if deal.VerifiedDeal {
 						timedOutVerifiedDeals = append(timedOutVerifiedDeals, deal)
-					}
+					} */
 
 					// we should not attempt to delete the DealState because it does NOT exist
-					if err := deleteDealProposalAndState(dealID, msm.dealStates, msm.dealProposals, true, false); err != nil {
-						builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal")
-					}
+					err := deleteDealProposalAndState(dealID, msm.dealStates, msm.dealProposals, true, false)
+					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal")
 
 					pdErr := msm.pendingDeals.Delete(abi.CidKey(dcid))
 					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal")
@@ -537,9 +566,22 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 				if state.LastUpdatedEpoch == epochUndefined {
 					pdErr := msm.pendingDeals.Delete(abi.CidKey(dcid))
 					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal")
+				} else {
+					AssertMsg(rt.CurrEpoch() >= state.LastUpdatedEpoch, "current epoch less than last update epoch")
 				}
 
-				slashAmount, nextEpoch, removeDeal := msm.updatePendingDealState(rt, state, deal, rt.CurrEpoch())
+				// sectors are terminated
+				if state.SlashEpoch != epochUndefined {
+					AssertMsg(rt.CurrEpoch() >= state.SlashEpoch, "current epoch less than slash epoch")
+					err := deleteDealProposalAndState(dealID, msm.dealStates, msm.dealProposals, true, true)
+					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal proposal and states")
+				} else {
+					// Update deal's LastUpdatedEpoch in DealStates
+					state.LastUpdatedEpoch = rt.CurrEpoch()
+					err = msm.dealStates.Set(dealID, state)
+					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set deal state")
+				}
+				/* slashAmount, nextEpoch, removeDeal := msm.updatePendingDealState(rt, state, deal, rt.CurrEpoch())
 				Assert(slashAmount.GreaterThanEqual(big.Zero()))
 
 				if removeDeal {
@@ -558,7 +600,7 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set deal state")
 
 					updatesNeeded[nextEpoch] = append(updatesNeeded[nextEpoch], dealID)
-				}
+				} */
 
 				return nil
 			})
@@ -568,7 +610,7 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal ops for epoch %v", i)
 		}
 
-		// Iterate changes in sorted order to ensure that loads/stores
+		/* // Iterate changes in sorted order to ensure that loads/stores
 		// are deterministic. Otherwise, we could end up charging an
 		// inconsistent amount of gas.
 		changedEpochs := make([]abi.ChainEpoch, 0, len(updatesNeeded))
@@ -581,7 +623,7 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		for _, epoch := range changedEpochs {
 			err = msm.dealsByEpoch.PutMany(epoch, updatesNeeded[epoch])
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to reinsert deal IDs for epoch %v", epoch)
-		}
+		} */
 
 		st.LastCron = rt.CurrEpoch()
 
@@ -589,7 +631,7 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
 	})
 
-	for _, d := range timedOutVerifiedDeals {
+	/* for _, d := range timedOutVerifiedDeals {
 		code := rt.Send(
 			builtin.VerifiedRegistryActorAddr,
 			builtin.MethodsVerifiedRegistry.RestoreBytes,
@@ -610,8 +652,43 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	if !amountSlashed.IsZero() {
 		e := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, amountSlashed, &builtin.Discard{})
 		builtin.RequireSuccess(rt, e, "expected send to burnt funds actor to succeed")
-	}
+	} */
 
+	return nil
+}
+
+type ResetQuotasParams struct {
+	NewQuotas []NewQuota
+}
+
+type NewQuota struct {
+	PieceCID cid.Cid `checked:"true"`
+	Quota    uint64
+}
+
+func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValue {
+	// TODO: validate caller
+	builtin.RequireParam(rt, len(params.NewQuotas) > 0, "empty params")
+
+	var st State
+	rt.StateTransaction(&st, func() {
+
+		msm, err := st.mutator(adt.AsStore(rt)).withQuotas(WritePermission).build()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
+
+		for _, newQuota := range params.NewQuotas {
+			found, err := msm.quotas.Get(abi.CidKey(newQuota.PieceCID), &builtin.Discard{})
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get deal")
+			builtin.RequireParam(rt, found, "piece cid not found")
+
+			quota := cbg.CborInt(newQuota.Quota)
+			err = msm.quotas.Put(abi.CidKey(newQuota.PieceCID), &quota)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set quota")
+		}
+
+		err = msm.commitState()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
+	})
 	return nil
 }
 
@@ -627,6 +704,11 @@ func genRandNextEpoch(currEpoch abi.ChainEpoch, deal *DealProposal, rbF func(cry
 	offset := binary.BigEndian.Uint64(rb)
 
 	return deal.StartEpoch + abi.ChainEpoch(offset%uint64(DealUpdatesInterval)), nil
+}
+
+func genTerminateEpoch(currEpoch abi.ChainEpoch, dealID abi.DealID) (abi.ChainEpoch, error) {
+	offset := uint64(dealID) % uint64(DealUpdatesInterval)
+	return currEpoch + DealTerminateLatency + abi.ChainEpoch(offset), nil
 }
 
 func deleteDealProposalAndState(dealId abi.DealID, states *DealMetaArray, proposals *DealArray, removeProposal bool,
@@ -653,67 +735,69 @@ func deleteDealProposalAndState(dealId abi.DealID, states *DealMetaArray, propos
 // Validates a collection of deal dealProposals for activation, and returns their combined weight,
 // split into regular deal weight and verified deal weight.
 func ValidateDealsForActivation(
-	st *State, store adt.Store, dealIDs []abi.DealID, minerAddr addr.Address, sectorExpiry, currEpoch abi.ChainEpoch,
-) (big.Int, big.Int, uint64, error) {
+	st *State, store adt.Store, dealIDs []abi.DealID, minerAddr addr.Address /* sectorExpiry, */, currEpoch abi.ChainEpoch,
+) ([]uint64, error) {
 
 	proposals, err := AsDealProposalArray(store, st.Proposals)
 	if err != nil {
-		return big.Int{}, big.Int{}, 0, xerrors.Errorf("failed to load dealProposals: %w", err)
+		return nil, xerrors.Errorf("failed to load dealProposals: %w", err)
 	}
 
 	seenDealIDs := make(map[abi.DealID]struct{}, len(dealIDs))
 
-	totalDealSpace := uint64(0)
+	dealSpaces := make([]uint64, len(dealIDs))
+	/* totalDealSpace := uint64(0)
 	totalDealSpaceTime := big.Zero()
-	totalVerifiedSpaceTime := big.Zero()
-	for _, dealID := range dealIDs {
+	totalVerifiedSpaceTime := big.Zero() */
+	for i, dealID := range dealIDs {
 		// Make sure we don't double-count deals.
 		if _, seen := seenDealIDs[dealID]; seen {
-			return big.Int{}, big.Int{}, 0, exitcode.ErrIllegalArgument.Wrapf("deal ID %d present multiple times", dealID)
+			return nil, exitcode.ErrIllegalArgument.Wrapf("deal ID %d present multiple times", dealID)
 		}
 		seenDealIDs[dealID] = struct{}{}
 
 		proposal, found, err := proposals.Get(dealID)
 		if err != nil {
-			return big.Int{}, big.Int{}, 0, xerrors.Errorf("failed to load deal %d: %w", dealID, err)
+			return nil, xerrors.Errorf("failed to load deal %d: %w", dealID, err)
 		}
 		if !found {
-			return big.Int{}, big.Int{}, 0, exitcode.ErrNotFound.Wrapf("no such deal %d", dealID)
+			return nil, exitcode.ErrNotFound.Wrapf("no such deal %d", dealID)
 		}
-		if err = validateDealCanActivate(proposal, minerAddr, sectorExpiry, currEpoch); err != nil {
-			return big.Int{}, big.Int{}, 0, xerrors.Errorf("cannot activate deal %d: %w", dealID, err)
+		if err = validateDealCanActivate(proposal, minerAddr /* sectorExpiry, */, currEpoch); err != nil {
+			return nil, xerrors.Errorf("cannot activate deal %d: %w", dealID, err)
 		}
 
-		// Compute deal weight
+		dealSpaces[i] = uint64(proposal.PieceSize)
+		/* // Compute deal weight
 		totalDealSpace += uint64(proposal.PieceSize)
 		dealSpaceTime := DealWeight(proposal)
 		if proposal.VerifiedDeal {
 			totalVerifiedSpaceTime = big.Add(totalVerifiedSpaceTime, dealSpaceTime)
 		} else {
 			totalDealSpaceTime = big.Add(totalDealSpaceTime, dealSpaceTime)
-		}
+		} */
 	}
-	return totalDealSpaceTime, totalVerifiedSpaceTime, totalDealSpace, nil
+	return /* totalDealSpaceTime totalVerifiedSpaceTime, totalDealSpace,*/ dealSpaces, nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Checks
 ////////////////////////////////////////////////////////////////////////////////
 
-func validateDealCanActivate(proposal *DealProposal, minerAddr addr.Address, sectorExpiration, currEpoch abi.ChainEpoch) error {
+func validateDealCanActivate(proposal *DealProposal, minerAddr addr.Address /* sectorExpiration, */, currEpoch abi.ChainEpoch) error {
 	if proposal.Provider != minerAddr {
 		return exitcode.ErrForbidden.Wrapf("proposal has provider %v, must be %v", proposal.Provider, minerAddr)
 	}
 	if currEpoch > proposal.StartEpoch {
 		return exitcode.ErrIllegalArgument.Wrapf("proposal start epoch %d has already elapsed at %d", proposal.StartEpoch, currEpoch)
 	}
-	if proposal.EndEpoch > sectorExpiration {
+	/* if proposal.EndEpoch > sectorExpiration {
 		return exitcode.ErrIllegalArgument.Wrapf("proposal expiration %d exceeds sector expiration %d", proposal.EndEpoch, sectorExpiration)
-	}
+	} */
 	return nil
 }
 
-func validateDeal(rt Runtime, deal ClientDealProposal, networkRawPower, networkQAPower, baselinePower abi.StoragePower) {
+func validateDeal(rt Runtime, deal ClientDealProposal /* networkRawPower, networkQAPower , baselinePower abi.StoragePower */) {
 	if err := dealProposalIsInternallyValid(rt, deal); err != nil {
 		rt.Abortf(exitcode.ErrIllegalArgument, "Invalid deal proposal: %s", err)
 	}
@@ -736,15 +820,15 @@ func validateDeal(rt Runtime, deal ClientDealProposal, networkRawPower, networkQ
 		rt.Abortf(exitcode.ErrIllegalArgument, "proposal PieceCID had wrong prefix")
 	}
 
-	if proposal.EndEpoch <= proposal.StartEpoch {
+	/* if proposal.EndEpoch <= proposal.StartEpoch {
 		rt.Abortf(exitcode.ErrIllegalArgument, "proposal end before proposal start")
-	}
+	} */
 
 	if rt.CurrEpoch() > proposal.StartEpoch {
 		rt.Abortf(exitcode.ErrIllegalArgument, "Deal start epoch has already elapsed.")
 	}
 
-	minDuration, maxDuration := DealDurationBounds(proposal.PieceSize)
+	/* minDuration, maxDuration := DealDurationBounds(proposal.PieceSize)
 	if proposal.Duration() < minDuration || proposal.Duration() > maxDuration {
 		rt.Abortf(exitcode.ErrIllegalArgument, "Deal duration out of bounds.")
 	}
@@ -763,7 +847,7 @@ func validateDeal(rt Runtime, deal ClientDealProposal, networkRawPower, networkQ
 	minClientCollateral, maxClientCollateral := DealClientCollateralBounds(proposal.PieceSize, proposal.Duration())
 	if proposal.ClientCollateral.LessThan(minClientCollateral) || proposal.ClientCollateral.GreaterThan(maxClientCollateral) {
 		rt.Abortf(exitcode.ErrIllegalArgument, "Client collateral out of bounds.")
-	}
+	} */
 }
 
 //
@@ -805,7 +889,7 @@ func getDealProposal(proposals *DealArray, dealID abi.DealID) (*DealProposal, er
 	return proposal, nil
 }
 
-// Requests the current epoch target block reward from the reward actor.
+/* // Requests the current epoch target block reward from the reward actor.
 func requestCurrentBaselinePower(rt Runtime) abi.StoragePower {
 	var ret reward.ThisEpochRewardReturn
 	code := rt.Send(builtin.RewardActorAddr, builtin.MethodsReward.ThisEpochReward, nil, big.Zero(), &ret)
@@ -819,4 +903,4 @@ func requestCurrentNetworkPower(rt Runtime) (rawPower, qaPower abi.StoragePower)
 	code := rt.Send(builtin.StoragePowerActorAddr, builtin.MethodsPower.CurrentTotalPower, nil, big.Zero(), &pwr)
 	builtin.RequireSuccess(rt, code, "failed to check current power")
 	return pwr.RawBytePower, pwr.QualityAdjPower
-}
+}*/

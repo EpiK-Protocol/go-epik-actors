@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	address "github.com/filecoin-project/go-address"
@@ -157,4 +157,4 @@ func (m *powerMigrator) migrateClaims(ctx context.Context, store cbor.IpldStore,
 	}
 
 	return outMap.Root()
-}
+} */

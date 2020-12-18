@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"bytes"
 	"context"
 
@@ -73,4 +73,4 @@ func migrateHAMTHAMTRaw(ctx context.Context, store cbor.IpldStore, root cid.Cid)
 	}
 	return store.Put(ctx, outRootNode)
 
-}
+} */

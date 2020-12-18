@@ -1,15 +1,9 @@
 package reward
 
 import (
-	"bytes"
-	"fmt"
 	gbig "math/big"
-	"testing"
 
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/stretchr/testify/assert"
-	"github.com/xorcare/golden"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/util/math"
 )
@@ -21,7 +15,7 @@ func q128ToF(x big.Int) float64 {
 	return res
 }
 
-func TestComputeRTeta(t *testing.T) {
+/* func TestComputeRTeta(t *testing.T) {
 	baselinePowerAt := func(epoch abi.ChainEpoch) abi.StoragePower {
 		return big.Mul(big.NewInt(int64(epoch+1)), big.NewInt(2048))
 	}
@@ -37,9 +31,9 @@ func TestComputeRTeta(t *testing.T) {
 		baselinePowerAt(16),
 		big.Add(cumsum15, big.Div(baselinePowerAt(16), big.NewInt(4))),
 		big.Add(cumsum15, baselinePowerAt(16)))))
-}
+} */
 
-func TestBaselineReward(t *testing.T) {
+/* func TestBaselineReward(t *testing.T) {
 	step := gbig.NewInt(5000)
 	step = step.Lsh(step, math.Precision128)
 	step = step.Sub(step, gbig.NewInt(77777777777)) // offset from full integers
@@ -151,3 +145,4 @@ func TestBaselineRewardGrowth(t *testing.T) {
 		assert.Less(t, perr, testCase.ErrBound)
 	}
 }
+*/

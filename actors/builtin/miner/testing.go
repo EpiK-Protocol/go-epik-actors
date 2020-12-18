@@ -12,8 +12,8 @@ import (
 )
 
 type DealSummary struct {
-	SectorStart      abi.ChainEpoch
-	SectorExpiration abi.ChainEpoch
+	SectorStart abi.ChainEpoch
+	// SectorExpiration abi.ChainEpoch
 }
 
 type StateSummary struct {
@@ -77,8 +77,8 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount) (
 
 			for _, dealID := range sector.DealIDs {
 				minerSummary.Deals[dealID] = DealSummary{
-					SectorStart:      sector.Activation,
-					SectorExpiration: sector.Expiration,
+					SectorStart: sector.Activation,
+					// SectorExpiration: sector.Expiration,
 				}
 			}
 
@@ -462,11 +462,11 @@ func CheckPartitionStateInvariants(
 }
 
 type ExpirationQueueStateSummary struct {
-	OnTimeSectors    bitfield.BitField
-	EarlySectors     bitfield.BitField
-	ActivePower      PowerPair
-	FaultyPower      PowerPair
-	OnTimePledge     abi.TokenAmount
+	OnTimeSectors bitfield.BitField
+	EarlySectors  bitfield.BitField
+	ActivePower   PowerPair
+	FaultyPower   PowerPair
+	/* OnTimePledge     abi.TokenAmount */
 	ExpirationEpochs []abi.ChainEpoch
 }
 
@@ -485,7 +485,7 @@ func CheckExpirationQueue(expQ ExpirationQueue, liveSectors map[abi.SectorNumber
 	var expirationEpochs []abi.ChainEpoch
 	allActivePower := NewPowerPairZero()
 	allFaultyPower := NewPowerPairZero()
-	allOnTimePledge := big.Zero()
+	/* allOnTimePledge := big.Zero() */
 	firstQueueEpoch := abi.ChainEpoch(-1)
 	var exp ExpirationSet
 	err = expQ.ForEach(&exp, func(e int64) error {
@@ -498,14 +498,14 @@ func CheckExpirationQueue(expQ ExpirationQueue, liveSectors map[abi.SectorNumber
 		}
 		expirationEpochs = append(expirationEpochs, epoch)
 
-		onTimeSectorsPledge := big.Zero()
+		/* onTimeSectorsPledge := big.Zero() */
 		err := exp.OnTimeSectors.ForEach(func(n uint64) error {
 			sno := abi.SectorNumber(n)
 			// Check sectors are present only once.
 			acc.Require(!seenSectors[sno], "sector %d in expiration queue twice", sno)
 			seenSectors[sno] = true
 
-			// Check expiring sectors are still alive.
+			/* // Check expiring sectors are still alive.
 			if sector, ok := liveSectors[sno]; ok {
 				// The sector can be "on time" either at its target expiration epoch, or in the first queue entry
 				// (a CC-replaced sector moved forward).
@@ -516,7 +516,7 @@ func CheckExpirationQueue(expQ ExpirationQueue, liveSectors map[abi.SectorNumber
 				onTimeSectorsPledge = big.Add(onTimeSectorsPledge, sector.InitialPledge)
 			} else {
 				acc.Addf("on-time expiration sector %d isn't live", n)
-			}
+			} */
 			return nil
 		})
 		acc.RequireNoError(err, "error iterating on-time sectors")
@@ -530,14 +530,14 @@ func CheckExpirationQueue(expQ ExpirationQueue, liveSectors map[abi.SectorNumber
 			// Check early sectors are faulty
 			acc.Require(partitionFaultsMap == nil || partitionFaultsMap[n], "sector %d expiring early but not faulty", sno)
 
-			// Check expiring sectors are still alive.
+			/* // Check expiring sectors are still alive.
 			if sector, ok := liveSectors[sno]; ok {
 				target := quant.QuantizeUp(sector.Expiration)
 				acc.Require(epoch < target, "invalid early expiration %d for sector %d, expected < %d",
 					epoch, sector.SectorNumber, target)
 			} else {
 				acc.Addf("on-time expiration sector %d isn't live", n)
-			}
+			} */
 			return nil
 		})
 		acc.RequireNoError(err, "error iterating early sectors")
@@ -583,13 +583,13 @@ func CheckExpirationQueue(expQ ExpirationQueue, liveSectors map[abi.SectorNumber
 			acc.Require(exp.FaultyPower.Equals(faultySectorsPower), "faulty power recorded %v doesn't match computed %v", exp.FaultyPower, faultySectorsPower)
 		}
 
-		acc.Require(exp.OnTimePledge.Equals(onTimeSectorsPledge), "on time pledge recorded %v doesn't match computed %v", exp.OnTimePledge, onTimeSectorsPledge)
+		/* acc.Require(exp.OnTimePledge.Equals(onTimeSectorsPledge), "on time pledge recorded %v doesn't match computed %v", exp.OnTimePledge, onTimeSectorsPledge) */
 
 		allOnTime = append(allOnTime, exp.OnTimeSectors)
 		allEarly = append(allEarly, exp.EarlySectors)
 		allActivePower = allActivePower.Add(exp.ActivePower)
 		allFaultyPower = allFaultyPower.Add(exp.FaultyPower)
-		allOnTimePledge = big.Add(allOnTimePledge, exp.OnTimePledge)
+		/* allOnTimePledge = big.Add(allOnTimePledge, exp.OnTimePledge) */
 		return nil
 	})
 	acc.RequireNoError(err, "error iterating expiration queue")
@@ -605,11 +605,11 @@ func CheckExpirationQueue(expQ ExpirationQueue, liveSectors map[abi.SectorNumber
 		unionEarly = bitfield.New()
 	}
 	return &ExpirationQueueStateSummary{
-		OnTimeSectors:    unionOnTime,
-		EarlySectors:     unionEarly,
-		ActivePower:      allActivePower,
-		FaultyPower:      allFaultyPower,
-		OnTimePledge:     allOnTimePledge,
+		OnTimeSectors: unionOnTime,
+		EarlySectors:  unionEarly,
+		ActivePower:   allActivePower,
+		FaultyPower:   allFaultyPower,
+		/* OnTimePledge:     allOnTimePledge, */
 		ExpirationEpochs: expirationEpochs,
 	}
 }
@@ -675,13 +675,13 @@ func CheckMinerInfo(info *MinerInfo, acc *builtin.MessageAccumulator) {
 func CheckMinerBalances(st *State, store adt.Store, balance abi.TokenAmount, acc *builtin.MessageAccumulator) {
 	acc.Require(balance.GreaterThanEqual(big.Zero()), "miner actor balance is less than zero: %v", balance)
 	acc.Require(st.LockedFunds.GreaterThanEqual(big.Zero()), "miner locked funds is less than zero: %v", st.LockedFunds)
-	acc.Require(st.PreCommitDeposits.GreaterThanEqual(big.Zero()), "miner precommit deposit is less than zero: %v", st.PreCommitDeposits)
-	acc.Require(st.InitialPledge.GreaterThanEqual(big.Zero()), "miner initial pledge is less than zero: %v", st.InitialPledge)
+	/* acc.Require(st.PreCommitDeposits.GreaterThanEqual(big.Zero()), "miner precommit deposit is less than zero: %v", st.PreCommitDeposits) */
+	acc.Require(st.TotalPledge.GreaterThanEqual(big.Zero()), "miner initial pledge is less than zero: %v", st.TotalPledge)
 	acc.Require(st.FeeDebt.GreaterThanEqual(big.Zero()), "miner fee debt is less than zero: %v", st.FeeDebt)
 
-	acc.Require(big.Subtract(balance, st.LockedFunds, st.PreCommitDeposits, st.InitialPledge).GreaterThanEqual(big.Zero()),
-		"miner balance (%v) is less than sum of locked funds (%v), precommit deposit (%v), and initial pledge (%v)",
-		balance, st.LockedFunds, st.PreCommitDeposits, st.InitialPledge)
+	/* acc.Require(big.Subtract(balance, st.LockedFunds, st.PreCommitDeposits, st.InitialPledge).GreaterThanEqual(big.Zero()),
+	"miner balance (%v) is less than sum of locked funds (%v), precommit deposit (%v), and initial pledge (%v)",
+	balance, st.LockedFunds, st.PreCommitDeposits, st.InitialPledge) */
 
 	// locked funds must be sum of vesting table and vesting table payments must be quantized
 	vestingSum := big.Zero()
@@ -724,7 +724,7 @@ func CheckPreCommits(st *State, store adt.Store, allocatedSectors map[uint64]boo
 		acc.RequireNoError(err, "error iterating pre-commit expiry queue")
 	}
 
-	precommitTotal := big.Zero()
+	/* precommitTotal := big.Zero() */
 	if precommitted, err := adt.AsMap(store, st.PreCommittedSectors); err != nil {
 		acc.Addf("error loading precommitted sectors: %v", err)
 	} else {
@@ -741,14 +741,14 @@ func CheckPreCommits(st *State, store adt.Store, allocatedSectors map[uint64]boo
 			_, found := expireEpochs[secNum]
 			acc.Require(found, "no expiry epoch for pre-commit at %d", precommit.PreCommitEpoch)
 
-			precommitTotal = big.Add(precommitTotal, precommit.PreCommitDeposit)
+			/* precommitTotal = big.Add(precommitTotal, precommit.PreCommitDeposit) */
 			return nil
 		})
 		acc.RequireNoError(err, "error iterating pre-committed sectors")
 	}
 
-	acc.Require(st.PreCommitDeposits.Equals(precommitTotal),
-		"sum of precommit deposits %v does not equal recorded precommit deposit %v", precommitTotal, st.PreCommitDeposits)
+	/* acc.Require(st.PreCommitDeposits.Equals(precommitTotal),
+	"sum of precommit deposits %v does not equal recorded precommit deposit %v", precommitTotal, st.PreCommitDeposits) */
 }
 
 // Selects a subset of sectors from a map by sector number.
@@ -771,9 +771,9 @@ func selectSectorsMap(sectors map[abi.SectorNumber]*SectorOnChainInfo, include b
 
 func powerForSectors(sectors map[abi.SectorNumber]*SectorOnChainInfo, ssize abi.SectorSize) PowerPair {
 	qa := big.Zero()
-	for _, s := range sectors { // nolint:nomaprange
+	/* for _, s := range sectors { // nolint:nomaprange
 		qa = big.Add(qa, QAPowerForSector(ssize, s))
-	}
+	} */
 
 	return PowerPair{
 		Raw: big.Mul(big.NewIntUnsigned(uint64(ssize)), big.NewIntUnsigned(uint64(len(sectors)))),

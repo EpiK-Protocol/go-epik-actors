@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"bytes"
 	"context"
 
@@ -457,4 +457,4 @@ func copyES(in miner.ExpirationSet) (miner.ExpirationSet, error) {
 		ActivePower:   in.ActivePower,
 		FaultyPower:   in.FaultyPower,
 	}, nil
-}
+} */

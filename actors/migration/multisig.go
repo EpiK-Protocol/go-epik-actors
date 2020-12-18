@@ -1,6 +1,6 @@
 package migration
 
-import (
+/* import (
 	"context"
 
 	addr "github.com/filecoin-project/go-address"
@@ -57,3 +57,4 @@ func (m *multisigMigrator) migratePending(ctx context.Context, store cbor.IpldSt
 
 	return migrateHAMTRaw(ctx, store, root)
 }
+*/

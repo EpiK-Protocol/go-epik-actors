@@ -15,14 +15,13 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 )
 
-// genesis power in bytes = 750,000 GiB
+/* // genesis power in bytes = 750,000 GiB
 var InitialQAPowerEstimatePosition = big.Mul(big.NewInt(750_000), big.NewInt(1<<30))
 
 // max chain throughput in bytes per epoch = 120 ProveCommits / epoch = 3,840 GiB
-var InitialQAPowerEstimateVelocity = big.Mul(big.NewInt(3_840), big.NewInt(1<<30))
+var InitialQAPowerEstimateVelocity = big.Mul(big.NewInt(3_840), big.NewInt(1<<30)) */
 
 type State struct {
 	TotalRawBytePower abi.StoragePower
@@ -38,7 +37,7 @@ type State struct {
 	ThisEpochRawBytePower     abi.StoragePower
 	ThisEpochQualityAdjPower  abi.StoragePower
 	ThisEpochPledgeCollateral abi.TokenAmount
-	ThisEpochQAPowerSmoothed  smoothing.FilterEstimate
+	// ThisEpochQAPowerSmoothed  smoothing.FilterEstimate
 
 	MinerCount int64
 	// Number of miners having proven the minimum consensus power.
@@ -71,6 +70,8 @@ type Claim struct {
 
 	// Sum of quality adjusted power for a miner's sectors.
 	QualityAdjPower abi.StoragePower
+
+	PledgeSufficient bool
 }
 
 type CronEvent struct {
@@ -88,12 +89,12 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 		ThisEpochRawBytePower:     abi.NewStoragePower(0),
 		ThisEpochQualityAdjPower:  abi.NewStoragePower(0),
 		ThisEpochPledgeCollateral: abi.NewTokenAmount(0),
-		ThisEpochQAPowerSmoothed:  smoothing.NewEstimate(InitialQAPowerEstimatePosition, InitialQAPowerEstimateVelocity),
-		FirstCronEpoch:            0,
-		CronEventQueue:            emptyMMapCid,
-		Claims:                    emptyMapCid,
-		MinerCount:                0,
-		MinerAboveMinPowerCount:   0,
+		// ThisEpochQAPowerSmoothed:  smoothing.NewEstimate(InitialQAPowerEstimatePosition, InitialQAPowerEstimateVelocity),
+		FirstCronEpoch:          0,
+		CronEventQueue:          emptyMMapCid,
+		Claims:                  emptyMapCid,
+		MinerCount:              0,
+		MinerAboveMinPowerCount: 0,
 	}
 }
 
@@ -136,13 +137,13 @@ func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 }
 
 // Parameters may be negative to subtract.
-func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePower, qapower abi.StoragePower) error {
+func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePower, qapower abi.StoragePower, pledgeSufficient bool) error {
 	claims, err := adt.AsMap(s, st.Claims)
 	if err != nil {
 		return xerrors.Errorf("failed to load claims: %w", err)
 	}
 
-	if err := st.addToClaim(claims, miner, power, qapower); err != nil {
+	if err := st.addToClaim(claims, miner, power, qapower, pledgeSufficient); err != nil {
 		return xerrors.Errorf("failed to add claim: %w", err)
 	}
 
@@ -162,7 +163,14 @@ func (st *State) GetClaim(s adt.Store, a addr.Address) (*Claim, bool, error) {
 	return getClaim(claims, a)
 }
 
-func (st *State) addToClaim(claims *adt.Map, miner addr.Address, power abi.StoragePower, qapower abi.StoragePower) error {
+// Parameters may be negative to subtract.
+func (st *State) addToClaim(
+	claims *adt.Map,
+	miner addr.Address,
+	power abi.StoragePower,
+	qapower abi.StoragePower,
+	pledgeSufficient bool,
+) error {
 	oldClaim, ok, err := getClaim(claims, miner)
 	if err != nil {
 		return fmt.Errorf("failed to get claim: %w", err)
@@ -176,30 +184,30 @@ func (st *State) addToClaim(claims *adt.Map, miner addr.Address, power abi.Stora
 	st.TotalBytesCommitted = big.Add(st.TotalBytesCommitted, power)
 
 	newClaim := Claim{
-		SealProofType:   oldClaim.SealProofType,
-		RawBytePower:    big.Add(oldClaim.RawBytePower, power),
-		QualityAdjPower: big.Add(oldClaim.QualityAdjPower, qapower),
+		SealProofType:    oldClaim.SealProofType,
+		RawBytePower:     big.Add(oldClaim.RawBytePower, power),
+		QualityAdjPower:  big.Add(oldClaim.QualityAdjPower, qapower),
+		PledgeSufficient: pledgeSufficient,
 	}
 
 	minPower, err := builtin.ConsensusMinerMinPower(oldClaim.SealProofType)
 	if err != nil {
 		return fmt.Errorf("could not get consensus miner min power: %w", err)
 	}
-
 	prevBelow := oldClaim.RawBytePower.LessThan(minPower)
 	stillBelow := newClaim.RawBytePower.LessThan(minPower)
 
-	if prevBelow && !stillBelow {
+	if !stillBelow && newClaim.PledgeSufficient && (prevBelow || !oldClaim.PledgeSufficient) {
 		// just passed min miner size
 		st.MinerAboveMinPowerCount++
 		st.TotalQualityAdjPower = big.Add(st.TotalQualityAdjPower, newClaim.QualityAdjPower)
 		st.TotalRawBytePower = big.Add(st.TotalRawBytePower, newClaim.RawBytePower)
-	} else if !prevBelow && stillBelow {
+	} else if (!prevBelow && stillBelow) || (oldClaim.PledgeSufficient && !newClaim.PledgeSufficient) {
 		// just went below min miner size
 		st.MinerAboveMinPowerCount--
 		st.TotalQualityAdjPower = big.Sub(st.TotalQualityAdjPower, oldClaim.QualityAdjPower)
 		st.TotalRawBytePower = big.Sub(st.TotalRawBytePower, oldClaim.RawBytePower)
-	} else if !prevBelow && !stillBelow {
+	} else if !prevBelow && !stillBelow && oldClaim.PledgeSufficient && newClaim.PledgeSufficient {
 		// Was above the threshold, still above
 		st.TotalQualityAdjPower = big.Add(st.TotalQualityAdjPower, qapower)
 		st.TotalRawBytePower = big.Add(st.TotalRawBytePower, power)
@@ -221,7 +229,7 @@ func (st *State) deleteClaim(claims *adt.Map, miner addr.Address) error {
 	}
 
 	// subtract from stats as if we were simply removing power
-	err = st.addToClaim(claims, miner, oldClaim.RawBytePower.Neg(), oldClaim.QualityAdjPower.Neg())
+	err = st.addToClaim(claims, miner, oldClaim.RawBytePower.Neg(), oldClaim.QualityAdjPower.Neg(), oldClaim.PledgeSufficient)
 	if err != nil {
 		return fmt.Errorf("failed to subtract miner power before deleting claim: %w", err)
 	}
@@ -260,10 +268,10 @@ func (st *State) appendCronEvent(events *adt.Multimap, epoch abi.ChainEpoch, eve
 	return nil
 }
 
-func (st *State) updateSmoothedEstimate(delta abi.ChainEpoch) {
+/* func (st *State) updateSmoothedEstimate(delta abi.ChainEpoch) {
 	filterQAPower := smoothing.LoadFilter(st.ThisEpochQAPowerSmoothed, smoothing.DefaultAlpha, smoothing.DefaultBeta)
 	st.ThisEpochQAPowerSmoothed = filterQAPower.NextEstimate(st.ThisEpochQualityAdjPower, delta)
-}
+} */
 
 func loadCronEvents(mmap *adt.Multimap, epoch abi.ChainEpoch) ([]CronEvent, error) {
 	var events []CronEvent

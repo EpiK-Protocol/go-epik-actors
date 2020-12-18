@@ -1,7 +1,10 @@
 package smoothing_test
 
 import (
+	"fmt"
 	"testing"
+
+	mb "math/big"
 
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -166,4 +169,23 @@ func perMillionError(val1, val2 big.Int) big.Int {
 		perMillion = perMillion.Neg()
 	}
 	return big.Rsh(perMillion, 2*math.Precision128)
+}
+
+func TestT(t *testing.T) {
+	// Alpha Beta Filter constants
+	constStrs := []string{
+		"314760000000000000000000000000000000", // DefaultAlpha
+		"96640100000000000000000000000000",     // DefaultBeta
+		"302231454903657293676544",             // Epsilon
+
+	}
+	constBigs := math.Parse(constStrs)
+	for _, b := range constBigs {
+		f := mb.NewFloat(0).SetInt(b)
+		fmt.Println(f.String())
+	}
+
+	bi := big.Lsh(big.NewInt(284), math.Precision128)
+	bi = big.Div(bi, big.NewInt(1000000000))
+	fmt.Println(bi)
 }

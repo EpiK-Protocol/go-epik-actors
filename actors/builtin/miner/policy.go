@@ -9,7 +9,7 @@ import (
 	mh "github.com/multiformats/go-multihash"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-)
+	/* . "github.com/filecoin-project/specs-actors/v2/actors/util" */)
 
 // The period over which a miner's active sectors are expected to be proven via WindowPoSt.
 // This guarantees that (1) user data is proven weekly, (2) user data is stored for 24h by a rational miner
@@ -19,17 +19,16 @@ var WPoStProvingPeriod = abi.ChainEpoch(7 * builtin.EpochsInDay) // 7 * 24 hours
 // The period between the opening and the closing of a WindowPoSt deadline in which the miner is expected to
 // provide a Window PoSt proof.
 // This provides a miner enough time to compute and propagate a Window PoSt proof.
-var WPoStChallengeWindow = abi.ChainEpoch(180 * 60 / builtin.EpochDurationSeconds) //  3 hours (56 per week) PARAM_SPEC
+var WPoStChallengeWindow = abi.ChainEpoch(30 * 60 / builtin.EpochDurationSeconds) //  30 minutes (336 per week) PARAM_SPEC
 
 // The number of non-overlapping PoSt deadlines in a proving period.
 // This spreads a miner's Window PoSt work across a proving period.
-const WPoStPeriodDeadlines = uint64(56) // PARAM_SPEC
+const WPoStPeriodDeadlines = uint64(336) // PARAM_SPEC
 
 // MaxPartitionsPerDeadline is the maximum number of partitions that will be assigned to a deadline.
-// For a minimum storage of upto 1Eib, we need 300 partitions per deadline.
-// 48 * 32GiB * 2349 * 300 = 1.00808144 EiB
-// So, to support upto 10Eib storage, we set this to 3000.
-const MaxPartitionsPerDeadline = 10000
+// For a minimum storage of upto 15Tib, we need 3_000 partitions per deadline.
+// 336 * 8MiB * 2 * 3_000 = 15.380859375 TiB
+const MaxPartitionsPerDeadline = 3_000
 
 func init() {
 	// Check that the challenge windows divide the proving period evenly.
@@ -134,7 +133,7 @@ var FaultMaxAge = WPoStProvingPeriod * 4 // PARAM_SPEC
 // This delay prevents a miner choosing a more favorable worker key that wins leader elections.
 const WorkerKeyChangeDelay = ChainFinality // PARAM_SPEC
 
-// Minimum number of epochs past the current epoch a sector may be set to expire.
+/* // Minimum number of epochs past the current epoch a sector may be set to expire.
 const MinSectorExpiration = 180 * builtin.EpochsInDay // PARAM_SPEC
 
 // The maximum number of epochs past the current epoch that sector lifetime may be extended.
@@ -144,14 +143,17 @@ const MaxSectorExpirationExtension = 1050 * builtin.EpochsInDay // PARAM_SPEC
 
 // Ratio of sector size to maximum number of deals per sector.
 // The maximum number of deals is the sector size divided by this number (2^27)
-// which limits 32GiB sectors to 256 deals and 64GiB sectors to 512
-const DealLimitDenominator = 134217728 // PARAM_SPEC
+// which limits 32GiB sectors to 256 deals and 64GiB sectors to 512 */
+// 32KiB per deal
+const DealLimitDenominator = 32768 // PARAM_SPEC
+
+const DealWinIncentiveMultiplier = 2
 
 // Number of epochs after a consensus fault for which a miner is ineligible
 // for permissioned actor methods and winning block elections.
 const ConsensusFaultIneligibilityDuration = ChainFinality
 
-// DealWeight and VerifiedDealWeight are spacetime occupied by regular deals and verified deals in a sector.
+/* // DealWeight and VerifiedDealWeight are spacetime occupied by regular deals and verified deals in a sector.
 // Sum of DealWeight and VerifiedDealWeight should be less than or equal to total SpaceTime of a sector.
 // Sectors full of VerifiedDeals will have a SectorQuality of VerifiedDealWeightMultiplier/QualityBaseMultiplier.
 // Sectors full of Deals will have a SectorQuality of DealWeightMultiplier/QualityBaseMultiplier.
@@ -192,6 +194,24 @@ func QAPowerForWeight(size abi.SectorSize, duration abi.ChainEpoch, dealWeight, 
 func QAPowerForSector(size abi.SectorSize, sector *SectorOnChainInfo) abi.StoragePower {
 	duration := sector.Expiration - sector.Activation
 	return QAPowerForWeight(size, duration, sector.DealWeight, sector.VerifiedDealWeight)
+}*/
+
+// dealWeight == dealSpace
+func QAPowerForWeight(dealWin bool, dealSpace uint64) abi.StoragePower {
+	pwr := big.Mul(big.NewIntUnsigned(dealSpace), big.Lsh(builtin.VerifiedDealWeightMultiplier, builtin.SectorQualityPrecision))
+	if dealWin {
+		pwr = big.Mul(pwr, big.NewInt(DealWinIncentiveMultiplier))
+	}
+	pwr = big.Div(pwr, builtin.QualityBaseMultiplier)
+	return big.Rsh(pwr, builtin.SectorQualityPrecision)
+}
+
+func QAPowerForSector(sector *SectorOnChainInfo) abi.StoragePower {
+	pwr := big.Zero()
+	for i := range sector.DealIDs {
+		pwr = big.Add(pwr, QAPowerForWeight(sector.DealWins[i].Bool, sector.DealSpaces[i]))
+	}
+	return pwr
 }
 
 // Determine maximum number of deal miner's sector can hold
@@ -268,3 +288,5 @@ func RewardForConsensusSlashReport(elapsedEpoch abi.ChainEpoch, collateral abi.T
 	return big.Min(big.Div(num, denom), big.Div(big.Mul(collateral, consensusFaultMaxReporterShare.Numerator),
 		consensusFaultMaxReporterShare.Denominator))
 }
+
+var ConsensusMinerMinPledge = big.Mul(big.NewInt(1000), builtin.TokenPrecision) // 1000 EPK

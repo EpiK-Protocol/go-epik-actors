@@ -21,6 +21,7 @@ const SecondsInHour = 60 * 60
 const SecondsInDay = 24 * SecondsInHour
 const EpochsInHour = SecondsInHour / EpochDurationSeconds
 const EpochsInDay = SecondsInDay / EpochDurationSeconds
+const EpochsInYear = 365 * EpochsInDay
 
 // PARAM_SPEC
 // Expected number of block quality in an epoch (e.g. 1 block with block quality 5, or 5 blocks with quality 1)
@@ -38,19 +39,19 @@ func init() {
 	}
 }
 
-// Number of token units in an abstract "FIL" token.
+// Number of token units in an abstract "EPK" token.
 // The network works purely in the indivisible token amounts. This constant converts to a fixed decimal with more
 // human-friendly scale.
 var TokenPrecision = big.NewIntUnsigned(1_000_000_000_000_000_000)
 
-// The maximum supply of Filecoin that will ever exist (in token units)
-var TotalFilecoin = big.Mul(big.NewIntUnsigned(1_000_000_000), TokenPrecision)
+// The maximum supply of EPK that will ever exist (in token units)
+var TotalEPK = big.Mul(big.NewIntUnsigned(1_000_000_000), TokenPrecision)
 
 // Quality multiplier for committed capacity (no deals) in a sector
 var QualityBaseMultiplier = big.NewInt(10)
 
-// Quality multiplier for unverified deals in a sector
-var DealWeightMultiplier = big.NewInt(10)
+/* // Quality multiplier for unverified deals in a sector
+var DealWeightMultiplier = big.NewInt(10) */
 
 // Quality multiplier for verified deals in a sector
 var VerifiedDealWeightMultiplier = big.NewInt(100)

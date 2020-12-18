@@ -60,7 +60,8 @@ var MethodsMarket = struct {
 	OnMinerSectorsTerminate  abi.MethodNum
 	ComputeDataCommitment    abi.MethodNum
 	CronTick                 abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9}
+	ResetQuotas              abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 var MethodsPower = struct {
 	Constructor              abi.MethodNum
@@ -83,7 +84,7 @@ var MethodsMiner = struct {
 	SubmitWindowedPoSt       abi.MethodNum
 	PreCommitSector          abi.MethodNum
 	ProveCommitSector        abi.MethodNum
-	ExtendSectorExpiration   abi.MethodNum
+	ChangeOwnerAddress       abi.MethodNum
 	TerminateSectors         abi.MethodNum
 	DeclareFaults            abi.MethodNum
 	DeclareFaultsRecovered   abi.MethodNum
@@ -98,17 +99,19 @@ var MethodsMiner = struct {
 	CompactSectorNumbers     abi.MethodNum
 	ConfirmUpdateWorkerKey   abi.MethodNum
 	RepayDebt                abi.MethodNum
-	ChangeOwnerAddress       abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23}
+	AddPledge                abi.MethodNum
+	WithdrawPledge           abi.MethodNum
+	ChangeCoinbase           abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25}
 
-var MethodsVerifiedRegistry = struct {
-	Constructor       abi.MethodNum
-	AddVerifier       abi.MethodNum
-	RemoveVerifier    abi.MethodNum
-	AddVerifiedClient abi.MethodNum
-	UseBytes          abi.MethodNum
-	RestoreBytes      abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6}
+// var MethodsVerifiedRegistry = struct {
+// 	Constructor       abi.MethodNum
+// 	AddVerifier       abi.MethodNum
+// 	RemoveVerifier    abi.MethodNum
+// 	AddVerifiedClient abi.MethodNum
+// 	UseBytes          abi.MethodNum
+// 	RestoreBytes      abi.MethodNum
+// }{MethodConstructor, 2, 3, 4, 5, 6}
 
 var MethodsExpert = struct {
 	Constructor      abi.MethodNum
@@ -157,9 +160,7 @@ var MethodsRetrieval = struct {
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}
 
 var MethodsKnowledge = struct {
-	Constructor         abi.MethodNum
-	ChangePayee         abi.MethodNum
-	AssignUndistributed abi.MethodNum
-	ApplyRewards        abi.MethodNum
-	WithdrawBalance     abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5}
+	Constructor  abi.MethodNum
+	ChangePayee  abi.MethodNum
+	ApplyRewards abi.MethodNum
+}{MethodConstructor, 2, 3}

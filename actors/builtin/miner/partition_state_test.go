@@ -330,7 +330,7 @@ func TestPartitions(t *testing.T) {
 		// remove 3 sectors starting with 2
 		oldSectors := sectors[1:4]
 		oldSectorPower := miner.PowerForSectors(sectorSize, oldSectors)
-		oldSectorPledge := int64(1001 + 1002 + 1003)
+		/* oldSectorPledge := int64(1001 + 1002 + 1003) */
 
 		// replace 1 and add 2 new sectors
 		newSectors := []*miner.SectorOnChainInfo{
@@ -339,14 +339,14 @@ func TestPartitions(t *testing.T) {
 			testSector(18, 8, 152, 262, 3002),
 		}
 		newSectorPower := miner.PowerForSectors(sectorSize, newSectors)
-		newSectorPledge := int64(3000 + 3001 + 3002)
+		/* newSectorPledge := int64(3000 + 3001 + 3002) */
 
-		powerDelta, pledgeDelta, err := partition.ReplaceSectors(store, oldSectors, newSectors, sectorSize, quantSpec)
+		powerDelta /* pledgeDelta, */, err := partition.ReplaceSectors(store, oldSectors, newSectors, sectorSize, quantSpec)
 		require.NoError(t, err)
 
 		expectedPowerDelta := newSectorPower.Sub(oldSectorPower)
 		assert.True(t, expectedPowerDelta.Equals(powerDelta))
-		assert.Equal(t, abi.NewTokenAmount(newSectorPledge-oldSectorPledge), pledgeDelta)
+		/* assert.Equal(t, abi.NewTokenAmount(newSectorPledge-oldSectorPledge), pledgeDelta) */
 
 		// partition state should contain new sectors and not old sectors
 		allSectors := append(newSectors, sectors[:1]...)
@@ -378,7 +378,7 @@ func TestPartitions(t *testing.T) {
 			testSector(10, 2, 150, 260, 3000),
 		}
 
-		_, _, err = partition.ReplaceSectors(store, oldSectors, newSectors, sectorSize, quantSpec)
+		_, err = partition.ReplaceSectors(store, oldSectors, newSectors, sectorSize, quantSpec)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "refusing to replace inactive sectors")
 	})
@@ -394,7 +394,7 @@ func TestPartitions(t *testing.T) {
 			testSector(10, 2, 150, 260, 3000),
 		}
 
-		_, _, err := partition.ReplaceSectors(store, oldSectors, newSectors, sectorSize, quantSpec)
+		_, err := partition.ReplaceSectors(store, oldSectors, newSectors, sectorSize, quantSpec)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "refusing to replace inactive sectors")
 	})
@@ -521,7 +521,7 @@ func TestPartitions(t *testing.T) {
 
 		assertBitfieldEquals(t, expset.OnTimeSectors, 1, 2)
 		assertBitfieldEquals(t, expset.EarlySectors, 4)
-		assert.Equal(t, abi.NewTokenAmount(1000+1001), expset.OnTimePledge)
+		/* assert.Equal(t, abi.NewTokenAmount(1000+1001), expset.OnTimePledge) */
 
 		// active power only contains power from non-faulty sectors
 		assert.True(t, expset.ActivePower.Equals(miner.PowerForSectors(sectorSize, sectors[:2])))

@@ -9,23 +9,23 @@ import (
 
 // The built-in actor code IDs
 var (
-	SystemActorCodeID           cid.Cid
-	InitActorCodeID             cid.Cid
-	CronActorCodeID             cid.Cid
-	AccountActorCodeID          cid.Cid
-	StoragePowerActorCodeID     cid.Cid
-	StorageMinerActorCodeID     cid.Cid
-	StorageMarketActorCodeID    cid.Cid
-	PaymentChannelActorCodeID   cid.Cid
-	MultisigActorCodeID         cid.Cid
-	RewardActorCodeID           cid.Cid
-	VerifiedRegistryActorCodeID cid.Cid
-	CallerTypesSignable         []cid.Cid
-	ExpertActorCodeID           cid.Cid
-	ExpertFundActorCodeID       cid.Cid
-	VoteActorCodeID             cid.Cid
-	RetrievalActorCodeID        cid.Cid
-	KnowledgeActorCodeID        cid.Cid
+	SystemActorCodeID         cid.Cid
+	InitActorCodeID           cid.Cid
+	CronActorCodeID           cid.Cid
+	AccountActorCodeID        cid.Cid
+	StoragePowerActorCodeID   cid.Cid
+	StorageMinerActorCodeID   cid.Cid
+	StorageMarketActorCodeID  cid.Cid
+	PaymentChannelActorCodeID cid.Cid
+	MultisigActorCodeID       cid.Cid
+	RewardActorCodeID         cid.Cid
+	GovernActorCodeID         cid.Cid
+	CallerTypesSignable       []cid.Cid
+	ExpertActorCodeID         cid.Cid
+	ExpertFundActorCodeID     cid.Cid
+	VoteActorCodeID           cid.Cid
+	RetrievalActorCodeID      cid.Cid
+	KnowledgeActorCodeID      cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -40,22 +40,22 @@ func init() {
 	builtinActors = make(map[cid.Cid]*actorInfo)
 
 	for id, info := range map[*cid.Cid]*actorInfo{ //nolint:nomaprange
-		&SystemActorCodeID:           {name: "epk/1/system"},
-		&InitActorCodeID:             {name: "epk/1/init"},
-		&CronActorCodeID:             {name: "epk/1/cron"},
-		&StoragePowerActorCodeID:     {name: "epk/1/storagepower"},
-		&StorageMinerActorCodeID:     {name: "epk/1/storageminer"},
-		&StorageMarketActorCodeID:    {name: "epk/1/storagemarket"},
-		&PaymentChannelActorCodeID:   {name: "epk/1/paymentchannel"},
-		&RewardActorCodeID:           {name: "epk/1/reward"},
-		&VerifiedRegistryActorCodeID: {name: "epk/1/verifiedregistry"},
-		&AccountActorCodeID:          {name: "epk/1/account", signer: true},
-		&MultisigActorCodeID:         {name: "epk/1/multisig", signer: true},
-		&ExpertActorCodeID:           {name: "epk/1/expert"},
-		&ExpertFundActorCodeID:       {name: "epk/1/expertfund"},
-		&VoteActorCodeID:             {name: "epk/1/vote"},
-		&KnowledgeActorCodeID:        {name: "epk/1/knowledge"},
-		&RetrievalActorCodeID:        {name: "epk/1/retrieval"},
+		&SystemActorCodeID:         {name: "epk/1/system"},
+		&InitActorCodeID:           {name: "epk/1/init"},
+		&CronActorCodeID:           {name: "epk/1/cron"},
+		&StoragePowerActorCodeID:   {name: "epk/1/storagepower"},
+		&StorageMinerActorCodeID:   {name: "epk/1/storageminer"},
+		&StorageMarketActorCodeID:  {name: "epk/1/storagemarket"},
+		&PaymentChannelActorCodeID: {name: "epk/1/paymentchannel"},
+		&RewardActorCodeID:         {name: "epk/1/reward"},
+		&GovernActorCodeID:         {name: "epk/1/govern"},
+		&AccountActorCodeID:        {name: "epk/1/account", signer: true},
+		&MultisigActorCodeID:       {name: "epk/1/multisig", signer: true},
+		&ExpertActorCodeID:         {name: "epk/1/expert"},
+		&ExpertFundActorCodeID:     {name: "epk/1/expertfund"},
+		&VoteActorCodeID:           {name: "epk/1/vote"},
+		&KnowledgeActorCodeID:      {name: "epk/1/knowledge"},
+		&RetrievalActorCodeID:      {name: "epk/1/retrieval"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {
