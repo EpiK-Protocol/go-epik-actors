@@ -198,18 +198,25 @@ func QAPowerForSector(size abi.SectorSize, sector *SectorOnChainInfo) abi.Storag
 
 // dealWeight == dealSpace
 func QAPowerForWeight(dealWin bool, dealSpace uint64) abi.StoragePower {
-	pwr := big.Mul(big.NewIntUnsigned(dealSpace), big.Lsh(builtin.VerifiedDealWeightMultiplier, builtin.SectorQualityPrecision))
+	pwr := big.NewIntUnsigned(dealSpace)
 	if dealWin {
 		pwr = big.Mul(pwr, big.NewInt(DealWinIncentiveMultiplier))
 	}
-	pwr = big.Div(pwr, builtin.QualityBaseMultiplier)
-	return big.Rsh(pwr, builtin.SectorQualityPrecision)
+	return pwr
 }
 
 func QAPowerForSector(sector *SectorOnChainInfo) abi.StoragePower {
 	pwr := big.Zero()
 	for i := range sector.DealIDs {
-		pwr = big.Add(pwr, QAPowerForWeight(sector.DealWins[i].Bool, sector.DealSpaces[i]))
+		pwr = big.Add(pwr, QAPowerForWeight(sector.DealWins[i].Bool, sector.PieceSizes[i]))
+	}
+	return pwr
+}
+
+func RawPowerForSector(sector *SectorOnChainInfo) abi.StoragePower {
+	pwr := big.Zero()
+	for i := range sector.DealIDs {
+		pwr = big.Add(pwr, QAPowerForWeight(false, sector.PieceSizes[i]))
 	}
 	return pwr
 }

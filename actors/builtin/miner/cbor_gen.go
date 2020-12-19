@@ -1306,15 +1306,15 @@ func (t *SectorPreCommitOnChainInfo) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.DealSpaces ([]uint64) (slice)
-	if len(t.DealSpaces) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.DealSpaces was too long")
+	// t.PieceSizes ([]uint64) (slice)
+	if len(t.PieceSizes) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.PieceSizes was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.DealSpaces))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.PieceSizes))); err != nil {
 		return err
 	}
-	for _, v := range t.DealSpaces {
+	for _, v := range t.PieceSizes {
 		if err := cbg.CborWriteHeader(w, cbg.MajUnsignedInt, uint64(v)); err != nil {
 			return err
 		}
@@ -1374,7 +1374,7 @@ func (t *SectorPreCommitOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 
 		t.PreCommitEpoch = abi.ChainEpoch(extraI)
 	}
-	// t.DealSpaces ([]uint64) (slice)
+	// t.PieceSizes ([]uint64) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1382,7 +1382,7 @@ func (t *SectorPreCommitOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.DealSpaces: array too large (%d)", extra)
+		return fmt.Errorf("t.PieceSizes: array too large (%d)", extra)
 	}
 
 	if maj != cbg.MajArray {
@@ -1390,21 +1390,21 @@ func (t *SectorPreCommitOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.DealSpaces = make([]uint64, extra)
+		t.PieceSizes = make([]uint64, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
 
 		maj, val, err := cbg.CborReadHeaderBuf(br, scratch)
 		if err != nil {
-			return xerrors.Errorf("failed to read uint64 for t.DealSpaces slice: %w", err)
+			return xerrors.Errorf("failed to read uint64 for t.PieceSizes slice: %w", err)
 		}
 
 		if maj != cbg.MajUnsignedInt {
-			return xerrors.Errorf("value read for array t.DealSpaces was not a uint, instead got %d", maj)
+			return xerrors.Errorf("value read for array t.PieceSizes was not a uint, instead got %d", maj)
 		}
 
-		t.DealSpaces[i] = uint64(val)
+		t.PieceSizes[i] = uint64(val)
 	}
 
 	return nil
@@ -1664,15 +1664,15 @@ func (t *SectorOnChainInfo) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.DealSpaces ([]uint64) (slice)
-	if len(t.DealSpaces) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.DealSpaces was too long")
+	// t.PieceSizes ([]uint64) (slice)
+	if len(t.PieceSizes) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.PieceSizes was too long")
 	}
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.DealSpaces))); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.PieceSizes))); err != nil {
 		return err
 	}
-	for _, v := range t.DealSpaces {
+	for _, v := range t.PieceSizes {
 		if err := cbg.CborWriteHeader(w, cbg.MajUnsignedInt, uint64(v)); err != nil {
 			return err
 		}
@@ -1821,7 +1821,7 @@ func (t *SectorOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		t.DealIDs[i] = abi.DealID(val)
 	}
 
-	// t.DealSpaces ([]uint64) (slice)
+	// t.PieceSizes ([]uint64) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1829,7 +1829,7 @@ func (t *SectorOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.DealSpaces: array too large (%d)", extra)
+		return fmt.Errorf("t.PieceSizes: array too large (%d)", extra)
 	}
 
 	if maj != cbg.MajArray {
@@ -1837,21 +1837,21 @@ func (t *SectorOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.DealSpaces = make([]uint64, extra)
+		t.PieceSizes = make([]uint64, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
 
 		maj, val, err := cbg.CborReadHeaderBuf(br, scratch)
 		if err != nil {
-			return xerrors.Errorf("failed to read uint64 for t.DealSpaces slice: %w", err)
+			return xerrors.Errorf("failed to read uint64 for t.PieceSizes slice: %w", err)
 		}
 
 		if maj != cbg.MajUnsignedInt {
-			return xerrors.Errorf("value read for array t.DealSpaces was not a uint, instead got %d", maj)
+			return xerrors.Errorf("value read for array t.PieceSizes was not a uint, instead got %d", maj)
 		}
 
-		t.DealSpaces[i] = uint64(val)
+		t.PieceSizes[i] = uint64(val)
 	}
 
 	// t.DealWins ([]builtin.BoolValue) (slice)

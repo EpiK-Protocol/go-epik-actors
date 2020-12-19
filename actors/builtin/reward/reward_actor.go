@@ -58,7 +58,7 @@ type AwardBlockRewardParams struct {
 	Miner     address.Address
 	Penalty   abi.TokenAmount // penalty for including bad messages in a block, >= 0
 	GasReward abi.TokenAmount // gas reward from all gas fees in a block, >= 0
-	// WinCount   int64           // number of reward units won, > 0
+	WinCount  int64           // number of reward units won, > 0
 
 	ShareCount int64 // number of blocks in current tipset, sharing ThisEpochReward
 

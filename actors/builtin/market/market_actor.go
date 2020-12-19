@@ -302,7 +302,7 @@ type VerifyDealsForActivationParams struct {
 type VerifyDealsForActivationReturn struct {
 	/* DealWeight abi.DealWeight
 	VerifiedDealWeight abi.DealWeight */
-	DealSpaces []uint64
+	PieceSizes []uint64
 }
 
 // Verify that a given set of storage deals is valid for a sector currently being PreCommitted
@@ -317,13 +317,13 @@ func (A Actor) VerifyDealsForActivation(rt Runtime, params *VerifyDealsForActiva
 	store := adt.AsStore(rt)
 
 	/* dealWeight verifiedWeight, */
-	dealSpaces, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, params.SectorStart)
+	pieceSizes, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, params.SectorStart)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to validate dealProposals for activation")
 
 	return &VerifyDealsForActivationReturn{
 		/* DealWeight: dealWeight,
 		VerifiedDealWeight: verifiedWeight, */
-		DealSpaces: dealSpaces,
+		PieceSizes: pieceSizes,
 	}
 }
 
@@ -745,7 +745,7 @@ func ValidateDealsForActivation(
 
 	seenDealIDs := make(map[abi.DealID]struct{}, len(dealIDs))
 
-	dealSpaces := make([]uint64, len(dealIDs))
+	pieceSizes := make([]uint64, len(dealIDs))
 	/* totalDealSpace := uint64(0)
 	totalDealSpaceTime := big.Zero()
 	totalVerifiedSpaceTime := big.Zero() */
@@ -767,7 +767,7 @@ func ValidateDealsForActivation(
 			return nil, xerrors.Errorf("cannot activate deal %d: %w", dealID, err)
 		}
 
-		dealSpaces[i] = uint64(proposal.PieceSize)
+		pieceSizes[i] = uint64(proposal.PieceSize)
 		/* // Compute deal weight
 		totalDealSpace += uint64(proposal.PieceSize)
 		dealSpaceTime := DealWeight(proposal)
@@ -777,7 +777,7 @@ func ValidateDealsForActivation(
 			totalDealSpaceTime = big.Add(totalDealSpaceTime, dealSpaceTime)
 		} */
 	}
-	return /* totalDealSpaceTime totalVerifiedSpaceTime, totalDealSpace,*/ dealSpaces, nil
+	return /* totalDealSpaceTime totalVerifiedSpaceTime, totalDealSpace,*/ pieceSizes, nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////

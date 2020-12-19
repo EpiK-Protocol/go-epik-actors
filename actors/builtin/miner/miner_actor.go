@@ -631,7 +631,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 
 		// Ensure total deal space does not exceed sector size.
 		totalSpace := uint64(0)
-		for _, space := range dealWeight.DealSpaces {
+		for _, space := range dealWeight.PieceSizes {
 			totalSpace += space
 		}
 		if totalSpace > uint64(info.SectorSize) {
@@ -673,7 +673,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 			Info: SectorPreCommitInfo(*params),
 			// PreCommitDeposit:   depositReq,
 			PreCommitEpoch: rt.CurrEpoch(),
-			DealSpaces:     dealWeight.DealSpaces,
+			PieceSizes:     dealWeight.PieceSizes,
 			/* DealWeight:         dealWeight.DealWeight,
 			VerifiedDealWeight: dealWeight.VerifiedDealWeight, */
 		}); err != nil {
@@ -900,7 +900,7 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 				SealProof:    precommit.Info.SealProof,
 				SealedCID:    precommit.Info.SealedCID,
 				DealIDs:      precommit.Info.DealIDs,
-				DealSpaces:   precommit.DealSpaces,
+				PieceSizes:   precommit.PieceSizes,
 				DealWins:     activateResults[precommit.Info.SectorNumber].DealWins,
 				Activation:   activation,
 				/* Expiration:         precommit.Info.Expiration,
@@ -2237,13 +2237,13 @@ func requestCurrentEpochBlockReward(rt Runtime) reward.ThisEpochRewardReturn {
 	return ret
 }
 
-// Requests the current network total power and pledge from the power actor.
+/* // Requests the current network total power and pledge from the power actor.
 func requestCurrentTotalPower(rt Runtime) *power.CurrentTotalPowerReturn {
 	var pwr power.CurrentTotalPowerReturn
 	code := rt.Send(builtin.StoragePowerActorAddr, builtin.MethodsPower.CurrentTotalPower, nil, big.Zero(), &pwr)
 	builtin.RequireSuccess(rt, code, "failed to check current power")
 	return &pwr
-}
+} */
 
 // Resolves an address to an ID address and verifies that it is address of an account or multisig actor.
 func resolveControlAddress(rt Runtime, raw addr.Address) addr.Address {
@@ -2438,7 +2438,8 @@ func validatePartitionContainsSectors(partition *Partition, sectors bitfield.Bit
 
 func PowerForSector(sectorSize abi.SectorSize, sector *SectorOnChainInfo) PowerPair {
 	return PowerPair{
-		Raw: big.NewIntUnsigned(uint64(sectorSize)),
+		/* Raw: big.NewIntUnsigned(uint64(sectorSize)), */
+		Raw: RawPowerForSector(sector),
 		QA:  QAPowerForSector(sector),
 	}
 }
@@ -2446,12 +2447,14 @@ func PowerForSector(sectorSize abi.SectorSize, sector *SectorOnChainInfo) PowerP
 // Returns the sum of the raw byte and quality-adjusted power for sectors.
 func PowerForSectors(ssize abi.SectorSize, sectors []*SectorOnChainInfo) PowerPair {
 	qa := big.Zero()
+	raw := big.Zero()
 	for _, s := range sectors {
 		qa = big.Add(qa, QAPowerForSector(s))
+		raw = big.Add(raw, RawPowerForSector(s))
 	}
 
 	return PowerPair{
-		Raw: big.Mul(big.NewIntUnsigned(uint64(ssize)), big.NewIntUnsigned(uint64(len(sectors)))),
+		Raw: raw,
 		QA:  qa,
 	}
 }

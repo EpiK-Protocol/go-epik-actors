@@ -47,14 +47,14 @@ var TokenPrecision = big.NewIntUnsigned(1_000_000_000_000_000_000)
 // The maximum supply of EPK that will ever exist (in token units)
 var TotalEPK = big.Mul(big.NewIntUnsigned(1_000_000_000), TokenPrecision)
 
-// Quality multiplier for committed capacity (no deals) in a sector
+/* // Quality multiplier for committed capacity (no deals) in a sector
 var QualityBaseMultiplier = big.NewInt(10)
 
-/* // Quality multiplier for unverified deals in a sector
-var DealWeightMultiplier = big.NewInt(10) */
+// Quality multiplier for unverified deals in a sector
+var DealWeightMultiplier = big.NewInt(10)
 
 // Quality multiplier for verified deals in a sector
 var VerifiedDealWeightMultiplier = big.NewInt(100)
 
 // Precision used for making QA power calculations
-const SectorQualityPrecision = 20
+const SectorQualityPrecision = 20 */

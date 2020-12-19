@@ -148,7 +148,7 @@ type SectorPreCommitOnChainInfo struct {
 	Info SectorPreCommitInfo
 	// PreCommitDeposit   abi.TokenAmount
 	PreCommitEpoch abi.ChainEpoch
-	DealSpaces     []uint64 // Corresponding to Info.DealIDs
+	PieceSizes     []uint64 // Corresponding to Info.DealIDs
 	/* DealWeight         abi.DealWeight // Integral of active deals over sector lifetime
 	VerifiedDealWeight abi.DealWeight // Integral of active verified deals over sector lifetime */
 }
@@ -160,7 +160,7 @@ type SectorOnChainInfo struct {
 	SealedCID    cid.Cid                 // CommR
 	Activation   abi.ChainEpoch          // Epoch during which the sector proof was accepted
 	DealIDs      []abi.DealID
-	DealSpaces   []uint64            // Space size of deal corresponding to DealIDs
+	PieceSizes   []uint64            // Space size of deal corresponding to DealIDs
 	DealWins     []builtin.BoolValue // If deal wins extra power incentive corresponding to DealIDs // TODO:
 	/* Expiration         abi.ChainEpoch // Epoch during which the sector expires */
 	/* DealWeight         abi.DealWeight // Integral of active deals over sector lifetime

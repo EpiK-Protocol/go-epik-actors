@@ -471,7 +471,7 @@ func TestPublishStorageDeals(t *testing.T) {
 		)
 		rt.ExpectSend(
 			expertAddr,
-			builtin.MethodsExpert.CheckData,
+			builtin.MethodsExpert.GetData,
 			&expert.ExpertDataParams{},
 			big.Zero(),
 			nil,
@@ -848,7 +848,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 				rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 				rt.ExpectSend(
 					expertAddr,
-					builtin.MethodsExpert.CheckData,
+					builtin.MethodsExpert.GetData,
 					&expert.ExpertDataParams{},
 					big.Zero(),
 					nil,
@@ -930,7 +930,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 			rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 			rt.ExpectSend(
 					expertAddr,
-					builtin.MethodsExpert.CheckData,
+					builtin.MethodsExpert.GetData,
 					&expert.ExpertDataParams{},
 					big.Zero(),
 					nil,
@@ -1616,7 +1616,7 @@ func TestCronTick(t *testing.T) {
 		params.DataRef.Expert = expertAddr.String()
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
-		rt.ExpectSend(expertAddr, builtin.MethodsExpert.CheckData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
 		rt.ExpectVerifySignature(crypto.Signature{}, d2.Client, mustCbor(&d2), nil)
@@ -1915,7 +1915,7 @@ func TestCronTickTimedoutDeals(t *testing.T) {
 		params.DataRef.Expert=expertAddr.String()
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
-		rt.ExpectSend(expertAddr, builtin.MethodsExpert.CheckData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
 		rt.ExpectVerifySignature(crypto.Signature{}, d2.Client, mustCbor(&d2), nil)
@@ -2497,7 +2497,7 @@ func TestMarketActorDeals(t *testing.T) {
 	{
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
-		rt.ExpectSend(expertAddr, builtin.MethodsExpert.CheckData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -2549,7 +2549,7 @@ func TestMaxDealLabelSize(t *testing.T) {
 	{
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
-		rt.ExpectSend(expertAddr, builtin.MethodsExpert.CheckData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -2649,7 +2649,7 @@ func TestVerifyDealsForActivation(t *testing.T) {
 		resp := actor.verifyDealsForActivation(rt, provider, sectorStart, sectorExpiry, dealId)
 		/* require.EqualValues(t, big.Zero(), resp.VerifiedDealWeight)
 		require.EqualValues(t, market.DealWeight(d), resp.DealWeight) */
-		require.EqualValues(t, d.PieceSize, sum(resp.DealSpaces...))
+		require.EqualValues(t, d.PieceSize, sum(resp.PieceSizes...))
 
 		actor.checkState(rt)
 	})
@@ -2663,7 +2663,7 @@ func TestVerifyDealsForActivation(t *testing.T) {
 		resp := actor.verifyDealsForActivation(rt, provider, sectorStart, sectorExpiry, dealIds...)
 		/* require.EqualValues(t, market.DealWeight(&deal), resp.VerifiedDealWeight)
 		require.EqualValues(t, big.Zero(), resp.DealWeight) */
-		require.EqualValues(t, deal.PieceSize, resp.DealSpaces[0])
+		require.EqualValues(t, deal.PieceSize, resp.PieceSizes[0])
 
 		actor.checkState(rt)
 	})
@@ -2693,7 +2693,7 @@ func TestVerifyDealsForActivation(t *testing.T) {
 		nvweight := big.Add(market.DealWeight(&d1), market.DealWeight(&d2))
 		require.EqualValues(t, verifiedWeight, resp.VerifiedDealWeight)
 		require.EqualValues(t, nvweight, resp.DealWeight) */
-		require.EqualValues(t, d1.PieceSize+d2.PieceSize+vd1.PieceSize+vd2.PieceSize, sum(resp.DealSpaces...))
+		require.EqualValues(t, d1.PieceSize+d2.PieceSize+vd1.PieceSize+vd2.PieceSize, sum(resp.PieceSizes...))
 
 		actor.checkState(rt)
 	})
@@ -3009,7 +3009,7 @@ func (h *marketActorTestHarness) publishDeals(rt *mock.Runtime, minerAddrs *mine
 	)
 	rt.ExpectSend(
 		minerAddrs.expert,
-		builtin.MethodsExpert.CheckData,
+		builtin.MethodsExpert.GetData,
 		&expert.ExpertDataParams{},
 		big.Zero(),
 		nil,
