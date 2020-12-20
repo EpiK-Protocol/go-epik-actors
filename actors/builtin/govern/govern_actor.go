@@ -30,7 +30,7 @@ func (a Actor) IsSingleton() bool {
 	return true
 }
 
-func (a Actor) State() cbor.Er { /* return new(State) */ return nil }
+func (a Actor) State() cbor.Er { return new(State) }
 
 var _ runtime.VMActor = Actor{}
 
@@ -44,7 +44,7 @@ func (a Actor) Constructor(rt runtime.Runtime, supervisor address.Address) *abi.
 }
 
 func (a Actor) ValidateGranted(rt runtime.Runtime, params *builtin.ValidateGrantedParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.CallerTypesGoverned...)
+	rt.ValidateImmediateCallerType(GovernedCallerTypes...)
 
 	governor, ok := rt.ResolveAddress(params.Caller)
 	builtin.RequireParam(rt, ok, "failed to resolve governor %s", params.Caller)
@@ -85,9 +85,12 @@ func (a Actor) Grant(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.Empty
 	governor, targetCodeMethods := checkGrantOrRevokeParams(rt, params)
 	builtin.RequireParam(rt, len(targetCodeMethods) != 0, "no priviledge to grant")
 
+	code, ok := rt.GetActorCodeCID(governor)
+	builtin.RequireParam(rt, ok && builtin.IsPrincipal(code), "failed to check actor code for %s", params.Governor)
+
 	var st State
 	rt.StateTransaction(&st, func() {
-		builtin.RequireParam(rt, st.Supervisor == rt.Caller(), "forbidden")
+		rt.ValidateImmediateCallerIs(st.Supervisor)
 
 		store := adt.AsStore(rt)
 
@@ -113,7 +116,7 @@ func (a Actor) Revoke(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.Empt
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		builtin.RequireParam(rt, st.Supervisor == rt.Caller(), "forbidden")
+		rt.ValidateImmediateCallerIs(st.Supervisor)
 
 		store := adt.AsStore(rt)
 
@@ -134,7 +137,6 @@ func checkGrantOrRevokeParams(rt runtime.Runtime, params *GrantOrRevokeParams) (
 	builtin.RequireParam(rt, ok, "failed to resovle governor")
 
 	target := make(map[cid.Cid][]abi.MethodNum)
-	// builtin.RequireParam(rt, len(params.Authorities) != 0, "no authorities")
 
 	if len(params.Authorities) != 0 {
 		seenCodeID := make(map[cid.Cid]struct{})
