@@ -26,6 +26,7 @@ var (
 	VoteActorCodeID           cid.Cid
 	RetrievalActorCodeID      cid.Cid
 	KnowledgeActorCodeID      cid.Cid
+	CallerTypesGoverned       []cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -75,6 +76,16 @@ func init() {
 		return CallerTypesSignable[i].KeyString() < CallerTypesSignable[j].KeyString()
 	})
 
+	CallerTypesGoverned = []cid.Cid{
+		StoragePowerActorCodeID,
+		StorageMinerActorCodeID,
+		StorageMarketActorCodeID,
+		ExpertActorCodeID,
+		ExpertFundActorCodeID,
+		VoteActorCodeID,
+		RetrievalActorCodeID,
+		KnowledgeActorCodeID,
+	}
 }
 
 // IsBuiltinActor returns true if the code belongs to an actor defined in this repo.

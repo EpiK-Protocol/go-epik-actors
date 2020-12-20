@@ -59,6 +59,7 @@ type State struct {
 	TotalProviderLockedCollateral abi.TokenAmount
 	// Total storage fee that is locked in escrow -> unlocked when payments are made
 	TotalClientStorageFee abi.TokenAmount */
+	InitialQuota int64
 }
 
 func ConstructState(emptyArrayCid, emptyMapCid, emptyMSetCid cid.Cid) *State {
@@ -72,6 +73,7 @@ func ConstructState(emptyArrayCid, emptyMapCid, emptyMSetCid cid.Cid) *State {
 		NextID:           abi.DealID(0),
 		DealOpsByEpoch:   emptyMSetCid,
 		LastCron:         abi.ChainEpoch(-1),
+		InitialQuota:     DefaultInitialQuota,
 
 		/* TotalClientLockedCollateral:   abi.NewTokenAmount(0),
 		TotalProviderLockedCollateral: abi.NewTokenAmount(0),

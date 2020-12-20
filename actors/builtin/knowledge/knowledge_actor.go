@@ -58,7 +58,8 @@ type ChangePayeeParams struct {
 }
 
 func (a Actor) ChangePayee(rt Runtime, params *ChangePayeeParams) *abi.EmptyValue {
-	// TODO: caller must be fundation?
+
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsKnowledge.ChangePayee)
 
 	newPayee, ok := rt.ResolveAddress(params.Payee)
 	builtin.RequireParam(rt, ok, "unable to resolve address %v", params.Payee)

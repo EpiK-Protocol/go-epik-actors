@@ -78,6 +78,16 @@ func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (owne
 	return addr.Owner
 }
 
+// Validates that if caller is granted on the method
+func ValidateCallerGranted(rt runtime.Runtime, caller addr.Address, method abi.MethodNum) {
+	params := &ValidateGrantedParams{
+		Caller: caller,
+		Method: method,
+	}
+	code := rt.Send(GovernActorAddr, MethodsGovern.ValidateGranted, params, abi.NewTokenAmount(0), &Discard{})
+	RequireSuccess(rt, code, "failed to validate caller granted")
+}
+
 // NotifyUpdate expert params
 type NotifyUpdate struct {
 	Expert  address.Address
@@ -184,4 +194,9 @@ type ExpertAddr struct {
 
 type BoolValue struct {
 	Bool bool
+}
+
+type ValidateGrantedParams struct {
+	Caller address.Address
+	Method abi.MethodNum
 }

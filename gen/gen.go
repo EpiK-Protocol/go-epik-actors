@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/govern"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
@@ -43,6 +44,7 @@ func main() {
 		builtin.NotifyUpdate{},
 		builtin.BlockCandidatesParams{},
 		builtin.BoolValue{},
+		builtin.ValidateGrantedParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -310,6 +312,16 @@ func main() {
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/knowledge/cbor_gen.go", "knowledge",
 		knowledge.State{},
 		knowledge.ChangePayeeParams{},
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/govern/cbor_gen.go", "govern",
+		// actor state
+		govern.State{},
+		govern.GrantedAuthorities{},
+		govern.GrantOrRevokeParams{},
+		govern.Authority{},
 	); err != nil {
 		panic(err)
 	}

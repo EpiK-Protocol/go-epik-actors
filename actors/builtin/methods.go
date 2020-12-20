@@ -61,7 +61,8 @@ var MethodsMarket = struct {
 	ComputeDataCommitment    abi.MethodNum
 	CronTick                 abi.MethodNum
 	ResetQuotas              abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	SetInitialQuota          abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
 
 var MethodsPower = struct {
 	Constructor              abi.MethodNum
@@ -164,3 +165,10 @@ var MethodsKnowledge = struct {
 	ChangePayee  abi.MethodNum
 	ApplyRewards abi.MethodNum
 }{MethodConstructor, 2, 3}
+
+var MethodsGovern = struct {
+	Constructor     abi.MethodNum
+	Grant           abi.MethodNum
+	Revoke          abi.MethodNum
+	ValidateGranted abi.MethodNum
+}{MethodConstructor, 2, 3, 4}

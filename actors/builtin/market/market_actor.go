@@ -37,6 +37,7 @@ func (a Actor) Exports() []interface{} {
 		8:                         a.ComputeDataCommitment,
 		9:                         a.CronTick,
 		10:                        a.ResetQuotas,
+		11:                        a.SetInitialQuota,
 	}
 }
 
@@ -392,7 +393,7 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 			found, err = msm.quotas.Get(abi.CidKey(proposal.PieceCID), &quota)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get quota %d", dealID)
 			if !found { // first activation
-				quota = cbg.CborInt(DefaultInitialQuota)
+				quota = cbg.CborInt(st.InitialQuota)
 			}
 
 			ret.DealWins[i] = builtin.BoolValue{Bool: quota > 0}
@@ -667,7 +668,9 @@ type NewQuota struct {
 }
 
 func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValue {
-	// TODO: validate caller
+
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsMarket.ResetQuotas)
+
 	builtin.RequireParam(rt, len(params.NewQuotas) > 0, "empty params")
 
 	var st State
@@ -688,6 +691,18 @@ func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValu
 
 		err = msm.commitState()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
+	})
+	return nil
+}
+
+func (a Actor) SetInitialQuota(rt Runtime, quota cbg.CborInt) *abi.EmptyValue {
+	builtin.RequireParam(rt, quota > 0, "negative quota to set")
+
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsMarket.SetInitialQuota)
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		st.InitialQuota = int64(quota)
 	})
 	return nil
 }
