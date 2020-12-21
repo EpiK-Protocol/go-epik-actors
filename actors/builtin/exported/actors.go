@@ -4,7 +4,10 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/account"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/govern"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
@@ -13,6 +16,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 )
 
@@ -28,8 +32,11 @@ func BuiltinActors() []runtime.VMActor {
 		power.Actor{},
 		reward.Actor{},
 		system.Actor{},
-		// verifreg.Actor{},
 		expert.Actor{},
 		retrieval.Actor{},
+		expertfund.Actor{},
+		govern.Actor{},
+		vote.Actor{},
+		knowledge.Actor{},
 	}
 }

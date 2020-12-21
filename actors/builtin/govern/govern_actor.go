@@ -34,11 +34,13 @@ func (a Actor) State() cbor.Er { return new(State) }
 
 var _ runtime.VMActor = Actor{}
 
-func (a Actor) Constructor(rt runtime.Runtime, supervisor address.Address) *abi.EmptyValue {
+func (a Actor) Constructor(rt runtime.Runtime, supervisor *address.Address) *abi.EmptyValue {
+	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
-	st := ConstructState(emptyMap, supervisor)
+	st := ConstructState(emptyMap, *supervisor)
 	rt.StateCreate(st)
 	return nil
 }
@@ -97,7 +99,7 @@ func (a Actor) Grant(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.Empty
 		governors, err := adt.AsMap(store, st.Governors)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load governors")
 
-		err = st.GrantOrRevoke(store, governors, governor, targetCodeMethods, true)
+		err = st.grantOrRevoke(store, governors, governor, targetCodeMethods, true)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to grant")
 
 		st.Governors, err = governors.Root()
@@ -123,7 +125,7 @@ func (a Actor) Revoke(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.Empt
 		governors, err := adt.AsMap(store, st.Governors)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load governors")
 
-		err = st.GrantOrRevoke(store, governors, governor, targetCodeMethods, false)
+		err = st.grantOrRevoke(store, governors, governor, targetCodeMethods, false)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to revoke")
 
 		st.Governors, err = governors.Root()

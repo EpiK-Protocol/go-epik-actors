@@ -155,7 +155,7 @@ var MethodsRetrieval = struct {
 	AddBalance       abi.MethodNum
 	ApplyForWithdraw abi.MethodNum
 	WithdrawBalance  abi.MethodNum
-	CheckAndUpdate   abi.MethodNum
+	RetrievalData    abi.MethodNum
 	ApplyRewards     abi.MethodNum
 	TotalCollateral  abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}

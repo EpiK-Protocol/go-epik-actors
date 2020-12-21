@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/ipfs/go-cid"
 )
@@ -12,9 +13,9 @@ type State struct {
 	Tally cid.Cid // Map, HAMT [Payee]TokenAmount
 }
 
-func ConstructState(emptyMapCid cid.Cid, payee addr.Address) *State {
+func ConstructState(emptyMapCid cid.Cid, initialPayee address.Address) *State {
 	return &State{
 		Tally: emptyMapCid,
-		Payee: payee,
+		Payee: initialPayee,
 	}
 }

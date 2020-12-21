@@ -668,6 +668,7 @@ type NewQuota struct {
 }
 
 func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
 
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsMarket.ResetQuotas)
 
@@ -695,14 +696,16 @@ func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValu
 	return nil
 }
 
-func (a Actor) SetInitialQuota(rt Runtime, quota cbg.CborInt) *abi.EmptyValue {
-	builtin.RequireParam(rt, quota > 0, "negative quota to set")
+func (a Actor) SetInitialQuota(rt Runtime, quota *cbg.CborInt) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
+
+	builtin.RequireParam(rt, *quota > 0, "negative quota to set")
 
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsMarket.SetInitialQuota)
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		st.InitialQuota = int64(quota)
+		st.InitialQuota = int64(*quota)
 	})
 	return nil
 }

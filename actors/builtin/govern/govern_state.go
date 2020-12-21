@@ -58,7 +58,7 @@ func (st *State) IsGranted(store adt.Store, governors *adt.Map, governor address
 	return util.BitFieldContainsAll(bf, bitfield.NewFromSet([]uint64{uint64(method)}))
 }
 
-func (st *State) GrantOrRevoke(store adt.Store, governors *adt.Map, governor address.Address,
+func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor address.Address,
 	targetCodeMethods map[cid.Cid][]abi.MethodNum, grant bool) error {
 
 	if len(targetCodeMethods) == 0 {

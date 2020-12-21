@@ -58,7 +58,7 @@ type State struct {
 	ExpertCount int64
 
 	// Information for all submit rdf data experts.
-	Experts cid.Cid // Map, AMT[key]Expert
+	Experts cid.Cid // Map, HAMT[key]Expert
 }
 
 type Claim struct {
@@ -95,6 +95,8 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 		Claims:                  emptyMapCid,
 		MinerCount:              0,
 		MinerAboveMinPowerCount: 0,
+		ExpertCount:             0,
+		Experts:                 emptyMapCid,
 	}
 }
 

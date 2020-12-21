@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -25,7 +26,7 @@ func (a Actor) Exports() []interface{} {
 }
 
 func (a Actor) Code() cid.Cid {
-	return builtin.KnowledgeActorCodeID
+	return builtin.KnowledgeFundsActorCodeID
 }
 
 func (a Actor) IsSingleton() bool {
@@ -42,13 +43,13 @@ var _ runtime.VMActor = Actor{}
 // Actor methods
 ////////////////////////////////////////////////////////////////////////////////
 
-func (a Actor) Constructor(rt Runtime, payee addr.Address) *abi.EmptyValue {
+func (a Actor) Constructor(rt Runtime, initialPayee *address.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
-	st := ConstructState(emptyMap, payee)
+	st := ConstructState(emptyMap, *initialPayee)
 	rt.StateCreate(st)
 	return nil
 }
@@ -58,6 +59,7 @@ type ChangePayeeParams struct {
 }
 
 func (a Actor) ChangePayee(rt Runtime, params *ChangePayeeParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerAcceptAny()
 
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsKnowledge.ChangePayee)
 

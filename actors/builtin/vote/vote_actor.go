@@ -30,7 +30,7 @@ func (a Actor) Exports() []interface{} {
 }
 
 func (a Actor) Code() cid.Cid {
-	return builtin.VoteActorCodeID
+	return builtin.VoteFundsActorCodeID
 }
 
 func (a Actor) IsSingleton() bool {
@@ -50,12 +50,10 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	emptyCandMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
-	emptyVoterMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
+	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
-	st := ConstructState(emptyCandMap, emptyVoterMap)
+	st := ConstructState(emptyMap)
 	rt.StateCreate(st)
 	return nil
 }

@@ -71,10 +71,10 @@ type VotingRecord struct {
 	LastRevokingEpoch abi.ChainEpoch
 }
 
-func ConstructState(emptyCandidateMapCid, emptyVoterMapCid cid.Cid) *State {
+func ConstructState(emptyMapCid cid.Cid) *State {
 	return &State{
-		Candidates: emptyCandidateMapCid,
-		Voters:     emptyVoterMapCid,
+		Candidates: emptyMapCid,
+		Voters:     emptyMapCid,
 	}
 }
 

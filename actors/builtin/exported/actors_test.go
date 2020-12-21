@@ -10,15 +10,20 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/account"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/govern"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/paych"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/ipfs/go-cid"
 
@@ -48,7 +53,12 @@ func TestKnownActors(t *testing.T) {
 		{power.Actor{}, builtin.StoragePowerActorCodeID, builtin.MethodsPower},
 		{reward.Actor{}, builtin.RewardActorCodeID, builtin.MethodsReward},
 		{system.Actor{}, builtin.SystemActorCodeID, nil},
-		{verifreg.Actor{}, builtin.VerifiedRegistryActorCodeID, builtin.MethodsVerifiedRegistry},
+		{expert.Actor{}, builtin.ExpertActorCodeID, builtin.MethodsExpert},
+		{retrieval.Actor{}, builtin.RetrievalActorCodeID, builtin.MethodsRetrieval},
+		{expertfund.Actor{}, builtin.ExpertFundActorCodeID, builtin.MethodsExpertFunds},
+		{govern.Actor{}, builtin.GovernActorCodeID, builtin.MethodsGovern},
+		{vote.Actor{}, builtin.VoteFundsActorCodeID, builtin.MethodsVote},
+		{knowledge.Actor{}, builtin.KnowledgeFundsActorCodeID, builtin.MethodsKnowledge},
 	}
 	require.Equal(t, len(builtins), len(actorInfos))
 	for i, info := range actorInfos {
