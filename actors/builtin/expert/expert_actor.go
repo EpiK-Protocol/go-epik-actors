@@ -68,10 +68,15 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to construct initial expert info")
 	infoCid := rt.StorePut(info)
 
+	eState := ExpertStateRegistered
+	if info.Type == ExpertFoundation {
+		eState = ExpertStateNormal
+	}
+
 	ownerChange := rt.StorePut(&PendingOwnerChange{
-		ApplyOwner: addr.Undef,
+		ApplyOwner: owner,
 		ApplyEpoch: abi.ChainEpoch(-1)})
-	st := ConstructState(infoCid, emptyMap, ownerChange)
+	st := ConstructState(infoCid, emptyMap, eState, ownerChange)
 	rt.StateCreate(st)
 	return nil
 }
@@ -261,8 +266,7 @@ func (a Actor) NominateUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 }
 
 func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	// TODO: (larry) change to the specified actorID
-	rt.ValidateImmediateCallerType(builtin.MultisigActorCodeID)
+	rt.ValidateImmediateCallerType(builtin.GovernActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -282,10 +286,13 @@ func (a Actor) BlockUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		st.Status = ExpertStateImplicated
-		if st.VoteAmount.GreaterThanEqual(ExpertVoteThreshold) &&
-			st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
-			st.LostEpoch = rt.CurrEpoch()
+		info := getExpertInfo(rt, &st)
+		if info.Type != ExpertFoundation {
+			st.Status = ExpertStateImplicated
+			if st.VoteAmount.GreaterThanEqual(ExpertVoteThreshold) &&
+				st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
+				st.LostEpoch = rt.CurrEpoch()
+			}
 		}
 	})
 	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef)
@@ -297,8 +304,7 @@ type FoundationChangeParams struct {
 }
 
 func (a Actor) FoundationChange(rt Runtime, params *FoundationChangeParams) *abi.EmptyValue {
-	// TODO: (larry) change to the specified actorID
-	rt.ValidateImmediateCallerType(builtin.MultisigActorCodeID)
+	rt.ValidateImmediateCallerType(builtin.GovernActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {

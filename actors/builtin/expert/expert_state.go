@@ -74,16 +74,17 @@ func ConstructExpertInfo(owner addr.Address, pid []byte, multiAddrs [][]byte, eT
 		Multiaddrs:      multiAddrs,
 		Type:            eType,
 		ApplicationHash: aHash,
+		Proposer:        owner,
 	}, nil
 }
 
-func ConstructState(info cid.Cid, emptyMapCid cid.Cid, emptyChange cid.Cid) *State {
+func ConstructState(info cid.Cid, emptyMapCid cid.Cid, state ExpertState, emptyChange cid.Cid) *State {
 	return &State{
 		Info:        info,
 		Datas:       emptyMapCid,
 		VoteAmount:  abi.NewTokenAmount(0),
 		LostEpoch:   abi.ChainEpoch(-1),
-		Status:      ExpertStateRegistered,
+		Status:      state,
 		OwnerChange: emptyChange,
 	}
 }
@@ -221,11 +222,17 @@ func (st *State) AutoUpdateOwnerChange(rt Runtime) error {
 func (st *State) Validate(rt Runtime) error {
 	switch st.Status {
 	case ExpertStateNormal:
-		if st.VoteAmount.LessThan(ExpertVoteThreshold) {
-			if st.LostEpoch < 0 {
-				return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
-			} else if (st.LostEpoch + ExpertVoteCheckPeriod) < rt.CurrEpoch() {
-				return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
+		info, err := st.GetInfo(adt.AsStore(rt))
+		if err != nil {
+			return err
+		}
+		if info.Type != ExpertFoundation {
+			if st.VoteAmount.LessThan(ExpertVoteThreshold) {
+				if st.LostEpoch < 0 {
+					return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
+				} else if (st.LostEpoch + ExpertVoteCheckPeriod) < rt.CurrEpoch() {
+					return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
+				}
 			}
 		}
 	case ExpertStateImplicated:

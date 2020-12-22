@@ -138,8 +138,7 @@ type FoundationChangeParams struct {
 
 // FoundationChange update the fund config
 func (a Actor) FoundationChange(rt Runtime, params *FoundationChangeParams) *abi.EmptyValue {
-	// TODO: (larry) change to the specified actorID
-	rt.ValidateImmediateCallerType(builtin.MultisigActorCodeID)
+	rt.ValidateImmediateCallerType(builtin.GovernActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {
