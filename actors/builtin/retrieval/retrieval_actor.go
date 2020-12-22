@@ -30,7 +30,7 @@ func (a Actor) Exports() []interface{} {
 }
 
 func (a Actor) Code() cid.Cid {
-	return builtin.RetrievalActorCodeID
+	return builtin.RetrievalFundActorCodeID
 }
 
 func (a Actor) IsSingleton() bool {

@@ -26,7 +26,7 @@ func (a Actor) Exports() []interface{} {
 }
 
 func (a Actor) Code() cid.Cid {
-	return builtin.KnowledgeFundsActorCodeID
+	return builtin.KnowledgeFundActorCodeID
 }
 
 func (a Actor) IsSingleton() bool {
@@ -107,10 +107,10 @@ func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 		st.Tally, err = tally.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush distributions")
-
-		code := rt.Send(st.Payee, builtin.MethodSend, nil, amount, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send funds")
 	})
+
+	code := rt.Send(st.Payee, builtin.MethodSend, nil, amount, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send funds")
 
 	return nil
 }

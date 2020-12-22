@@ -59,6 +59,7 @@ func ConstructState(emptyMapCid cid.Cid, pool cid.Cid) *State {
 
 		TotalExpertDataSize: abi.PaddedPieceSize(0),
 		TotalExpertReward:   abi.NewTokenAmount(0),
+		LastFundBalance:     abi.NewTokenAmount(0),
 		DataStoreThreshold:  DefaultDataStoreThreshold,
 	}
 }

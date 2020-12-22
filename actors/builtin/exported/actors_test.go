@@ -54,11 +54,11 @@ func TestKnownActors(t *testing.T) {
 		{reward.Actor{}, builtin.RewardActorCodeID, builtin.MethodsReward},
 		{system.Actor{}, builtin.SystemActorCodeID, nil},
 		{expert.Actor{}, builtin.ExpertActorCodeID, builtin.MethodsExpert},
-		{retrieval.Actor{}, builtin.RetrievalActorCodeID, builtin.MethodsRetrieval},
+		{retrieval.Actor{}, builtin.RetrievalFundActorCodeID, builtin.MethodsRetrieval},
 		{expertfund.Actor{}, builtin.ExpertFundActorCodeID, builtin.MethodsExpertFunds},
 		{govern.Actor{}, builtin.GovernActorCodeID, builtin.MethodsGovern},
-		{vote.Actor{}, builtin.VoteFundsActorCodeID, builtin.MethodsVote},
-		{knowledge.Actor{}, builtin.KnowledgeFundsActorCodeID, builtin.MethodsKnowledge},
+		{vote.Actor{}, builtin.VoteFundActorCodeID, builtin.MethodsVote},
+		{knowledge.Actor{}, builtin.KnowledgeFundActorCodeID, builtin.MethodsKnowledge},
 	}
 	require.Equal(t, len(builtins), len(actorInfos))
 	for i, info := range actorInfos {

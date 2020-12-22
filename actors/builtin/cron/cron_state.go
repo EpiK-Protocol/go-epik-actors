@@ -32,7 +32,7 @@ func BuiltInEntries() []Entry {
 			MethodNum: builtin.MethodsMarket.CronTick,
 		},
 		{
-			Receiver:  builtin.VoteFundsActorAddr,
+			Receiver:  builtin.VoteFundActorAddr,
 			MethodNum: builtin.MethodsVote.OnEpochTickEnd,
 		},
 	}

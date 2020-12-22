@@ -92,6 +92,10 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 		rt.Abortf(exitcode.ErrIllegalArgument, "non-positive share count %d", params.ShareCount)
 	}
 
+	if params.WinCount <= 0 {
+		rt.Abortf(exitcode.ErrIllegalArgument, "non-positive win count %d", params.WinCount)
+	}
+
 	minerAddr, ok := rt.ResolveAddress(params.Miner)
 	if !ok {
 		rt.Abortf(exitcode.ErrNotFound, "failed to resolve given owner address")
@@ -144,22 +148,22 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	}
 
 	if !voteReward.IsZero() {
-		code = rt.Send(builtin.VoteFundsActorAddr, builtin.MethodsVote.ApplyRewards, nil, voteReward, &builtin.Discard{})
+		code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, voteReward, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds to vote")
 	}
 
 	if !expertReward.IsZero() {
-		code = rt.Send(builtin.ExpertFundsActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, expertReward, &builtin.Discard{})
+		code = rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, expertReward, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds to expert")
 	}
 
 	if !knowledgeReward.IsZero() {
-		code = rt.Send(builtin.KnowledgeFundsActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, knowledgeReward, &builtin.Discard{})
+		code = rt.Send(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, knowledgeReward, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds to knowledge")
 	}
 
 	if !bandwidthReward.IsZero() {
-		code = rt.Send(builtin.RetrieveFundsActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
+		code = rt.Send(builtin.RetrievalFundActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds to retrieval")
 	}
 

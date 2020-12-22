@@ -14,7 +14,7 @@ var GovernedActors = map[cid.Cid]map[abi.MethodNum]struct{}{
 	builtin.ExpertFundActorCodeID: {
 		// TODO:
 	},
-	builtin.KnowledgeFundsActorCodeID: {
+	builtin.KnowledgeFundActorCodeID: {
 		builtin.MethodsKnowledge.ChangePayee: struct{}{},
 	},
 	builtin.StorageMarketActorCodeID: {

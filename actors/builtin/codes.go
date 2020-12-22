@@ -23,9 +23,9 @@ var (
 	CallerTypesSignable       []cid.Cid
 	ExpertActorCodeID         cid.Cid
 	ExpertFundActorCodeID     cid.Cid
-	VoteFundsActorCodeID      cid.Cid
-	KnowledgeFundsActorCodeID cid.Cid
-	RetrievalActorCodeID      cid.Cid
+	VoteFundActorCodeID       cid.Cid
+	KnowledgeFundActorCodeID  cid.Cid
+	RetrievalFundActorCodeID  cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -53,9 +53,9 @@ func init() {
 		&MultisigActorCodeID:       {name: "epk/1/multisig", signer: true},
 		&ExpertActorCodeID:         {name: "epk/1/expert"},
 		&ExpertFundActorCodeID:     {name: "epk/1/expertfund"},
-		&VoteFundsActorCodeID:      {name: "epk/1/votefunds"},
-		&KnowledgeFundsActorCodeID: {name: "epk/1/knowledgefunds"},
-		&RetrievalActorCodeID:      {name: "epk/1/retrieval"},
+		&VoteFundActorCodeID:       {name: "epk/1/votefund"},
+		&KnowledgeFundActorCodeID:  {name: "epk/1/knowledgefund"},
+		&RetrievalFundActorCodeID:  {name: "epk/1/retrievalfund"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {

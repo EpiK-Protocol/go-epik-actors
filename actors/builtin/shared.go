@@ -99,7 +99,7 @@ func NotifyExpertUpdate(rt runtime.Runtime, expertAddr addr.Address, pieceID cid
 		Expert:  expertAddr,
 		PieceID: pieceID,
 	}
-	code := rt.Send(ExpertFundsActorAddr, MethodsExpertFunds.NotifyUpdate, params, abi.NewTokenAmount(0), &Discard{})
+	code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.NotifyUpdate, params, abi.NewTokenAmount(0), &Discard{})
 	RequireSuccess(rt, code, "failed to notify expert update")
 }
 
@@ -108,7 +108,7 @@ func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount ab
 	// 	Expert: expertAddr,
 	// 	Amount: voteAmount,
 	// }
-	// code := rt.Send(ExpertFundsActorAddr, MethodsExpertFunds.NotifyVote, params, abi.NewTokenAmount(0), &Discard{})
+	// code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.NotifyVote, params, abi.NewTokenAmount(0), &Discard{})
 	// RequireSuccess(rt, code, "failed to notify expert vote")
 
 }
@@ -141,7 +141,7 @@ func NotifyExpertsBlocked(rt runtime.Runtime, blockedExperts ...addr.Address) {
 	params := &BlockCandidatesParams{
 		Candidates: blockedExperts,
 	}
-	code := rt.Send(VoteFundsActorAddr, MethodsVote.BlockCandidates, params, big.Zero(), &Discard{})
+	code := rt.Send(VoteFundActorAddr, MethodsVote.BlockCandidates, params, big.Zero(), &Discard{})
 	RequireSuccess(rt, code, "failed to notify experts blocked")
 }
 

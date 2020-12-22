@@ -73,8 +73,11 @@ type VotingRecord struct {
 
 func ConstructState(emptyMapCid cid.Cid) *State {
 	return &State{
-		Candidates: emptyMapCid,
-		Voters:     emptyMapCid,
+		Candidates:         emptyMapCid,
+		Voters:             emptyMapCid,
+		TotalVotes:         abi.NewTokenAmount(0),
+		UnownedFunds:       abi.NewTokenAmount(0),
+		CumEarningsPerVote: abi.NewTokenAmount(0),
 	}
 }
 

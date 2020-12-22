@@ -30,7 +30,7 @@ func (a Actor) Exports() []interface{} {
 }
 
 func (a Actor) Code() cid.Cid {
-	return builtin.VoteFundsActorCodeID
+	return builtin.VoteFundActorCodeID
 }
 
 func (a Actor) IsSingleton() bool {
@@ -59,7 +59,7 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 }
 
 func (a Actor) BlockCandidates(rt Runtime, params *builtin.BlockCandidatesParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.ExpertFundsActorAddr)
+	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
 
 	candAddrs := make(map[addr.Address]struct{})
 	for _, cand := range params.Candidates {

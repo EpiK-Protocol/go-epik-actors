@@ -15,10 +15,10 @@ var (
 	StorageMarketActorAddr = mustMakeAddress(5)
 	GovernActorAddr        = mustMakeAddress(6)
 
-	ExpertFundsActorAddr    = mustMakeAddress(50)
-	RetrieveFundsActorAddr  = mustMakeAddress(51)
-	VoteFundsActorAddr      = mustMakeAddress(52)
-	KnowledgeFundsActorAddr = mustMakeAddress(53)
+	ExpertFundActorAddr    = mustMakeAddress(50)
+	RetrievalFundActorAddr = mustMakeAddress(51)
+	VoteFundActorAddr      = mustMakeAddress(52)
+	KnowledgeFundActorAddr = mustMakeAddress(53)
 
 	// Distinguished AccountActor that is the destination of all burnt funds.
 	BurntFundsActorAddr = mustMakeAddress(99)

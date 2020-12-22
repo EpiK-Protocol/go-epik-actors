@@ -21,7 +21,7 @@ type State struct {
 	EscrowTable cid.Cid // BalanceTable
 
 	// Amount locked, indexed by actor address.
-	LockedTable cid.Cid // // AMT[Address]LockedState
+	LockedTable cid.Cid // // BalanceTable
 
 	// Total Client Collateral that is locked -> unlocked when deal is terminated
 	TotalLockedCollateral abi.TokenAmount
@@ -59,6 +59,8 @@ func ConstructState(emptyMapCid, emptyMMapCid cid.Cid) *State {
 
 		TotalLockedCollateral: abi.NewTokenAmount(0),
 		TotalCollateral:       abi.NewTokenAmount(0),
+		TotalRetrievalReward:  abi.NewTokenAmount(0),
+		PendingReward:         abi.NewTokenAmount(0),
 	}
 }
 
