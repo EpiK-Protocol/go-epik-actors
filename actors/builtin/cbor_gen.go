@@ -14,14 +14,14 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufMinerAddrs = []byte{131}
+var lengthBufGetControlAddressesReturn = []byte{132}
 
-func (t *MinerAddrs) MarshalCBOR(w io.Writer) error {
+func (t *GetControlAddressesReturn) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufMinerAddrs); err != nil {
+	if _, err := w.Write(lengthBufGetControlAddressesReturn); err != nil {
 		return err
 	}
 
@@ -34,6 +34,11 @@ func (t *MinerAddrs) MarshalCBOR(w io.Writer) error {
 
 	// t.Worker (address.Address) (struct)
 	if err := t.Worker.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Coinbase (address.Address) (struct)
+	if err := t.Coinbase.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -53,8 +58,8 @@ func (t *MinerAddrs) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *MinerAddrs) UnmarshalCBOR(r io.Reader) error {
-	*t = MinerAddrs{}
+func (t *GetControlAddressesReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = GetControlAddressesReturn{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -67,7 +72,7 @@ func (t *MinerAddrs) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -86,6 +91,15 @@ func (t *MinerAddrs) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.Worker.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.Worker: %w", err)
+		}
+
+	}
+	// t.Coinbase (address.Address) (struct)
+
+	{
+
+		if err := t.Coinbase.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Coinbase: %w", err)
 		}
 
 	}

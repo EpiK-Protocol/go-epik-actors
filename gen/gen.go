@@ -37,7 +37,7 @@ func main() {
 	}
 
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/cbor_gen.go", "builtin",
-		builtin.MinerAddrs{},
+		builtin.GetControlAddressesReturn{},
 		builtin.ExpertAddr{},
 		builtin.ConfirmSectorProofsParams{},
 		builtin.ApplyRewardParams{},
@@ -247,7 +247,6 @@ func main() {
 		miner.DeclareFaultsParams{},
 		miner.DeclareFaultsRecoveredParams{},
 		miner.ReportConsensusFaultParams{},
-		miner.GetControlAddressesReturn{},
 		miner.CheckSectorProvenParams{},
 		miner.WithdrawBalanceParams{},
 		miner.CompactPartitionsParams{},

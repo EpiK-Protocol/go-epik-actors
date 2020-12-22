@@ -63,7 +63,7 @@ func RequireNoErr(rt runtime.Runtime, err error, defaultExitCode exitcode.ExitCo
 }
 
 func RequestMinerControlAddrs(rt runtime.Runtime, minerAddr addr.Address) (ownerAddr addr.Address, workerAddr addr.Address, controlAddrs []addr.Address) {
-	var addrs MinerAddrs
+	var addrs GetControlAddressesReturn
 	code := rt.Send(minerAddr, MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &addrs)
 	RequireSuccess(rt, code, "failed fetching miner control addresses")
 
@@ -120,9 +120,10 @@ type NotifyVote struct {
 }
 
 // This type duplicates the Miner.ControlAddresses return type, to work around a circular dependency between actors.
-type MinerAddrs struct {
+type GetControlAddressesReturn struct {
 	Owner        addr.Address
 	Worker       addr.Address
+	Coinbase     addr.Address
 	ControlAddrs []addr.Address
 }
 

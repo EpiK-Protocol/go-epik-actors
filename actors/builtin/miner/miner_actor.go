@@ -160,21 +160,12 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 // Control //
 /////////////
 
-// Changed since v0:
-// - Add ControlAddrs
-type GetControlAddressesReturn struct {
-	Owner        addr.Address
-	Worker       addr.Address
-	Coinbase     addr.Address
-	ControlAddrs []addr.Address
-}
-
-func (a Actor) ControlAddresses(rt Runtime, _ *abi.EmptyValue) *GetControlAddressesReturn {
+func (a Actor) ControlAddresses(rt Runtime, _ *abi.EmptyValue) *builtin.GetControlAddressesReturn {
 	rt.ValidateImmediateCallerAcceptAny()
 	var st State
 	rt.StateReadonly(&st)
 	info := getMinerInfo(rt, &st)
-	return &GetControlAddressesReturn{
+	return &builtin.GetControlAddressesReturn{
 		Owner:        info.Owner,
 		Worker:       info.Worker,
 		Coinbase:     info.Coinbase,
@@ -830,7 +821,7 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 					/* SectorExpiry: precommit.Info.Expiration, */
 				},
 				abi.NewTokenAmount(0),
-				nil, //&ret,// TODO:
+				&ret,
 			)
 
 			if code != exitcode.Ok {

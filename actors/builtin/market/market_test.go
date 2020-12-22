@@ -20,7 +20,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v2/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v2/support/testing"
@@ -466,7 +465,7 @@ func TestPublishStorageDeals(t *testing.T) {
 			builtin.MethodsMiner.ControlAddresses,
 			nil,
 			big.Zero(),
-			&miner.GetControlAddressesReturn{Owner: mAddr.owner, Worker: mAddr.worker},
+			&builtin.GetControlAddressesReturn{Owner: mAddr.owner, Worker: mAddr.worker},
 			exitcode.Ok,
 		)
 		rt.ExpectSend(
@@ -845,7 +844,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 				params.DataRef.Expert = expertAddr.String()
 
 				rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
-				rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
+				rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 				rt.ExpectSend(
 					expertAddr,
 					builtin.MethodsExpert.GetData,
@@ -927,7 +926,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 			params.DataRef.Expert = expertAddr.String()
 
 			rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
-			rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
+			rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 			rt.ExpectSend(
 					expertAddr,
 					builtin.MethodsExpert.GetData,
@@ -993,7 +992,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 			deal := generateDealProposal(client, provider, startEpoch/* , endEpoch */)
 			params := mkPublishStorageParams(deal)
 			rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
-			rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: tutil.NewIDAddr(t, 999), Owner: owner}, 0)
+			rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: tutil.NewIDAddr(t, 999), Owner: owner}, 0)
 			rt.SetCaller(worker, builtin.AccountActorCodeID)
 			rt.ExpectAbort(exitcode.ErrForbidden, func() {
 				rt.Call(actor.PublishStorageDeals, params)
@@ -1615,7 +1614,7 @@ func TestCronTick(t *testing.T) {
 		params := mkPublishStorageParams(d2)
 		params.DataRef.Expert = expertAddr.String()
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
-		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
+		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -1914,7 +1913,7 @@ func TestCronTickTimedoutDeals(t *testing.T) {
 		params := mkPublishStorageParams(d2)
 		params.DataRef.Expert=expertAddr.String()
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
-		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
+		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -2496,7 +2495,7 @@ func TestMarketActorDeals(t *testing.T) {
 	// Second attempt at publishing the same deal should fail
 	{
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
-		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
+		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
@@ -2548,7 +2547,7 @@ func TestMaxDealLabelSize(t *testing.T) {
 	// Label greater than max size should fail.
 	{
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
-		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &miner.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
+		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner}, 0)
 		rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{}, big.Zero(),nil,exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
@@ -2844,7 +2843,7 @@ func (h *marketActorTestHarness) addParticipantFunds(rt *mock.Runtime, addr addr
 }
 
 func (h *marketActorTestHarness) expectProviderControlAddresses(rt *mock.Runtime, provider address.Address, owner address.Address, worker address.Address) {
-	expectRet := &miner.GetControlAddressesReturn{Owner: owner, Worker: worker}
+	expectRet := &builtin.GetControlAddressesReturn{Owner: owner, Worker: worker}
 
 	rt.ExpectSend(
 		provider,
@@ -3004,7 +3003,7 @@ func (h *marketActorTestHarness) publishDeals(rt *mock.Runtime, minerAddrs *mine
 		builtin.MethodsMiner.ControlAddresses,
 		nil,
 		big.Zero(),
-		&miner.GetControlAddressesReturn{Owner: minerAddrs.owner, Worker: minerAddrs.worker},
+		&builtin.GetControlAddressesReturn{Owner: minerAddrs.owner, Worker: minerAddrs.worker},
 		exitcode.Ok,
 	)
 	rt.ExpectSend(
