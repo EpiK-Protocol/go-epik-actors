@@ -17,7 +17,7 @@ import (
 
 type MarketMigrator struct{}
 
-func (m MarketMigrator) MigrateState(ctx context.Context, store cbor.IpldStore, head cid.Cid, info MigrationInfo) (*StateMigrationResult, error) {
+func (m marketMigrator) migrateState(ctx context.Context, store cbor.IpldStore, in actorMigrationInput) (*actorMigrationResult, error) {
 	var inState market2.State
 	if err := store.Get(ctx, head, &inState); err != nil {
 		return nil, err
@@ -63,8 +63,9 @@ func (m MarketMigrator) MigrateState(ctx context.Context, store cbor.IpldStore, 
 	}
 
 	newHead, err := store.Put(ctx, &outState)
-	return &StateMigrationResult{
-		NewHead: newHead,
+	return &actorMigrationResult{
+		newCodeCID: builtin3.StorageMarketActorCodeID,
+		newHead:    newHead,
 	}, err
 }
 

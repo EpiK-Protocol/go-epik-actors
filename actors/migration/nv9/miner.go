@@ -17,7 +17,7 @@ import (
 
 type minerMigrator struct{}
 
-func (m minerMigrator) MigrateState(ctx context.Context, store cbor.IpldStore, in StateMigrationInput) (*StateMigrationResult, error) {
+func (m minerMigrator) migrateState(ctx context.Context, store cbor.IpldStore, in actorMigrationInput) (*actorMigrationResult, error) {
 	var inState miner2.State
 	if err := store.Get(ctx, in.head, &inState); err != nil {
 		return nil, err
@@ -58,9 +58,9 @@ func (m minerMigrator) MigrateState(ctx context.Context, store cbor.IpldStore, i
 		EarlyTerminations:         inState.EarlyTerminations,
 	}
 	newHead, err := store.Put(ctx, &outState)
-	return &StateMigrationResult{
-		NewCodeCID: builtin3.StorageMinerActorCodeID,
-		NewHead:    newHead,
+	return &actorMigrationResult{
+		newCodeCID: builtin3.StorageMinerActorCodeID,
+		newHead:    newHead,
 	}, err
 }
 
