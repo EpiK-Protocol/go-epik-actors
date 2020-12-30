@@ -6,12 +6,9 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 )
 
-func TestQuality(t *testing.T) {
+/* func TestQuality(t *testing.T) {
 	// Quality of space with no deals. This doesn't depend on either the sector size or duration.
 	emptyQuality := big.NewIntUnsigned(1 << builtin.SectorQualityPrecision)
 	// Quality space filled with non-verified deals.
@@ -132,7 +129,7 @@ func TestPower(t *testing.T) {
 			assert.Equal(t, halfVerifiedPower, miner.QAPowerForWeight(sectorSize, sectorDuration, big.Zero(), big.Div(sectorWeight, big.NewInt(2))))
 		}
 	})
-}
+} */
 
 func weight(size abi.SectorSize, duration abi.ChainEpoch) big.Int {
 	return big.Mul(big.NewIntUnsigned(uint64(size)), big.NewInt(int64(duration)))

@@ -17,7 +17,6 @@ import (
 	require "github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/multisig"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v2/support/mock"
@@ -465,15 +464,16 @@ func TestPropose(t *testing.T) {
 
 		actor.constructAndVerify(rt, numApprovals, noUnlockDuration, startEpoch, signers...)
 
-		proposeRet := miner.GetControlAddressesReturn{
-			Owner:  tutil.NewIDAddr(t, 1),
-			Worker: tutil.NewIDAddr(t, 2),
+		proposeRet := builtin.GetControlAddressesReturn{
+			Owner:    tutil.NewIDAddr(t, 1),
+			Worker:   tutil.NewIDAddr(t, 2),
+			Coinbase: tutil.NewIDAddr(t, 3),
 		}
 		rt.ExpectSend(chuck, builtin.MethodsMiner.ControlAddresses, fakeParams, sendValue, &proposeRet, 0)
 
 		rt.SetCaller(anne, builtin.AccountActorCodeID)
 
-		var out miner.GetControlAddressesReturn
+		var out builtin.GetControlAddressesReturn
 		actor.proposeOK(rt, chuck, sendValue, builtin.MethodsMiner.ControlAddresses, fakeParams, &out)
 		// assert ProposeReturn.Ret can be marshaled into the expected structure.
 		assert.Equal(t, proposeRet, out)
@@ -577,14 +577,15 @@ func TestApprove(t *testing.T) {
 		rt.SetCaller(anne, builtin.AccountActorCodeID)
 		proposalHashData := actor.proposeOK(rt, chuck, sendValue, builtin.MethodsMiner.ControlAddresses, fakeParams, nil)
 
-		approveRet := miner.GetControlAddressesReturn{
-			Owner:  tutil.NewIDAddr(t, 1),
-			Worker: tutil.NewIDAddr(t, 2),
+		approveRet := builtin.GetControlAddressesReturn{
+			Owner:    tutil.NewIDAddr(t, 1),
+			Worker:   tutil.NewIDAddr(t, 2),
+			Coinbase: tutil.NewIDAddr(t, 3),
 		}
 
 		rt.SetCaller(bob, builtin.AccountActorCodeID)
 		rt.ExpectSend(chuck, builtin.MethodsMiner.ControlAddresses, fakeParams, sendValue, &approveRet, 0)
-		var out miner.GetControlAddressesReturn
+		var out builtin.GetControlAddressesReturn
 		actor.approveOK(rt, txnID, proposalHashData, &out)
 		// assert approveRet.Ret can be marshaled into the expected structure.
 		assert.Equal(t, approveRet, out)

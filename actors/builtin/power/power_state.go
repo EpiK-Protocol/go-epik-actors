@@ -71,7 +71,7 @@ type Claim struct {
 	// Sum of quality adjusted power for a miner's sectors.
 	QualityAdjPower abi.StoragePower
 
-	PledgeSufficient bool
+	TotalMiningPledge abi.TokenAmount
 }
 
 type CronEvent struct {
@@ -139,13 +139,13 @@ func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 }
 
 // Parameters may be negative to subtract.
-func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePower, qapower abi.StoragePower, pledgeSufficient bool) error {
+func (st *State) AddToClaim(s adt.Store, miner addr.Address, power abi.StoragePower, qapower abi.StoragePower, pledge abi.TokenAmount) error {
 	claims, err := adt.AsMap(s, st.Claims)
 	if err != nil {
 		return xerrors.Errorf("failed to load claims: %w", err)
 	}
 
-	if err := st.addToClaim(claims, miner, power, qapower, pledgeSufficient); err != nil {
+	if err := st.addToClaim(claims, miner, power, qapower, pledge); err != nil {
 		return xerrors.Errorf("failed to add claim: %w", err)
 	}
 
@@ -171,7 +171,7 @@ func (st *State) addToClaim(
 	miner addr.Address,
 	power abi.StoragePower,
 	qapower abi.StoragePower,
-	pledgeSufficient bool,
+	pledge abi.TokenAmount,
 ) error {
 	oldClaim, ok, err := getClaim(claims, miner)
 	if err != nil {
@@ -184,13 +184,17 @@ func (st *State) addToClaim(
 	// TotalBytes always update directly
 	st.TotalQABytesCommitted = big.Add(st.TotalQABytesCommitted, qapower)
 	st.TotalBytesCommitted = big.Add(st.TotalBytesCommitted, power)
+	st.TotalPledgeCollateral = big.Add(st.TotalPledgeCollateral, pledge)
 
 	newClaim := Claim{
-		SealProofType:    oldClaim.SealProofType,
-		RawBytePower:     big.Add(oldClaim.RawBytePower, power),
-		QualityAdjPower:  big.Add(oldClaim.QualityAdjPower, qapower),
-		PledgeSufficient: pledgeSufficient,
+		SealProofType:     oldClaim.SealProofType,
+		RawBytePower:      big.Add(oldClaim.RawBytePower, power),
+		QualityAdjPower:   big.Add(oldClaim.QualityAdjPower, qapower),
+		TotalMiningPledge: big.Add(oldClaim.TotalMiningPledge, pledge),
 	}
+
+	newSuff := newClaim.TotalMiningPledge.GreaterThanEqual(ConsensusMinerMinPledge)
+	oldSuff := oldClaim.TotalMiningPledge.GreaterThanEqual(ConsensusMinerMinPledge)
 
 	minPower, err := builtin.ConsensusMinerMinPower(oldClaim.SealProofType)
 	if err != nil {
@@ -199,24 +203,22 @@ func (st *State) addToClaim(
 	prevBelow := oldClaim.RawBytePower.LessThan(minPower)
 	stillBelow := newClaim.RawBytePower.LessThan(minPower)
 
-	if !stillBelow && newClaim.PledgeSufficient && (prevBelow || !oldClaim.PledgeSufficient) {
+	if !stillBelow && newSuff && (prevBelow || !oldSuff) {
 		// just passed min miner size
 		st.MinerAboveMinPowerCount++
 		st.TotalQualityAdjPower = big.Add(st.TotalQualityAdjPower, newClaim.QualityAdjPower)
 		st.TotalRawBytePower = big.Add(st.TotalRawBytePower, newClaim.RawBytePower)
-	} else if (!prevBelow && stillBelow) || (oldClaim.PledgeSufficient && !newClaim.PledgeSufficient) {
+	} else if !prevBelow && oldSuff && (stillBelow || !newSuff) {
 		// just went below min miner size
 		st.MinerAboveMinPowerCount--
 		st.TotalQualityAdjPower = big.Sub(st.TotalQualityAdjPower, oldClaim.QualityAdjPower)
 		st.TotalRawBytePower = big.Sub(st.TotalRawBytePower, oldClaim.RawBytePower)
-	} else if !prevBelow && !stillBelow && oldClaim.PledgeSufficient && newClaim.PledgeSufficient {
+	} else if !prevBelow && !stillBelow && oldSuff && newSuff {
 		// Was above the threshold, still above
 		st.TotalQualityAdjPower = big.Add(st.TotalQualityAdjPower, qapower)
 		st.TotalRawBytePower = big.Add(st.TotalRawBytePower, power)
 	}
 
-	AssertMsg(newClaim.RawBytePower.GreaterThanEqual(big.Zero()), "negative claimed raw byte power: %v", newClaim.RawBytePower)
-	AssertMsg(newClaim.QualityAdjPower.GreaterThanEqual(big.Zero()), "negative claimed quality adjusted power: %v", newClaim.QualityAdjPower)
 	AssertMsg(st.MinerAboveMinPowerCount >= 0, "negative number of miners larger than min: %v", st.MinerAboveMinPowerCount)
 	return setClaim(claims, miner, &newClaim)
 }
@@ -231,7 +233,7 @@ func (st *State) deleteClaim(claims *adt.Map, miner addr.Address) error {
 	}
 
 	// subtract from stats as if we were simply removing power
-	err = st.addToClaim(claims, miner, oldClaim.RawBytePower.Neg(), oldClaim.QualityAdjPower.Neg(), oldClaim.PledgeSufficient)
+	err = st.addToClaim(claims, miner, oldClaim.RawBytePower.Neg(), oldClaim.QualityAdjPower.Neg(), oldClaim.TotalMiningPledge.Neg())
 	if err != nil {
 		return fmt.Errorf("failed to subtract miner power before deleting claim: %w", err)
 	}
@@ -286,8 +288,9 @@ func loadCronEvents(mmap *adt.Multimap, epoch abi.ChainEpoch) ([]CronEvent, erro
 }
 
 func setClaim(claims *adt.Map, a addr.Address, claim *Claim) error {
-	Assert(claim.RawBytePower.GreaterThanEqual(big.Zero()))
-	Assert(claim.QualityAdjPower.GreaterThanEqual(big.Zero()))
+	AssertMsg(claim.RawBytePower.GreaterThanEqual(big.Zero()), "negative claimed raw byte power: %v", claim.RawBytePower)
+	AssertMsg(claim.QualityAdjPower.GreaterThanEqual(big.Zero()), "negative claimed quality adjusted power: %v", claim.QualityAdjPower)
+	AssertMsg(claim.TotalMiningPledge.GreaterThanEqual(big.Zero()), "negative claimed total pledge: %v", claim.TotalMiningPledge)
 
 	if err := claims.Put(abi.AddrKey(a), claim); err != nil {
 		return xerrors.Errorf("failed to put claim with address %s power %v: %w", a, claim, err)

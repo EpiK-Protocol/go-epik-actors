@@ -64,7 +64,9 @@ func (a Actor) ValidateGranted(rt runtime.Runtime, params *builtin.ValidateGrant
 	granted, err := st.IsGranted(store, governors, governor, codeID, params.Method)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check granted")
 
-	builtin.RequireParam(rt, granted, "forbidden")
+	if !granted {
+		rt.Abortf(exitcode.ErrForbidden, "method not granted")
+	}
 
 	return nil
 }

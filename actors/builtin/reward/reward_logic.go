@@ -15,7 +15,7 @@ const (
 	// sector lifetimes, etc.
 	daysInYear   = 365
 	epochsInYear = daysInYear * builtin.EpochsInDay */
-	decayPeriod = 90 * builtin.EpochsInDay
+	RewardDecayPeriod = 90 * builtin.EpochsInDay
 )
 
 var (

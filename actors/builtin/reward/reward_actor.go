@@ -42,14 +42,10 @@ func (a Actor) State() cbor.Er {
 
 var _ runtime.VMActor = Actor{}
 
-func (a Actor) Constructor(rt runtime.Runtime, currRealizedPower *abi.StoragePower) *abi.EmptyValue {
+func (a Actor) Constructor(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
-	if currRealizedPower == nil {
-		rt.Abortf(exitcode.ErrIllegalArgument, "argument should not be nil")
-		return nil // linter does not understand abort exiting
-	}
-	st := ConstructState(*currRealizedPower)
+	st := ConstructState()
 	rt.StateCreate(st)
 	return nil
 }
@@ -194,7 +190,7 @@ func (a Actor) ThisEpochReward(rt runtime.Runtime, _ *abi.EmptyValue) *ThisEpoch
 // Called at the end of each epoch by the power actor (in turn by its cron hook).
 // This is only invoked for non-empty tipsets, but catches up any number of null
 // epochs to compute the next epoch reward.
-func (a Actor) UpdateNetworkKPI(rt runtime.Runtime, currRealizedPower *abi.StoragePower) *abi.EmptyValue {
+func (a Actor) UpdateNetworkKPI(rt runtime.Runtime, _ *abi.EmptyValue /* currRealizedPower *abi.StoragePower */) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.StoragePowerActorAddr)
 	/* if currRealizedPower == nil {
 		rt.Abortf(exitcode.ErrIllegalArgument, "arugment should not be nil")
@@ -202,7 +198,7 @@ func (a Actor) UpdateNetworkKPI(rt runtime.Runtime, currRealizedPower *abi.Stora
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		if rt.CurrEpoch()+1 >= st.Epoch+decayPeriod {
+		if rt.CurrEpoch()+1 >= st.Epoch+RewardDecayPeriod {
 			st.ThisEpochReward = big.Div(big.Mul(st.ThisEpochReward, DecayTarget.Numerator), DecayTarget.Denominator)
 			st.Epoch = rt.CurrEpoch() + 1
 		}

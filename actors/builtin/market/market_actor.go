@@ -334,7 +334,7 @@ type ActivateDealsParams struct {
 }
 
 type ActivateDealsReturn struct {
-	DealWins []builtin.BoolValue
+	DealWins []builtin.BoolValue // TODO:
 }
 
 // Verify that a given set of storage deals is valid for a sector currently being ProveCommitted,
@@ -686,6 +686,7 @@ func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValu
 			builtin.RequireParam(rt, found, "piece cid not found")
 
 			quota := cbg.CborInt(newQuota.Quota)
+			builtin.RequireParam(rt, quota >= 0, "new quota too large")
 			err = msm.quotas.Put(abi.CidKey(newQuota.PieceCID), &quota)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set quota")
 		}
@@ -699,7 +700,7 @@ func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValu
 func (a Actor) SetInitialQuota(rt Runtime, quota *cbg.CborInt) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 
-	builtin.RequireParam(rt, *quota > 0, "negative quota to set")
+	builtin.RequireParam(rt, *quota > 0, "non-positive quota to set")
 
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsMarket.SetInitialQuota)
 

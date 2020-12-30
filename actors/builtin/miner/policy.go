@@ -295,5 +295,3 @@ func RewardForConsensusSlashReport(elapsedEpoch abi.ChainEpoch, collateral abi.T
 	return big.Min(big.Div(num, denom), big.Div(big.Mul(collateral, consensusFaultMaxReporterShare.Numerator),
 		consensusFaultMaxReporterShare.Denominator))
 }
-
-var ConsensusMinerMinPledge = big.Mul(big.NewInt(1000), builtin.TokenPrecision) // 1000 EPK

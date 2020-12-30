@@ -1,6 +1,7 @@
 package miner_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/filecoin-project/go-bitfield"
@@ -10,7 +11,7 @@ import (
 )
 
 func assertBitfieldsEqual(t *testing.T, expected bitfield.BitField, actual bitfield.BitField) {
-	const maxDiff = 100
+	const maxDiff = math.MaxInt64
 
 	missing, err := bitfield.SubtractBitField(expected, actual)
 	require.NoError(t, err)

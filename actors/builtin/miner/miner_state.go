@@ -161,7 +161,7 @@ type SectorOnChainInfo struct {
 	Activation   abi.ChainEpoch          // Epoch during which the sector proof was accepted
 	DealIDs      []abi.DealID
 	PieceSizes   []uint64            // Space size of deal corresponding to DealIDs
-	DealWins     []builtin.BoolValue // If deal wins extra power incentive corresponding to DealIDs // TODO:
+	DealWins     []builtin.BoolValue // If deal wins extra power incentive corresponding to DealIDs // TODO: merge
 	/* Expiration         abi.ChainEpoch // Epoch during which the sector expires */
 	/* DealWeight         abi.DealWeight // Integral of active deals over sector lifetime
 	VerifiedDealWeight abi.DealWeight // Integral of active verified deals over sector lifetime
@@ -741,7 +741,7 @@ func (st *State) SaveVestingFunds(store adt.Store, funds *VestingFunds) error {
 	st.PreCommitDeposits = newTotal
 } */
 
-func (st *State) addPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) error {
+func (st *State) AddPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) error {
 	Assert(amount.GreaterThan(big.Zero()))
 
 	// add to pledges
@@ -761,10 +761,18 @@ func (st *State) addPledge(store adt.Store, pledger addr.Address, amount abi.Tok
 		out = big.Add(out, amount)
 	}
 	st.TotalPledge = big.Add(st.TotalPledge, amount)
-	return pledges.Put(abi.AddrKey(pledger), &out)
+	err = pledges.Put(abi.AddrKey(pledger), &out)
+	if err != nil {
+		return errors.Wrapf(err, "failed to put pledge")
+	}
+	st.Pledges, err = pledges.Root()
+	if err != nil {
+		return errors.Wrapf(err, "failed to flush pledges")
+	}
+	return nil
 }
 
-func (st *State) withdrawPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
+func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
 	Assert(amount.GreaterThan(big.Zero()))
 
 	pledges, err := adt.AsMap(store, st.Pledges)
@@ -797,6 +805,11 @@ func (st *State) withdrawPledge(store adt.Store, pledger addr.Address, amount ab
 
 	st.TotalPledge = big.Sub(st.TotalPledge, actual)
 	Assert(st.TotalPledge.GreaterThanEqual(big.Zero()))
+
+	st.Pledges, err = pledges.Root()
+	if err != nil {
+		return big.Zero(), errors.Wrapf(err, "failed to flush pledges")
+	}
 	return actual, nil
 }
 

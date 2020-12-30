@@ -266,7 +266,7 @@ func CheckDeadlineStateInvariants(deadline *Deadline, store adt.Store, quant Qua
 					acc.Require(found, "expected to find partition expiration entry at epoch %d", epoch)
 				}
 
-				if queuedPIdxs, err := bf.AllMap(1 << 20); err != nil {
+				if queuedPIdxs, err := bf.AllMap(NoExpireEpoch); err != nil {
 					acc.Addf("error expanding expirating partitions: %v", err)
 				} else {
 					for _, p := range expiringPIdxs {
@@ -491,8 +491,8 @@ func CheckExpirationQueue(expQ ExpirationQueue, liveSectors map[abi.SectorNumber
 	err = expQ.ForEach(&exp, func(e int64) error {
 		epoch := abi.ChainEpoch(e)
 		acc := acc.WithPrefix("expiration epoch %d: ", epoch)
-		acc.Require(quant.QuantizeUp(epoch) == epoch,
-			"expiration queue key %d is not quantized, expected %d", epoch, quant.QuantizeUp(epoch))
+		acc.Require(epoch == NoExpireEpoch || quant.QuantizeUp(epoch) == epoch,
+			"expiration queue key %d is not quantized nor NoExpireEpoch, expected %d", epoch, quant.QuantizeUp(epoch))
 		if firstQueueEpoch == abi.ChainEpoch(-1) {
 			firstQueueEpoch = epoch
 		}
@@ -771,12 +771,14 @@ func selectSectorsMap(sectors map[abi.SectorNumber]*SectorOnChainInfo, include b
 
 func powerForSectors(sectors map[abi.SectorNumber]*SectorOnChainInfo, ssize abi.SectorSize) PowerPair {
 	qa := big.Zero()
-	/* for _, s := range sectors { // nolint:nomaprange
-		qa = big.Add(qa, QAPowerForSector(ssize, s))
-	} */
+	raw := big.Zero()
+	for _, s := range sectors { // nolint:nomaprange
+		qa = big.Add(qa, QAPowerForSector(s))
+		raw = big.Add(raw, RawPowerForSector(s))
+	}
 
 	return PowerPair{
-		Raw: big.Mul(big.NewIntUnsigned(uint64(ssize)), big.NewIntUnsigned(uint64(len(sectors)))),
+		Raw: raw,
 		QA:  qa,
 	}
 }

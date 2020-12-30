@@ -280,15 +280,15 @@ func (a Actor) AddPledge(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		err := st.addPledge(adt.AsStore(rt), rt.Caller(), rt.ValueReceived())
+		err := st.AddPledge(adt.AsStore(rt), rt.Caller(), rt.ValueReceived())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add pledge")
 	})
 
 	err := st.CheckBalanceInvariants(rt.CurrentBalance())
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")
 
-	requestUpdatePower(rt, &st, NewPowerPairZero())
-	notifyPledgeChanged(rt, rt.ValueReceived())
+	// power.TotalPledgeCollateral will be changed implicitly
+	requestUpdatePower(rt, rt.ValueReceived(), NewPowerPairZero())
 	return nil
 }
 
@@ -305,10 +305,13 @@ func (a Actor) WithdrawPledge(rt Runtime, params *WithdrawPledgeParams) *abi.Emp
 	var st State
 	rt.StateTransaction(&st, func() {
 		var err error
-		amountWithdrawn, err = st.withdrawPledge(adt.AsStore(rt), rt.Caller(), params.AmountRequested)
+		amountWithdrawn, err = st.WithdrawPledge(adt.AsStore(rt), rt.Caller(), params.AmountRequested)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to withdraw pledge")
 	})
-	Assert(amountWithdrawn.GreaterThan(big.Zero()))
+	Assert(amountWithdrawn.GreaterThanEqual(big.Zero()))
+	if amountWithdrawn.IsZero() {
+		return nil
+	}
 
 	code := rt.Send(rt.Caller(), builtin.MethodSend, nil, amountWithdrawn, &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to send funds")
@@ -316,8 +319,8 @@ func (a Actor) WithdrawPledge(rt Runtime, params *WithdrawPledgeParams) *abi.Emp
 	err := st.CheckBalanceInvariants(rt.CurrentBalance())
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")
 
-	requestUpdatePower(rt, &st, NewPowerPairZero())
-	notifyPledgeChanged(rt, amountWithdrawn.Neg())
+	// power.TotalPledgeCollateral will be changed implicitly
+	requestUpdatePower(rt, amountWithdrawn.Neg(), NewPowerPairZero())
 	return nil
 }
 
@@ -517,7 +520,7 @@ func (a Actor) SubmitWindowedPoSt(rt Runtime, params *SubmitWindowedPoStParams) 
 	// NOTE: It would be permissible to delay the power loss until the deadline closes, but that would require
 	// additional accounting state.
 	// https://github.com/filecoin-project/specs-actors/issues/414
-	requestUpdatePower(rt, &st, postResult.PowerDelta)
+	requestUpdatePower(rt, big.Zero(), postResult.PowerDelta)
 
 	// rt.StateReadonly(&st)
 	err := st.CheckBalanceInvariants(rt.CurrentBalance())
@@ -587,7 +590,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 
 	rewardStats := requestCurrentEpochBlockReward(rt)
 	pwrTotal := requestCurrentTotalPower(rt) */
-	dealWeight := requestDealWeight(rt, params.DealIDs, rt.CurrEpoch() /* , params.Expiration */)
+	dealsInfo := requestDealsInfo(rt, params.DealIDs, rt.CurrEpoch() /* , params.Expiration */)
 
 	store := adt.AsStore(rt)
 	var st State
@@ -622,7 +625,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 
 		// Ensure total deal space does not exceed sector size.
 		totalSpace := uint64(0)
-		for _, space := range dealWeight.PieceSizes {
+		for _, space := range dealsInfo.PieceSizes {
 			totalSpace += space
 		}
 		if totalSpace > uint64(info.SectorSize) {
@@ -664,7 +667,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 			Info: SectorPreCommitInfo(*params),
 			// PreCommitDeposit:   depositReq,
 			PreCommitEpoch: rt.CurrEpoch(),
-			PieceSizes:     dealWeight.PieceSizes,
+			PieceSizes:     dealsInfo.PieceSizes,
 			/* DealWeight:         dealWeight.DealWeight,
 			VerifiedDealWeight: dealWeight.VerifiedDealWeight, */
 		}); err != nil {
@@ -941,7 +944,7 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")
 
 	// Request power and pledge update for activated sector.
-	requestUpdatePower(rt, &st, newPower)
+	requestUpdatePower(rt, big.Zero(), newPower)
 	notifyPledgeChanged(rt, newlyVested.Neg())
 
 	return nil
@@ -1239,7 +1242,7 @@ func (a Actor) TerminateSectors(rt Runtime, params *TerminateSectorsParams) *Ter
 		scheduleEarlyTerminationWork(rt)
 	}
 
-	requestUpdatePower(rt, &st, powerDelta)
+	requestUpdatePower(rt, big.Zero(), powerDelta)
 
 	return &TerminateSectorsReturn{Done: !more}
 }
@@ -1322,7 +1325,7 @@ func (a Actor) DeclareFaults(rt Runtime, params *DeclareFaultsParams) *abi.Empty
 	// NOTE: It would be permissible to delay the power loss until the deadline closes, but that would require
 	// additional accounting state.
 	// https://github.com/filecoin-project/specs-actors/issues/414
-	requestUpdatePower(rt, &st, powerDelta)
+	requestUpdatePower(rt, big.Zero(), powerDelta)
 
 	// Payment of penalty for declared faults is deferred to the deadline cron.
 	return nil
@@ -1691,13 +1694,11 @@ func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.E
 		feeToBurn = RepayDebtsOrAbort(rt, &st)
 	})
 
+	builtin.RequireParam(rt, availableBalance.GreaterThanEqual(big.Zero()), "negative available balance")
 	amountWithdrawn := big.Min(availableBalance, params.AmountRequested)
-	Assert(amountWithdrawn.GreaterThanEqual(big.Zero()))
-	Assert(amountWithdrawn.LessThanEqual(availableBalance))
-
 	if amountWithdrawn.GreaterThan(abi.NewTokenAmount(0)) {
 		code := rt.Send(info.Coinbase, builtin.MethodSend, nil, amountWithdrawn, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to withdraw balance")
+		builtin.RequireSuccess(rt, code, "failed to send withdrawn funds")
 	}
 
 	burnFunds(rt, feeToBurn)
@@ -1893,18 +1894,20 @@ func handleProvingDeadline(rt Runtime) {
 	hadEarlyTerminations := false
 
 	powerDeltaTotal := NewPowerPairZero()
-	/* penaltyTotal := abi.NewTokenAmount(0) */
-	pledgeDeltaTotal := abi.NewTokenAmount(0)
+	/* penaltyTotal := abi.NewTokenAmount(0)
+	pledgeDeltaTotal := abi.NewTokenAmount(0) */
+	newlyVested := abi.NewTokenAmount(0)
 
 	var st State
 	rt.StateTransaction(&st, func() {
 		{
+			var err error
 			// Vest locked funds.
 			// This happens first so that any subsequent penalties are taken
 			// from locked vesting funds before funds free this epoch.
-			newlyVested, err := st.UnlockVestedFunds(store, rt.CurrEpoch())
+			newlyVested, err = st.UnlockVestedFunds(store, rt.CurrEpoch())
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to vest funds")
-			pledgeDeltaTotal = big.Add(pledgeDeltaTotal, newlyVested.Neg())
+			// pledgeDeltaTotal = big.Add(pledgeDeltaTotal, newlyVested.Neg())
 		}
 
 		{
@@ -1913,13 +1916,13 @@ func handleProvingDeadline(rt Runtime) {
 			processPendingWorker(info, rt, &st)
 		}
 
-		/* {
-			depositToBurn, err := st.ExpirePreCommits(store, currEpoch)
+		{
+			err := st.ExpirePreCommits(store, currEpoch)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to expire pre-committed sectors")
 
-			err = st.ApplyPenalty(depositToBurn)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply penalty")
-		} */
+			/* err = st.ApplyPenalty(depositToBurn)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply penalty") */
+		}
 
 		// Record whether or not we _had_ early terminations in the queue before this method.
 		// That way, don't re-schedule a cron callback if one is already scheduled.
@@ -1951,9 +1954,9 @@ func handleProvingDeadline(rt Runtime) {
 	})
 
 	// Remove power for new faults, and burn penalties.
-	requestUpdatePower(rt, &st, powerDeltaTotal)
+	requestUpdatePower(rt, big.Zero(), powerDeltaTotal)
 	/* burnFunds(rt, penaltyTotal) */
-	notifyPledgeChanged(rt, pledgeDeltaTotal)
+	notifyPledgeChanged(rt, newlyVested.Neg())
 
 	// Schedule cron callback for next deadline's last epoch.
 	newDlInfo := st.DeadlineInfo(currEpoch)
@@ -2047,22 +2050,22 @@ func enrollCronEvent(rt Runtime, eventEpoch abi.ChainEpoch, callbackPayload *Cro
 	builtin.RequireSuccess(rt, code, "failed to enroll cron event")
 }
 
-func requestUpdatePower(rt Runtime, st *State, delta PowerPair) {
-	if delta.IsZero() {
+func requestUpdatePower(rt Runtime, pledgeDelta abi.TokenAmount, powerDelta PowerPair) {
+	if pledgeDelta.IsZero() && powerDelta.IsZero() {
 		return
 	}
 	code := rt.Send(
 		builtin.StoragePowerActorAddr,
 		builtin.MethodsPower.UpdateClaimedPower,
 		&power.UpdateClaimedPowerParams{
-			RawByteDelta:         delta.Raw,
-			QualityAdjustedDelta: delta.QA,
-			PledgeSufficient:     st.TotalPledge.GreaterThanEqual(ConsensusMinerMinPledge),
+			RawByteDelta:         powerDelta.Raw,
+			QualityAdjustedDelta: powerDelta.QA,
+			PledgeDelta:          pledgeDelta,
 		},
 		abi.NewTokenAmount(0),
 		&builtin.Discard{},
 	)
-	builtin.RequireSuccess(rt, code, "failed to update power with power delta %v, pledge %s", delta, st.TotalPledge)
+	builtin.RequireSuccess(rt, code, "failed to update power with power delta %v, pledge delta %s", powerDelta, pledgeDelta)
 }
 
 func requestTerminateDeals(rt Runtime, epoch abi.ChainEpoch, dealIDs []abi.DealID) {
@@ -2194,7 +2197,7 @@ func requestUnsealedSectorCID(rt Runtime, proofType abi.RegisteredSealProof, dea
 	return cid.Cid(unsealedCID)
 }
 
-func requestDealWeight(rt Runtime, dealIDs []abi.DealID, sectorStart /* , sectorExpiry */ abi.ChainEpoch) market.VerifyDealsForActivationReturn {
+func requestDealsInfo(rt Runtime, dealIDs []abi.DealID, sectorStart /* , sectorExpiry */ abi.ChainEpoch) market.VerifyDealsForActivationReturn {
 	if len(dealIDs) == 0 {
 		return market.VerifyDealsForActivationReturn{
 			/* DealWeight:         big.Zero(),
@@ -2202,7 +2205,7 @@ func requestDealWeight(rt Runtime, dealIDs []abi.DealID, sectorStart /* , sector
 		}
 	}
 
-	var dealWeights market.VerifyDealsForActivationReturn
+	var dealsInfo market.VerifyDealsForActivationReturn
 
 	code := rt.Send(
 		builtin.StorageMarketActorAddr,
@@ -2213,10 +2216,10 @@ func requestDealWeight(rt Runtime, dealIDs []abi.DealID, sectorStart /* , sector
 			/* SectorExpiry: sectorExpiry, */
 		},
 		abi.NewTokenAmount(0),
-		&dealWeights,
+		&dealsInfo,
 	)
-	builtin.RequireSuccess(rt, code, "failed to verify deals and get deal weight")
-	return dealWeights
+	builtin.RequireSuccess(rt, code, "failed to verify deals and get deal info")
+	return dealsInfo
 }
 
 // Requests the current epoch target block reward from the reward actor.

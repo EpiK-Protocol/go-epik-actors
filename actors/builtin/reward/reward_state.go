@@ -65,7 +65,7 @@ type State struct {
 	// BaselineTotal abi.TokenAmount
 }
 
-func ConstructState(currRealizedPower abi.StoragePower) *State {
+func ConstructState() *State {
 	st := &State{
 		/* CumsumBaseline:         big.Zero(),
 		CumsumRealized:         big.Zero(),

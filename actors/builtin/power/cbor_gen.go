@@ -429,8 +429,8 @@ func (t *Claim) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.PledgeSufficient (bool) (bool)
-	if err := cbg.WriteBool(w, t.PledgeSufficient); err != nil {
+	// t.TotalMiningPledge (big.Int) (struct)
+	if err := t.TotalMiningPledge.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
@@ -497,22 +497,14 @@ func (t *Claim) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.PledgeSufficient (bool) (bool)
+	// t.TotalMiningPledge (big.Int) (struct)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajOther {
-		return fmt.Errorf("booleans must be major type 7")
-	}
-	switch extra {
-	case 20:
-		t.PledgeSufficient = false
-	case 21:
-		t.PledgeSufficient = true
-	default:
-		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	{
+
+		if err := t.TotalMiningPledge.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalMiningPledge: %w", err)
+		}
+
 	}
 	return nil
 }
@@ -1007,8 +999,8 @@ func (t *UpdateClaimedPowerParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.PledgeSufficient (bool) (bool)
-	if err := cbg.WriteBool(w, t.PledgeSufficient); err != nil {
+	// t.PledgeDelta (big.Int) (struct)
+	if err := t.PledgeDelta.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
@@ -1050,22 +1042,14 @@ func (t *UpdateClaimedPowerParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.PledgeSufficient (bool) (bool)
+	// t.PledgeDelta (big.Int) (struct)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajOther {
-		return fmt.Errorf("booleans must be major type 7")
-	}
-	switch extra {
-	case 20:
-		t.PledgeSufficient = false
-	case 21:
-		t.PledgeSufficient = true
-	default:
-		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	{
+
+		if err := t.PledgeDelta.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.PledgeDelta: %w", err)
+		}
+
 	}
 	return nil
 }

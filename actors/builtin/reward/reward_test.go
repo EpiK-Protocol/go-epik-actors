@@ -31,8 +31,8 @@ func TestConstructor(t *testing.T) {
 		rt := mock.NewBuilder(context.Background(), builtin.RewardActorAddr).
 			WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID).
 			Build(t)
-		startRealizedPower := abi.NewStoragePower(0)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		// startRealizedPower := abi.NewStoragePower(0)
+		actor.constructAndVerify(rt)
 		st := getState(rt)
 		assert.Equal(t, abi.ChainEpoch(0), st.Epoch)
 		/* assert.Equal(t, reward.DefaultSimpleTotal, st.SimpleTotal) */
@@ -77,7 +77,6 @@ func TestConstructor(t *testing.T) {
 
 }
 
-// TODO: error
 func TestAwardBlockReward(t *testing.T) {
 	actor := rewardHarness{reward.Actor{}, t}
 	winner := tutil.NewIDAddr(t, 1000)
@@ -86,8 +85,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("rejects gas reward exceeding balance", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(0)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 
 		rt.SetBalance(abi.NewTokenAmount(9))
 		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
@@ -99,8 +97,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("rejects negative penalty or reward", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(0)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 
 		rt.SetBalance(abi.NewTokenAmount(1e18))
 		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
@@ -117,8 +114,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("rejects non-positive sharecount", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(0)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 
 		rt.SetBalance(abi.NewTokenAmount(1e18))
 		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
@@ -133,8 +129,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("pays zero penalty and gas with no retrieval pledge", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(0)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 
 		oneEpk := abi.NewTokenAmount(1e18)
 
@@ -147,8 +142,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("pays reward and tracks penalty", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(0)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 
 		rt.SetBalance(big.Mul(big.NewInt(1e9), abi.NewTokenAmount(1e18)))
 		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
@@ -164,8 +158,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("pays out current balance when reward exceeds total balance", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(1)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 
 		// Total reward is a huge number, upon writing ~1e18, so 300 should be way less
 		smallReward := abi.NewTokenAmount(311)
@@ -185,6 +178,7 @@ func TestAwardBlockReward(t *testing.T) {
 			Miner:            winner,
 			Penalty:          penalty,
 			GasReward:        big.Zero(),
+			WinCount:         1,
 			ShareCount:       1,
 			RetrievalPledged: big.Zero(),
 		})
@@ -193,8 +187,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("pays 2.26% bandwidth reward", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(1)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 
 		// Total reward is a huge number, upon writing ~1e18, so 300 should be way less
 		smallReward := abi.NewTokenAmount(311)
@@ -216,6 +209,7 @@ func TestAwardBlockReward(t *testing.T) {
 			Miner:            winner,
 			Penalty:          penalty,
 			GasReward:        big.Zero(),
+			WinCount:         1,
 			ShareCount:       1,
 			RetrievalPledged: big.NewInt(113),
 		})
@@ -224,8 +218,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("TotalStoragePowerReward tracks correctly", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(1)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 		miner := tutil.NewIDAddr(t, 1000)
 
 		st := getState(rt)
@@ -252,8 +245,7 @@ func TestAwardBlockReward(t *testing.T) {
 
 	t.Run("funds are sent to the burnt funds actor if sending locked funds to miner fails", func(t *testing.T) {
 		rt := builder.Build(t)
-		startRealizedPower := abi.NewStoragePower(1)
-		actor.constructAndVerify(rt, &startRealizedPower)
+		actor.constructAndVerify(rt)
 		miner := tutil.NewIDAddr(t, 1000)
 		st := getState(rt)
 		assert.Equal(t, big.Zero(), st.TotalStoragePowerReward)
@@ -277,6 +269,7 @@ func TestAwardBlockReward(t *testing.T) {
 			Miner:            miner,
 			Penalty:          big.Zero(),
 			GasReward:        big.Zero(),
+			WinCount:         1,
 			ShareCount:       1,
 			RetrievalPledged: big.Zero(),
 		})
@@ -291,8 +284,7 @@ func TestThisEpochReward(t *testing.T) {
 		builder := mock.NewBuilder(context.Background(), builtin.RewardActorAddr).
 			WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 		rt := builder.Build(t)
-		power := abi.NewStoragePower(1 << 50)
-		actor.constructAndVerify(rt, &power)
+		actor.constructAndVerify(rt)
 
 		resp := actor.thisEpochReward(rt)
 		st := getState(rt)
@@ -308,36 +300,39 @@ func TestSuccessiveKPIUpdates(t *testing.T) {
 	builder := mock.NewBuilder(context.Background(), builtin.RewardActorAddr).
 		WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 	rt := builder.Build(t)
-	power := abi.NewStoragePower(1 << 50)
-	actor.constructAndVerify(rt, &power)
+	actor.constructAndVerify(rt)
+
+	st := getState(rt)
+	require.EqualValues(t, st.Epoch, abi.ChainEpoch(0))
+	require.EqualValues(t, rt.Epoch(), abi.ChainEpoch(0))
 
 	rt.SetEpoch(abi.ChainEpoch(0))
-	actor.updateNetworkKPI(rt, &power)
-	st := getState(rt)
-	require.EqualValues(t, st.Epoch, 1)
-	require.EqualValues(t, st.ThisEpochReward, reward.EpochZeroReward)
-	require.EqualValues(t, st.TotalStoragePowerReward, abi.NewTokenAmount(0))
+	actor.updateNetworkKPI(rt)
+	st = getState(rt)
+	require.EqualValues(t, 0, st.Epoch)
+	require.EqualValues(t, reward.EpochZeroReward, st.ThisEpochReward)
+	require.EqualValues(t, abi.NewTokenAmount(0), st.TotalStoragePowerReward)
 
 	rt.SetEpoch(abi.ChainEpoch(1))
-	actor.updateNetworkKPI(rt, &power)
+	actor.updateNetworkKPI(rt)
 	st = getState(rt)
-	require.EqualValues(t, st.Epoch, 2)
-	require.EqualValues(t, st.ThisEpochReward, reward.EpochZeroReward)
-	require.EqualValues(t, st.TotalStoragePowerReward, abi.NewTokenAmount(0))
+	require.EqualValues(t, 0, st.Epoch)
+	require.EqualValues(t, reward.EpochZeroReward, st.ThisEpochReward)
+	require.EqualValues(t, abi.NewTokenAmount(0), st.TotalStoragePowerReward)
 
-	rt.SetEpoch(90*builtin.EpochsInDay - 2)
-	actor.updateNetworkKPI(rt, &power)
+	rt.SetEpoch(reward.RewardDecayPeriod - 2)
+	actor.updateNetworkKPI(rt)
 	st = getState(rt)
-	require.EqualValues(t, st.Epoch, 90*builtin.EpochsInDay-1)
-	require.EqualValues(t, st.ThisEpochReward, reward.EpochZeroReward)
-	require.EqualValues(t, st.TotalStoragePowerReward, abi.NewTokenAmount(0))
+	require.EqualValues(t, 0, st.Epoch)
+	require.EqualValues(t, reward.EpochZeroReward, st.ThisEpochReward)
+	require.EqualValues(t, abi.NewTokenAmount(0), st.TotalStoragePowerReward)
 
-	rt.SetEpoch(90*builtin.EpochsInDay - 1)
-	actor.updateNetworkKPI(rt, &power)
+	rt.SetEpoch(reward.RewardDecayPeriod - 1)
+	actor.updateNetworkKPI(rt)
 	st = getState(rt)
-	require.EqualValues(t, st.Epoch, 90*builtin.EpochsInDay)
-	require.NotEqualValues(t, st.ThisEpochReward, reward.EpochZeroReward, st.ThisEpochReward)
-	require.EqualValues(t, st.TotalStoragePowerReward, abi.NewTokenAmount(0))
+	require.EqualValues(t, reward.RewardDecayPeriod, st.Epoch)
+	require.EqualValues(t, big.Div(big.Mul(reward.EpochZeroReward, reward.DecayTarget.Numerator), reward.DecayTarget.Denominator), st.ThisEpochReward)
+	require.EqualValues(t, abi.NewTokenAmount(0), st.TotalStoragePowerReward)
 }
 
 type rewardHarness struct {
@@ -345,18 +340,18 @@ type rewardHarness struct {
 	t testing.TB
 }
 
-func (h *rewardHarness) constructAndVerify(rt *mock.Runtime, currRawPower *abi.StoragePower) {
+func (h *rewardHarness) constructAndVerify(rt *mock.Runtime /* , currRawPower *abi.StoragePower */) {
 	rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-	ret := rt.Call(h.Constructor, currRawPower)
+	ret := rt.Call(h.Constructor, nil)
 	assert.Nil(h.t, ret)
 	rt.Verify()
 
 }
 
-func (h *rewardHarness) updateNetworkKPI(rt *mock.Runtime, currRawPower *abi.StoragePower) {
+func (h *rewardHarness) updateNetworkKPI(rt *mock.Runtime /* , currRawPower *abi.StoragePower */) {
 	rt.SetCaller(builtin.StoragePowerActorAddr, builtin.StoragePowerActorCodeID)
 	rt.ExpectValidateCallerAddr(builtin.StoragePowerActorAddr)
-	ret := rt.Call(h.UpdateNetworkKPI, currRawPower)
+	ret := rt.Call(h.UpdateNetworkKPI, nil)
 	assert.Nil(h.t, ret)
 	rt.Verify()
 }
@@ -389,6 +384,7 @@ func (h *rewardHarness) awardBlockReward(
 		Miner:            miner,
 		Penalty:          penalty,
 		GasReward:        gasReward,
+		WinCount:         1, //
 		ShareCount:       shareCount,
 		RetrievalPledged: retrievalPledge,
 	})

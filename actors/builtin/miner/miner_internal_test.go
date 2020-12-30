@@ -4,12 +4,9 @@ import (
 	"testing"
 
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/minio/blake2b-simd"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/util/smoothing"
 	tutils "github.com/filecoin-project/specs-actors/v2/support/testing"
 )
 
@@ -95,14 +92,14 @@ func TestCurrentProvingPeriodStart(t *testing.T) {
 
 type e = abi.ChainEpoch
 
-func TestFaultFeeInvariants(t *testing.T) {
+/* func TestFaultFeeInvariants(t *testing.T) {
 
-	/* // Construct plausible reward and qa power filtered estimates
+	// Construct plausible reward and qa power filtered estimates
 	epochReward := abi.NewTokenAmount(100 << 53)
 	rewardEstimate := smoothing.TestingConstantEstimate(epochReward) // not too much growth over ~3000 epoch projection in BR
 
 	networkPower := abi.NewStoragePower(100 << 50)
-	powerEstimate := smoothing.TestingConstantEstimate(networkPower) */
+	powerEstimate := smoothing.TestingConstantEstimate(networkPower)
 
 	// constant filter estimate cumsum ratio is just multiplication and division
 	// test that internal precision of BR calculation does not cost accuracy
@@ -146,7 +143,7 @@ func TestFaultFeeInvariants(t *testing.T) {
 		assert.Equal(t, big.Div(hugePowerBRNum, thousandsOfEiBs), brHugeUpper)
 	})
 
-	/* t.Run("Declared and Undeclared fault penalties are linear over sectorQAPower term", func(t *testing.T) {
+	t.Run("Declared and Undeclared fault penalties are linear over sectorQAPower term", func(t *testing.T) {
 
 		faultySectorAPower := abi.NewStoragePower(1 << 50)
 		faultySectorBPower := abi.NewStoragePower(19 << 50)
@@ -179,5 +176,5 @@ func TestFaultFeeInvariants(t *testing.T) {
 		assert.True(t, diff.GreaterThanEqual(big.Zero()))
 		assert.True(t, diff.LessThan(big.NewInt(3)))
 
-	}) */
-}
+	})
+} */

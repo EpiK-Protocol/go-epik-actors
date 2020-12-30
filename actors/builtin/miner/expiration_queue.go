@@ -560,6 +560,9 @@ func (q ExpirationQueue) PopUntil(until abi.ChainEpoch) (*ExpirationSet, error) 
 	}); err != nil && err != stopErr {
 		return nil, err
 	}
+	if len(poppedKeys) == 0 {
+		return NewExpirationSetEmpty(), nil
+	}
 
 	if err := q.Array.BatchDelete(poppedKeys); err != nil {
 		return nil, err
@@ -744,6 +747,9 @@ func groupNewSectorsByDeclaredExpiration(sectorSize abi.SectorSize, sectors []*S
 
 	// This map iteration is non-deterministic but safe because we sort by epoch below.
 	for expiration, epochSectors := range sectorsByExpiration { //nolint:nomaprange // result is subsequently sorted
+		if len(epochSectors) == 0 {
+			continue
+		}
 		sectorNumbers := make([]uint64, len(epochSectors))
 		totalPower := NewPowerPairZero()
 		/* totalPledge := big.Zero() */

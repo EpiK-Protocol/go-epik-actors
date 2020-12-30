@@ -175,9 +175,9 @@ func TestMaxPartitionsPerDeadline(t *testing.T) {
 	const partitionSize = 2
 
 	t.Run("fails if all deadlines hit their max partitions limit before assigning all sectors to deadlines", func(T *testing.T) {
-		// one deadline can take 5 * 5 = 25 sectors
-		// so 48 deadlines can take 48 * 25 = 1200 sectors.
-		// Hence, we should fail if we try to assign 1201 sectors.
+		// one deadline can take 5 * 2 = 10 sectors
+		// so 336 deadlines can take 336 * 10 = 3360 sectors.
+		// Hence, we should fail if we try to assign 3361 sectors.
 
 		var deadlines [WPoStPeriodDeadlines]*Deadline
 		for i := range deadlines {
@@ -187,7 +187,7 @@ func TestMaxPartitionsPerDeadline(t *testing.T) {
 			}
 		}
 
-		sectors := make([]*SectorOnChainInfo, 1201)
+		sectors := make([]*SectorOnChainInfo, 3361)
 		for i := range sectors {
 			sectors[i] = &SectorOnChainInfo{SectorNumber: abi.SectorNumber(i)}
 		}
@@ -198,7 +198,7 @@ func TestMaxPartitionsPerDeadline(t *testing.T) {
 
 	t.Run("succeeds if all all deadlines hit their max partitions limit but assignment is complete", func(t *testing.T) {
 		// one deadline can take 5 * 2 = 10 sectors
-		// so 56 deadlines that can take 56 * 10 = 560 sectors.
+		// so 336 deadlines that can take 336 * 10 = 3360 sectors.
 		var deadlines [WPoStPeriodDeadlines]*Deadline
 		for i := range deadlines {
 			deadlines[i] = &Deadline{
@@ -207,7 +207,7 @@ func TestMaxPartitionsPerDeadline(t *testing.T) {
 			}
 		}
 
-		sectors := make([]*SectorOnChainInfo, 560)
+		sectors := make([]*SectorOnChainInfo, 3360)
 		for i := range sectors {
 			sectors[i] = &SectorOnChainInfo{SectorNumber: abi.SectorNumber(i)}
 		}
@@ -216,7 +216,7 @@ func TestMaxPartitionsPerDeadline(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, sectors := range deadlineToSectors {
-			require.Len(t, sectors, 10) // there should be (560/56) = 10 sectors per deadline
+			require.Len(t, sectors, 10) // there should be (3360/336) = 10 sectors per deadline
 		}
 	})
 
@@ -229,9 +229,9 @@ func TestMaxPartitionsPerDeadline(t *testing.T) {
 			}
 		}
 
-		// can only take 1200 - (2 * 48) = 1104 sectors
+		// can only take 3360 - (2 * 336) = 2688 sectors
 
-		sectors := make([]*SectorOnChainInfo, 1105)
+		sectors := make([]*SectorOnChainInfo, 2689)
 		for i := range sectors {
 			sectors[i] = &SectorOnChainInfo{SectorNumber: abi.SectorNumber(i)}
 		}

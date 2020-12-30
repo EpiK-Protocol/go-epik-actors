@@ -1,6 +1,6 @@
 package reward
 
-import (
+/* import (
 	gbig "math/big"
 
 	"github.com/filecoin-project/go-state-types/big"
@@ -15,7 +15,7 @@ func q128ToF(x big.Int) float64 {
 	return res
 }
 
-/* func TestComputeRTeta(t *testing.T) {
+func TestComputeRTeta(t *testing.T) {
 	baselinePowerAt := func(epoch abi.ChainEpoch) abi.StoragePower {
 		return big.Mul(big.NewInt(int64(epoch+1)), big.NewInt(2048))
 	}

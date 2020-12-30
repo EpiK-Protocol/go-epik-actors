@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/stretchr/testify/require"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
@@ -24,11 +23,11 @@ func sectorsArr(t *testing.T, store adt.Store, sectors []*miner.SectorOnChainInf
 func TestSectors(t *testing.T) {
 	makeSector := func(t *testing.T, i uint64) *miner.SectorOnChainInfo {
 		return &miner.SectorOnChainInfo{
-			SectorNumber:       abi.SectorNumber(i),
-			SealProof:          abi.RegisteredSealProof_StackedDrg32GiBV1,
-			SealedCID:          tutil.MakeCID(fmt.Sprintf("commR-%d", i), &miner.SealedCIDPrefix),
-			DealWeight:         big.Zero(),
-			VerifiedDealWeight: big.Zero(),
+			SectorNumber: abi.SectorNumber(i),
+			SealProof:    abi.RegisteredSealProof_StackedDrg32GiBV1,
+			SealedCID:    tutil.MakeCID(fmt.Sprintf("commR-%d", i), &miner.SealedCIDPrefix),
+			// DealWeight:         big.Zero(),
+			// VerifiedDealWeight: big.Zero(),
 			/* InitialPledge:         big.Zero(),
 			ExpectedDayReward:     big.Zero(),
 			ExpectedStoragePledge: big.Zero(),

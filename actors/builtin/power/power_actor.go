@@ -134,7 +134,12 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
-		err = setClaim(claims, addresses.IDAddress, &Claim{params.SealProofType, abi.NewStoragePower(0), abi.NewStoragePower(0), false})
+		err = setClaim(claims, addresses.IDAddress, &Claim{
+			params.SealProofType,
+			abi.NewStoragePower(0),
+			abi.NewStoragePower(0),
+			abi.NewTokenAmount(0),
+		})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put power in claimed table while creating miner")
 
 		st.MinerCount += 1
@@ -151,7 +156,7 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 type UpdateClaimedPowerParams struct {
 	RawByteDelta         abi.StoragePower
 	QualityAdjustedDelta abi.StoragePower
-	PledgeSufficient     bool
+	PledgeDelta          abi.TokenAmount
 }
 
 // Adds or removes claimed power for the calling actor.
@@ -164,8 +169,8 @@ func (a Actor) UpdateClaimedPower(rt Runtime, params *UpdateClaimedPowerParams) 
 		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
-		err = st.addToClaim(claims, minerAddr, params.RawByteDelta, params.QualityAdjustedDelta, params.PledgeSufficient)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update power raw %s, qa %s, pl %t", params.RawByteDelta, params.QualityAdjustedDelta, params.PledgeSufficient)
+		err = st.addToClaim(claims, minerAddr, params.RawByteDelta, params.QualityAdjustedDelta, params.PledgeDelta)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update power raw %s, qa %s, pl %s", params.RawByteDelta, params.QualityAdjustedDelta, params.PledgeDelta)
 
 		st.Claims, err = claims.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush claims")
@@ -229,7 +234,7 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	code := rt.Send(
 		builtin.RewardActorAddr,
 		builtin.MethodsReward.UpdateNetworkKPI,
-		&st.ThisEpochRawBytePower,
+		nil, //&st.ThisEpochRawBytePower,
 		abi.NewTokenAmount(0),
 		&builtin.Discard{},
 	)

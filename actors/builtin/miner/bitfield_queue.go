@@ -35,7 +35,10 @@ func (q BitfieldQueue) AddToQueue(rawEpoch abi.ChainEpoch, values bitfield.BitFi
 		// nothing to do.
 		return nil
 	}
-	epoch := q.quant.QuantizeUp(rawEpoch)
+	epoch := rawEpoch
+	if rawEpoch != NoExpireEpoch {
+		epoch = q.quant.QuantizeUp(rawEpoch)
+	}
 	var bf bitfield.BitField
 	if _, err := q.Array.Get(uint64(epoch), &bf); err != nil {
 		return xerrors.Errorf("failed to lookup queue epoch %v: %w", epoch, err)
@@ -92,7 +95,10 @@ func (q BitfieldQueue) AddManyToQueueValues(values map[abi.ChainEpoch][]uint64) 
 	quantizedValues := make(map[abi.ChainEpoch][]uint64, len(values))
 	updatedEpochs := make([]abi.ChainEpoch, 0, len(values))
 	for rawEpoch, entries := range values { // nolint:nomaprange // subsequently sorted
-		epoch := q.quant.QuantizeUp(rawEpoch)
+		epoch := rawEpoch
+		if rawEpoch != NoExpireEpoch {
+			epoch = q.quant.QuantizeUp(rawEpoch)
+		}
 		updatedEpochs = append(updatedEpochs, epoch)
 		quantizedValues[epoch] = append(quantizedValues[epoch], entries...)
 	}

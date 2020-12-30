@@ -1,6 +1,6 @@
 package miner_test
 
-import (
+/* import (
 	"testing"
 
 	"github.com/filecoin-project/go-state-types/abi"
@@ -12,7 +12,7 @@ import (
 )
 
 // Test termination fee
-/* func TestPledgePenaltyForTermination(t *testing.T) {
+func TestPledgePenaltyForTermination(t *testing.T) {
 	epochTargetReward := abi.NewTokenAmount(1 << 50)
 	qaSectorPower := abi.NewStoragePower(1 << 36)
 	networkQAPower := abi.NewStoragePower(1 << 50)
@@ -140,7 +140,7 @@ import (
 
 		assert.Equal(t, expectedFee, fee)
 	})
-} */
+}
 
 func TestNegativeBRClamp(t *testing.T) {
 	epochTargetReward := abi.NewTokenAmount(1 << 50)
@@ -152,4 +152,4 @@ func TestNegativeBRClamp(t *testing.T) {
 
 	fourBR := miner.ExpectedRewardForPower(rewardEstimate, powerEstimate, qaSectorPower, abi.ChainEpoch(4))
 	assert.Equal(t, big.Zero(), fourBR)
-}
+} */

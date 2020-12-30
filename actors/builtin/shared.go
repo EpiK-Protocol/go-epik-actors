@@ -85,7 +85,11 @@ func ValidateCallerGranted(rt runtime.Runtime, caller addr.Address, method abi.M
 		Method: method,
 	}
 	code := rt.Send(GovernActorAddr, MethodsGovern.ValidateGranted, params, abi.NewTokenAmount(0), &Discard{})
-	RequireSuccess(rt, code, "failed to validate caller granted")
+	errMsg := "failed to validate caller granted"
+	if code == exitcode.ErrForbidden {
+		errMsg = "method not granted"
+	}
+	RequireSuccess(rt, code, errMsg)
 }
 
 // NotifyUpdate expert params

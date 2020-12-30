@@ -272,7 +272,7 @@ func (dl *Deadline) AddSectors(
 	}
 
 	// First update partitions, consuming the sectors
-	/* partitionDeadlineUpdates := make(map[abi.ChainEpoch][]uint64) */
+	partitionDeadlineUpdates := make(map[abi.ChainEpoch][]uint64)
 	activatedPower = NewPowerPairZero()
 	dl.LiveSectors += uint64(len(sectors))
 	dl.TotalSectors += uint64(len(sectors))
@@ -339,6 +339,9 @@ func (dl *Deadline) AddSectors(
 				}
 				partitionDeadlineUpdates[sector.Expiration] = append(partitionUpdate, partIdx)
 			} */
+			if len(partitionNewSectors) > 0 {
+				partitionDeadlineUpdates[NoExpireEpoch] = append(partitionDeadlineUpdates[NoExpireEpoch], partIdx)
+			}
 		}
 
 		// Save partitions back.
@@ -348,7 +351,7 @@ func (dl *Deadline) AddSectors(
 		}
 	}
 
-	/* // Next, update the expiration queue.
+	// Next, update the expiration queue.
 	{
 		deadlineExpirations, err := LoadBitfieldQueue(store, dl.ExpirationsEpochs, quant)
 		if err != nil {
@@ -362,7 +365,7 @@ func (dl *Deadline) AddSectors(
 		if dl.ExpirationsEpochs, err = deadlineExpirations.Root(); err != nil {
 			return NewPowerPairZero(), err
 		}
-	} */
+	}
 
 	return activatedPower, nil
 }
@@ -565,7 +568,7 @@ func (dl *Deadline) RemovePartitions(store adt.Store, toRemove bitfield.BitField
 		return bitfield.BitField{}, bitfield.BitField{}, NewPowerPairZero(), xerrors.Errorf("failed to check for early terminations: %w", err)
 	}
 	if !noEarlyTerminations {
-		return bitfield.BitField{}, bitfield.BitField{}, NewPowerPairZero(), xerrors.Errorf("cannot remove partitions from deadline with early terminations: %w", err)
+		return bitfield.BitField{}, bitfield.BitField{}, NewPowerPairZero(), xerrors.New("cannot remove partitions from deadline with early terminations")
 	}
 
 	newPartitions := adt.MakeEmptyArray(store)
