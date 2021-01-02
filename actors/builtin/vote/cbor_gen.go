@@ -270,15 +270,15 @@ func (t *Voter) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.UnclaimedFunds (big.Int) (struct)
-	if err := t.UnclaimedFunds.MarshalCBOR(w); err != nil {
+	// t.Withdrawable (big.Int) (struct)
+	if err := t.Withdrawable.MarshalCBOR(w); err != nil {
 		return err
 	}
 
-	// t.VotingRecords (cid.Cid) (struct)
+	// t.Tally (cid.Cid) (struct)
 
-	if err := cbg.WriteCidBuf(scratch, w, t.VotingRecords); err != nil {
-		return xerrors.Errorf("failed to write cid field t.VotingRecords: %w", err)
+	if err := cbg.WriteCidBuf(scratch, w, t.Tally); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Tally: %w", err)
 	}
 
 	return nil
@@ -336,38 +336,38 @@ func (t *Voter) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.UnclaimedFunds (big.Int) (struct)
+	// t.Withdrawable (big.Int) (struct)
 
 	{
 
-		if err := t.UnclaimedFunds.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.UnclaimedFunds: %w", err)
+		if err := t.Withdrawable.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Withdrawable: %w", err)
 		}
 
 	}
-	// t.VotingRecords (cid.Cid) (struct)
+	// t.Tally (cid.Cid) (struct)
 
 	{
 
 		c, err := cbg.ReadCid(br)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.VotingRecords: %w", err)
+			return xerrors.Errorf("failed to read cid field t.Tally: %w", err)
 		}
 
-		t.VotingRecords = c
+		t.Tally = c
 
 	}
 	return nil
 }
 
-var lengthBufVotingRecord = []byte{131}
+var lengthBufVotesInfo = []byte{131}
 
-func (t *VotingRecord) MarshalCBOR(w io.Writer) error {
+func (t *VotesInfo) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufVotingRecord); err != nil {
+	if _, err := w.Write(lengthBufVotesInfo); err != nil {
 		return err
 	}
 
@@ -396,8 +396,8 @@ func (t *VotingRecord) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *VotingRecord) UnmarshalCBOR(r io.Reader) error {
-	*t = VotingRecord{}
+func (t *VotesInfo) UnmarshalCBOR(r io.Reader) error {
+	*t = VotesInfo{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)

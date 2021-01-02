@@ -301,7 +301,7 @@ func main() {
 		vote.State{},
 		vote.Candidate{},
 		vote.Voter{},
-		vote.VotingRecord{},
+		vote.VotesInfo{},
 		vote.RescindParams{},
 	); err != nil {
 		panic(err)
