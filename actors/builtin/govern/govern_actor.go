@@ -37,6 +37,10 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt runtime.Runtime, supervisor *address.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
+	if supervisor.Protocol() != address.ID {
+		rt.Abortf(exitcode.ErrIllegalArgument, "supervisor address must be an ID address")
+	}
+
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 

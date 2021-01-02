@@ -1225,12 +1225,16 @@ func (t *NewQuota) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.PieceCID: %w", err)
 	}
 
-	// t.Quota (uint64) (uint64)
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Quota)); err != nil {
-		return err
+	// t.Quota (int64) (int64)
+	if t.Quota >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Quota)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.Quota-1)); err != nil {
+			return err
+		}
 	}
-
 	return nil
 }
 
@@ -1264,19 +1268,30 @@ func (t *NewQuota) UnmarshalCBOR(r io.Reader) error {
 		t.PieceCID = c
 
 	}
-	// t.Quota (uint64) (uint64)
-
+	// t.Quota (int64) (int64)
 	{
-
-		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
 		if err != nil {
 			return err
 		}
-		if maj != cbg.MajUnsignedInt {
-			return fmt.Errorf("wrong type for uint64 field")
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
-		t.Quota = uint64(extra)
 
+		t.Quota = int64(extraI)
 	}
 	return nil
 }

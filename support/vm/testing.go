@@ -71,7 +71,7 @@ func NewVMWithSingletons(ctx context.Context, t *testing.T) *VM {
 	initState := initactor.ConstructState(emptyMapCID, "scenarios")
 	initializeActor(ctx, t, vm, initState, builtin.InitActorCodeID, builtin.InitActorAddr, big.Zero())
 
-	rewardState := reward.ConstructState(abi.NewStoragePower(0))
+	rewardState := reward.ConstructState()
 	initializeActor(ctx, t, vm, rewardState, builtin.RewardActorCodeID, builtin.RewardActorAddr, big.Max(big.NewInt(14e8), FIL))
 
 	cronState := cron.ConstructState(cron.BuiltInEntries())
@@ -416,6 +416,11 @@ type NetworkStats struct {
 	/* ThisEpochRewardSmoothed       smoothing.FilterEstimate
 	ThisEpochBaselinePower        abi.StoragePower */
 	TotalStoragePowerReward abi.TokenAmount
+	TotalExpertReward       abi.TokenAmount
+	TotalVoteReward         abi.TokenAmount
+	TotalKnowledgeReward    abi.TokenAmount
+	TotalRetrievalReward    abi.TokenAmount
+	TotalSendFailed         abi.TokenAmount
 	/* TotalClientLockedCollateral   abi.TokenAmount
 	TotalProviderLockedCollateral abi.TokenAmount
 	TotalClientStorageFee         abi.TokenAmount */
@@ -449,6 +454,11 @@ func GetNetworkStats(t *testing.T, vm *VM) NetworkStats {
 		/* ThisEpochRewardSmoothed:       rewardState.ThisEpochRewardSmoothed,
 		ThisEpochBaselinePower:        rewardState.ThisEpochBaselinePower, */
 		TotalStoragePowerReward: rewardState.TotalStoragePowerReward,
+		TotalExpertReward:       rewardState.TotalExpertReward,
+		TotalVoteReward:         rewardState.TotalVoteReward,
+		TotalKnowledgeReward:    rewardState.TotalKnowledgeReward,
+		TotalRetrievalReward:    rewardState.TotalRetrievalReward,
+		TotalSendFailed:         rewardState.TotalSendFailed,
 		/* TotalClientLockedCollateral:   marketState.TotalClientLockedCollateral,
 		TotalProviderLockedCollateral: marketState.TotalProviderLockedCollateral,
 		TotalClientStorageFee:         marketState.TotalClientStorageFee, */

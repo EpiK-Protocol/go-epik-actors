@@ -131,6 +131,7 @@ func main() {
 		reward.State{},
 		// method params and returns
 		reward.AwardBlockRewardParams{},
+		reward.AwardBlockRewardReturn{},
 		reward.ThisEpochRewardReturn{},
 	); err != nil {
 		panic(err)
@@ -253,7 +254,6 @@ func main() {
 		miner.CompactSectorNumbersParams{},
 		miner.CronEventPayload{},
 		miner.WithdrawPledgeParams{},
-		miner.ChangeCoinbaseParams{},
 		// other types
 		miner.FaultDeclaration{},
 		miner.RecoveryDeclaration{},
@@ -302,15 +302,13 @@ func main() {
 		vote.Candidate{},
 		vote.Voter{},
 		vote.VotingRecord{},
-		vote.RevokeParams{},
-		vote.VoteParams{},
+		vote.RescindParams{},
 	); err != nil {
 		panic(err)
 	}
 
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/knowledge/cbor_gen.go", "knowledge",
 		knowledge.State{},
-		knowledge.ChangePayeeParams{},
 	); err != nil {
 		panic(err)
 	}

@@ -1732,14 +1732,10 @@ func (a Actor) RepayDebt(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-type ChangeCoinbaseParams struct {
-	NewCoinbase addr.Address
-}
-
 // ChangeCoinbase will immediately overwrite the existing coinbase with that passed in the params.
-func (a Actor) ChangeCoinbase(rt Runtime, params *ChangeCoinbaseParams) *abi.EmptyValue {
+func (a Actor) ChangeCoinbase(rt Runtime, newAddress *addr.Address) *abi.EmptyValue {
 
-	newCoinbase := resolveControlAddress(rt, params.NewCoinbase)
+	newCoinbase := resolveControlAddress(rt, *newAddress)
 
 	var st State
 	rt.StateTransaction(&st, func() {

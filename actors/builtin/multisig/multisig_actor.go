@@ -9,7 +9,6 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/go-state-types/network"
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
@@ -523,7 +522,7 @@ func executeTransactionIfApproved(rt runtime.Runtime, st State, txnID TxnID, txn
 	var out builtin.CBORBytes
 	var code exitcode.ExitCode
 	applied := false
-	nv := rt.NetworkVersion()
+	// nv := rt.NetworkVersion()
 
 	thresholdMet := uint64(len(txn.Approved)) >= st.NumApprovalsThreshold
 	if thresholdMet {
@@ -546,7 +545,17 @@ func executeTransactionIfApproved(rt runtime.Runtime, st State, txnID TxnID, txn
 			ptx, err := adt.AsMap(adt.AsStore(rt), st.PendingTxns)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load pending transactions")
 
-			// Prior to version 6 we attempt to delete all transactions, even those
+			txnExists, err := ptx.Has(txnID)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check existance of transaction %v for cleanup", txnID)
+			if !txnExists {
+				// do nothing
+				return
+			}
+
+			err = ptx.Delete(txnID)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete transaction %v for cleanup", txnID)
+
+			/* // Prior to version 6 we attempt to delete all transactions, even those
 			// no longer in the pending txns map because they have been purged.
 			shouldDelete := true
 			// Starting at version 6 we first check if the transaction exists before
@@ -562,7 +571,7 @@ func executeTransactionIfApproved(rt runtime.Runtime, st State, txnID TxnID, txn
 				if err := ptx.Delete(txnID); err != nil {
 					rt.Abortf(exitcode.ErrIllegalState, "failed to delete transaction for cleanup: %v", err)
 				}
-			}
+			} */
 
 			st.PendingTxns, err = ptx.Root()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush pending transactions")

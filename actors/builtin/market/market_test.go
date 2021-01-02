@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"math"
 	"strings"
 	"testing"
 
@@ -2802,7 +2801,7 @@ func TestResetQuotas(t *testing.T) {
 
 	setupFunc := func( grantedCode exitcode.ExitCode) (*mock.Runtime, *marketActorTestHarness) {
 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-		rt.ExpectValidateCallerAny()
+		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
 		rt.ExpectSend(builtin.GovernActorAddr,
 			builtin.MethodsGovern.ValidateGranted,
 			&builtin.ValidateGrantedParams{
@@ -2878,10 +2877,10 @@ func TestResetQuotas(t *testing.T) {
 		require.NoError(t, err)
 		rt.ReplaceState(&st)
 
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "new quota too large", func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "negative quota not allowed", func() {
 			rt.Call(actor.ResetQuotas,&market.ResetQuotasParams{
 				NewQuotas: []market.NewQuota{
-					{pieceCID, math.MaxInt64+1},
+					{pieceCID, -1},
 				},
 			})
 		})
@@ -2938,7 +2937,7 @@ func TestSetInitialQuota(t *testing.T) {
 
 	setupFunc := func( grantedCode exitcode.ExitCode) (*mock.Runtime, *marketActorTestHarness) {
 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-		rt.ExpectValidateCallerAny()
+		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
 		rt.ExpectSend(builtin.GovernActorAddr,
 			builtin.MethodsGovern.ValidateGranted,
 			&builtin.ValidateGrantedParams{
@@ -3580,7 +3579,7 @@ func generateDealProposal(client, provider address.Address, startEpoch abi.Chain
 
 func basicMarketSetup(t *testing.T, owner, provider, worker, client, coinbase address.Address) (*mock.Runtime, *marketActorTestHarness) {
 	builder := mock.NewBuilder(context.Background(), builtin.StorageMarketActorAddr).
-		WithCaller(builtin.SystemActorAddr, builtin.InitActorCodeID).
+		WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID).
 		WithBalance(big.Mul(big.NewInt(10), big.NewInt(1e18)), big.Zero()).
 		WithActorType(owner, builtin.AccountActorCodeID).
 		WithActorType(worker, builtin.AccountActorCodeID).

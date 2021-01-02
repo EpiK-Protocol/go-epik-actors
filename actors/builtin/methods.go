@@ -144,8 +144,8 @@ var MethodsVote = struct {
 	Constructor     abi.MethodNum
 	BlockCandidates abi.MethodNum
 	Vote            abi.MethodNum
-	Revoke          abi.MethodNum
-	Claim           abi.MethodNum
+	Rescind         abi.MethodNum
+	Withdraw        abi.MethodNum
 	ApplyRewards    abi.MethodNum
 	OnEpochTickEnd  abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}

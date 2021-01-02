@@ -53,8 +53,14 @@ type State struct {
 	// Epoch tracks for which epoch the last reward decay occurred
 	Epoch abi.ChainEpoch
 
-	// TotalStoragePowerReward tracks the total FIL awarded to block miners
-	TotalStoragePowerReward abi.TokenAmount
+	// These fields track the total EPK awarded to each actor.
+	TotalStoragePowerReward abi.TokenAmount // to block miners
+	TotalExpertReward       abi.TokenAmount // to expert fund actor
+	TotalVoteReward         abi.TokenAmount // to vote fund actor
+	TotalKnowledgeReward    abi.TokenAmount // to knowledge fund actor
+	TotalRetrievalReward    abi.TokenAmount // to retrieval fund actor
+	// TotalSendFailed tracks the total EPK failed to send
+	TotalSendFailed abi.TokenAmount
 
 	// Simple and Baseline totals are constants used for computing rewards.
 	// They are on chain because of a historical fix resetting baseline value
@@ -82,6 +88,11 @@ func ConstructState() *State {
 		Epoch:                   0,
 		ThisEpochReward:         EpochZeroReward,
 		TotalStoragePowerReward: big.Zero(),
+		TotalExpertReward:       big.Zero(),
+		TotalVoteReward:         big.Zero(),
+		TotalKnowledgeReward:    big.Zero(),
+		TotalRetrievalReward:    big.Zero(),
+		TotalSendFailed:         big.Zero(),
 	}
 
 	return st

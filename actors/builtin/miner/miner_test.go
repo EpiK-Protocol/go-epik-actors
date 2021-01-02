@@ -3698,9 +3698,8 @@ func TestChangeCoinbase(t *testing.T) {
 		rt.SetAddressActorType(newCoinbase, builtin.StorageMinerActorCodeID)
 		rt.SetCaller(actor.owner, builtin.AccountActorCodeID)
 
-		param := &miner.ChangeCoinbaseParams{NewCoinbase: newCoinbase}
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "must be a principal", func() {
-			rt.Call(actor.a.ChangeCoinbase, param)
+			rt.Call(actor.a.ChangeCoinbase, &newCoinbase)
 		})
 
 		rt.Verify()
@@ -3716,9 +3715,8 @@ func TestChangeCoinbase(t *testing.T) {
 		rt.ExpectValidateCallerAddr(actor.owner)
 		rt.SetCaller(actor.worker, builtin.AccountActorCodeID)
 
-		param := &miner.ChangeCoinbaseParams{NewCoinbase: newCoinbase}
 		rt.ExpectAbort(exitcode.SysErrForbidden, func() {
-			rt.Call(actor.a.ChangeCoinbase, param)
+			rt.Call(actor.a.ChangeCoinbase, &newCoinbase)
 		})
 
 		rt.Verify()
@@ -3734,8 +3732,7 @@ func TestChangeCoinbase(t *testing.T) {
 		rt.ExpectValidateCallerAddr(actor.owner)
 		rt.SetCaller(actor.owner, builtin.AccountActorCodeID)
 
-		param := &miner.ChangeCoinbaseParams{NewCoinbase: newCoinbase}
-		rt.Call(actor.a.ChangeCoinbase, param)
+		rt.Call(actor.a.ChangeCoinbase, &newCoinbase)
 		rt.Verify()
 		actor.checkState(rt)
 

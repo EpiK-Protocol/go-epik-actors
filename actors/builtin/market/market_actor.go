@@ -664,11 +664,11 @@ type ResetQuotasParams struct {
 
 type NewQuota struct {
 	PieceCID cid.Cid `checked:"true"`
-	Quota    uint64
+	Quota    int64
 }
 
 func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerAcceptAny()
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsMarket.ResetQuotas)
 
@@ -686,7 +686,7 @@ func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValu
 			builtin.RequireParam(rt, found, "piece cid not found")
 
 			quota := cbg.CborInt(newQuota.Quota)
-			builtin.RequireParam(rt, quota >= 0, "new quota too large")
+			builtin.RequireParam(rt, quota >= 0, "negative quota not allowed")
 			err = msm.quotas.Put(abi.CidKey(newQuota.PieceCID), &quota)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set quota")
 		}
@@ -698,7 +698,7 @@ func (a Actor) ResetQuotas(rt Runtime, params *ResetQuotasParams) *abi.EmptyValu
 }
 
 func (a Actor) SetInitialQuota(rt Runtime, quota *cbg.CborInt) *abi.EmptyValue {
-	rt.ValidateImmediateCallerAcceptAny()
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	builtin.RequireParam(rt, *quota > 0, "non-positive quota to set")
 

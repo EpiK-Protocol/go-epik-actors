@@ -13,7 +13,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{131}
+var lengthBufState = []byte{136}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -46,6 +46,31 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	if err := t.TotalStoragePowerReward.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.TotalExpertReward (big.Int) (struct)
+	if err := t.TotalExpertReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalVoteReward (big.Int) (struct)
+	if err := t.TotalVoteReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalKnowledgeReward (big.Int) (struct)
+	if err := t.TotalKnowledgeReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalRetrievalReward (big.Int) (struct)
+	if err := t.TotalRetrievalReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalSendFailed (big.Int) (struct)
+	if err := t.TotalSendFailed.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -63,7 +88,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 8 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -107,6 +132,51 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.TotalStoragePowerReward.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.TotalStoragePowerReward: %w", err)
+		}
+
+	}
+	// t.TotalExpertReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalExpertReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalExpertReward: %w", err)
+		}
+
+	}
+	// t.TotalVoteReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalVoteReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalVoteReward: %w", err)
+		}
+
+	}
+	// t.TotalKnowledgeReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalKnowledgeReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalKnowledgeReward: %w", err)
+		}
+
+	}
+	// t.TotalRetrievalReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalRetrievalReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalRetrievalReward: %w", err)
+		}
+
+	}
+	// t.TotalSendFailed (big.Int) (struct)
+
+	{
+
+		if err := t.TotalSendFailed.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalSendFailed: %w", err)
 		}
 
 	}
@@ -277,7 +347,139 @@ func (t *AwardBlockRewardParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufThisEpochRewardReturn = []byte{131}
+var lengthBufAwardBlockRewardReturn = []byte{135}
+
+func (t *AwardBlockRewardReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufAwardBlockRewardReturn); err != nil {
+		return err
+	}
+
+	// t.PowerReward (big.Int) (struct)
+	if err := t.PowerReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.GasReward (big.Int) (struct)
+	if err := t.GasReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.VoteReward (big.Int) (struct)
+	if err := t.VoteReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.ExpertReward (big.Int) (struct)
+	if err := t.ExpertReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.RetrievalReward (big.Int) (struct)
+	if err := t.RetrievalReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.KnowledgeReward (big.Int) (struct)
+	if err := t.KnowledgeReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.SendFailed (big.Int) (struct)
+	if err := t.SendFailed.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *AwardBlockRewardReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = AwardBlockRewardReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 7 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.PowerReward (big.Int) (struct)
+
+	{
+
+		if err := t.PowerReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.PowerReward: %w", err)
+		}
+
+	}
+	// t.GasReward (big.Int) (struct)
+
+	{
+
+		if err := t.GasReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.GasReward: %w", err)
+		}
+
+	}
+	// t.VoteReward (big.Int) (struct)
+
+	{
+
+		if err := t.VoteReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.VoteReward: %w", err)
+		}
+
+	}
+	// t.ExpertReward (big.Int) (struct)
+
+	{
+
+		if err := t.ExpertReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.ExpertReward: %w", err)
+		}
+
+	}
+	// t.RetrievalReward (big.Int) (struct)
+
+	{
+
+		if err := t.RetrievalReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.RetrievalReward: %w", err)
+		}
+
+	}
+	// t.KnowledgeReward (big.Int) (struct)
+
+	{
+
+		if err := t.KnowledgeReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.KnowledgeReward: %w", err)
+		}
+
+	}
+	// t.SendFailed (big.Int) (struct)
+
+	{
+
+		if err := t.SendFailed.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.SendFailed: %w", err)
+		}
+
+	}
+	return nil
+}
+
+var lengthBufThisEpochRewardReturn = []byte{136}
 
 func (t *ThisEpochRewardReturn) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -310,6 +512,31 @@ func (t *ThisEpochRewardReturn) MarshalCBOR(w io.Writer) error {
 	if err := t.TotalStoragePowerReward.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.TotalExpertReward (big.Int) (struct)
+	if err := t.TotalExpertReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalVoteReward (big.Int) (struct)
+	if err := t.TotalVoteReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalKnowledgeReward (big.Int) (struct)
+	if err := t.TotalKnowledgeReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalRetrievalReward (big.Int) (struct)
+	if err := t.TotalRetrievalReward.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.TotalSendFailed (big.Int) (struct)
+	if err := t.TotalSendFailed.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -327,7 +554,7 @@ func (t *ThisEpochRewardReturn) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 8 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -371,6 +598,51 @@ func (t *ThisEpochRewardReturn) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.TotalStoragePowerReward.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.TotalStoragePowerReward: %w", err)
+		}
+
+	}
+	// t.TotalExpertReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalExpertReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalExpertReward: %w", err)
+		}
+
+	}
+	// t.TotalVoteReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalVoteReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalVoteReward: %w", err)
+		}
+
+	}
+	// t.TotalKnowledgeReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalKnowledgeReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalKnowledgeReward: %w", err)
+		}
+
+	}
+	// t.TotalRetrievalReward (big.Int) (struct)
+
+	{
+
+		if err := t.TotalRetrievalReward.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalRetrievalReward: %w", err)
+		}
+
+	}
+	// t.TotalSendFailed (big.Int) (struct)
+
+	{
+
+		if err := t.TotalSendFailed.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.TotalSendFailed: %w", err)
 		}
 
 	}

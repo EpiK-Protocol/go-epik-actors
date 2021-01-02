@@ -260,10 +260,11 @@ func TestAwardBlockReward(t *testing.T) {
 		penalty := big.Zero()
 		expectedParams := builtin.ApplyRewardParams{Reward: expectedReward, Penalty: penalty}
 		rt.ExpectSend(miner, builtin.MethodsMiner.ApplyRewards, &expectedParams, expectedReward, nil, exitcode.ErrForbidden)
-		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, expectedReward, nil, exitcode.Ok)
 		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(10), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, big.NewInt(90), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, 0)
+
+		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, expectedReward, nil, exitcode.Ok)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
 			Miner:            miner,
@@ -274,6 +275,101 @@ func TestAwardBlockReward(t *testing.T) {
 			RetrievalPledged: big.Zero(),
 		})
 		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(2500)), rt.Balance())
+
+		st = getState(rt)
+		assert.True(t, st.TotalSendFailed.Equals(expectedReward))
+		assert.True(t, st.TotalStoragePowerReward.Equals(big.Zero()))
+		assert.True(t, st.TotalVoteReward.Equals(big.NewInt(10)))
+		assert.True(t, st.TotalExpertReward.Equals(big.NewInt(90)))
+		assert.True(t, st.TotalKnowledgeReward.Equals(big.NewInt(150)))
+		assert.True(t, st.TotalRetrievalReward.Equals(big.Zero()))
+		rt.Verify()
+	})
+
+	t.Run("funds are sent to the burnt funds actor if all sending fails", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+		miner := tutil.NewIDAddr(t, 1000)
+		st := getState(rt)
+		assert.Equal(t, big.Zero(), st.TotalStoragePowerReward)
+		st.ThisEpochReward = abi.NewTokenAmount(1000)
+		rt.ReplaceState(st)
+		// enough balance to pay 3 full rewards and one partial
+		totalPayout := abi.NewTokenAmount(3500)
+		rt.SetBalance(totalPayout)
+
+		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
+		expectedReward := big.NewInt(750)
+		penalty := big.Zero()
+		expectedParams := builtin.ApplyRewardParams{Reward: expectedReward, Penalty: penalty}
+		rt.ExpectSend(miner, builtin.MethodsMiner.ApplyRewards, &expectedParams, expectedReward, nil, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(10), &builtin.Discard{}, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, big.NewInt(90), &builtin.Discard{}, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, exitcode.ErrForbidden)
+
+		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.Ok)
+
+		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
+			Miner:            miner,
+			Penalty:          big.Zero(),
+			GasReward:        big.Zero(),
+			WinCount:         1,
+			ShareCount:       1,
+			RetrievalPledged: big.Zero(),
+		})
+		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(2500)), rt.Balance())
+
+		st = getState(rt)
+		assert.True(t, st.TotalSendFailed.Equals(st.ThisEpochReward))
+		assert.True(t, st.TotalStoragePowerReward.Equals(big.Zero()))
+		assert.True(t, st.TotalVoteReward.Equals(big.Zero()))
+		assert.True(t, st.TotalExpertReward.Equals(big.Zero()))
+		assert.True(t, st.TotalKnowledgeReward.Equals(big.Zero()))
+		assert.True(t, st.TotalRetrievalReward.Equals(big.Zero()))
+
+		rt.Verify()
+	})
+
+	t.Run("funds remains in reward actor if sending to burnt funds actor fails", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+		miner := tutil.NewIDAddr(t, 1000)
+		st := getState(rt)
+		assert.Equal(t, big.Zero(), st.TotalStoragePowerReward)
+		st.ThisEpochReward = abi.NewTokenAmount(1000)
+		rt.ReplaceState(st)
+		// enough balance to pay 3 full rewards and one partial
+		totalPayout := abi.NewTokenAmount(3500)
+		rt.SetBalance(totalPayout)
+
+		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
+		expectedReward := big.NewInt(750)
+		penalty := big.Zero()
+		expectedParams := builtin.ApplyRewardParams{Reward: expectedReward, Penalty: penalty}
+		rt.ExpectSend(miner, builtin.MethodsMiner.ApplyRewards, &expectedParams, expectedReward, nil, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(10), &builtin.Discard{}, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, big.NewInt(90), &builtin.Discard{}, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, exitcode.ErrForbidden)
+
+		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.ErrForbidden)
+
+		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
+			Miner:            miner,
+			Penalty:          big.Zero(),
+			GasReward:        big.Zero(),
+			WinCount:         1,
+			ShareCount:       1,
+			RetrievalPledged: big.Zero(),
+		})
+		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(3500)), rt.Balance())
+
+		st = getState(rt)
+		assert.True(t, st.TotalSendFailed.Equals(st.ThisEpochReward))
+		assert.True(t, st.TotalStoragePowerReward.Equals(big.Zero()))
+		assert.True(t, st.TotalVoteReward.Equals(big.Zero()))
+		assert.True(t, st.TotalExpertReward.Equals(big.Zero()))
+		assert.True(t, st.TotalKnowledgeReward.Equals(big.Zero()))
+		assert.True(t, st.TotalRetrievalReward.Equals(big.Zero()))
 		rt.Verify()
 	})
 }

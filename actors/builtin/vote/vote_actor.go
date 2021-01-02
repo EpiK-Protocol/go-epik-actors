@@ -22,8 +22,8 @@ func (a Actor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.BlockCandidates,
 		3:                         a.Vote,
-		4:                         a.Revoke,
-		5:                         a.Claim,
+		4:                         a.Rescind,
+		5:                         a.Withdraw,
 		6:                         a.ApplyRewards,
 		7:                         a.OnEpochTickEnd,
 	}
@@ -47,13 +47,15 @@ var _ runtime.VMActor = Actor{}
 // Actor methods
 ////////////////////////////////////////////////////////////////////////////////
 
-func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+func (a Actor) Constructor(rt Runtime, fallback *addr.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
+
+	builtin.RequireParam(rt, fallback.Protocol() == addr.ID, "fallback not a ID-Address")
 
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
-	st := ConstructState(emptyMap)
+	st := ConstructState(emptyMap, *fallback)
 	rt.StateCreate(st)
 	return nil
 }
@@ -84,18 +86,14 @@ func (a Actor) BlockCandidates(rt Runtime, params *builtin.BlockCandidatesParams
 	return nil
 }
 
-type VoteParams struct {
-	Candidate addr.Address
-}
-
-func (a Actor) Vote(rt Runtime, params *VoteParams) *abi.EmptyValue {
+func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	votes := rt.ValueReceived()
 	builtin.RequireParam(rt, votes.GreaterThan(big.Zero()), "non positive votes to vote")
 
-	resovled, ok := rt.ResolveAddress(params.Candidate)
-	builtin.RequireParam(rt, ok, "unable to resolve address %v", params.Candidate)
+	resovled, ok := rt.ResolveAddress(*candidate)
+	builtin.RequireParam(rt, ok, "unable to resolve address %v", candidate)
 
 	candAddr := builtin.RequestExpertControlAddr(rt, resovled)
 
@@ -143,21 +141,21 @@ func (a Actor) Vote(rt Runtime, params *VoteParams) *abi.EmptyValue {
 }
 
 //
-type RevokeParams struct {
+type RescindParams struct {
 	Candidate addr.Address
 	Votes     abi.TokenAmount
 }
 
-func (a Actor) Revoke(rt Runtime, params *RevokeParams) *abi.EmptyValue {
+func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	builtin.RequireParam(rt, params.Votes.GreaterThan(big.Zero()), "non positive votes to revoke")
+	builtin.RequireParam(rt, params.Votes.GreaterThan(big.Zero()), "non positive votes to rescind")
 
 	candAddr, ok := rt.ResolveAddress(params.Candidate)
 	builtin.RequireParam(rt, ok, "unable to resolve address %v", params.Candidate)
 
 	var st State
-	var afterRevoke *Candidate
+	var afterRescind *Candidate
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
 
@@ -175,14 +173,14 @@ func (a Actor) Revoke(rt Runtime, params *RevokeParams) *abi.EmptyValue {
 		err = st.settle(store, voter, candidates, rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
 
-		revokedVotes := big.Zero()
-		revokedVotes, err = st.subFromVotingRecord(store, voter, candAddr, params.Votes, rt.CurrEpoch())
+		rescindedVotes := big.Zero()
+		rescindedVotes, err = st.subFromVotingRecord(store, voter, candAddr, params.Votes, rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract votes from voting record")
-		if revokedVotes.IsZero() {
+		if rescindedVotes.IsZero() {
 			return
 		}
 
-		afterRevoke, err = st.subFromCandidate(candidates, candAddr, revokedVotes)
+		afterRescind, err = st.subFromCandidate(candidates, candAddr, rescindedVotes)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract votes from candidate")
 
 		st.Candidates, err = candidates.Root()
@@ -194,19 +192,19 @@ func (a Actor) Revoke(rt Runtime, params *RevokeParams) *abi.EmptyValue {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
 
 		// If blocked, TotalVotes has been subtracted in BlockCandidate.
-		if !afterRevoke.IsBlocked() {
-			st.TotalVotes = big.Sub(st.TotalVotes, revokedVotes)
+		if !afterRescind.IsBlocked() {
+			st.TotalVotes = big.Sub(st.TotalVotes, rescindedVotes)
 			Assert(st.TotalVotes.GreaterThanEqual(big.Zero()))
 		}
 	})
-	if afterRevoke != nil && !afterRevoke.IsBlocked() {
-		builtin.NotifyExpertVote(rt, candAddr, afterRevoke.Votes)
+	if afterRescind != nil && !afterRescind.IsBlocked() {
+		builtin.NotifyExpertVote(rt, candAddr, afterRescind.Votes)
 	}
 	return nil
 }
 
-// Claims unlocked revoking votes and vested rewards.
-func (a Actor) Claim(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+// Withdraws unlocked rescinding votes and rewards.
+func (a Actor) Withdraw(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	total := abi.NewTokenAmount(0)
@@ -266,14 +264,29 @@ func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.CronActorAddr)
 
+	toFoundation := abi.NewTokenAmount(0)
 	var st State
 	rt.StateTransaction(&st, func() {
-		if st.UnownedFunds.IsZero() || st.TotalVotes.IsZero() {
+		builtin.RequireParam(rt, st.UnownedFunds.GreaterThanEqual(big.Zero()), "non positive unowned funds")
+
+		if st.UnownedFunds.IsZero() {
+			return
+		}
+
+		if st.TotalVotes.IsZero() {
+			toFoundation = st.UnownedFunds
+			st.UnownedFunds = big.Zero()
 			return
 		}
 
 		st.CumEarningsPerVote = big.Add(st.CumEarningsPerVote, big.Div(st.UnownedFunds, st.TotalVotes))
 		st.UnownedFunds = big.Mod(st.UnownedFunds, st.TotalVotes)
 	})
+
+	if !toFoundation.IsZero() {
+		code := rt.Send(st.FallbackReceiver, builtin.MethodSend, nil, toFoundation, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds to fallback")
+	}
+
 	return nil
 }

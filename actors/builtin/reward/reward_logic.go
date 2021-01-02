@@ -137,14 +137,14 @@ func SlowConvenientBaselineForEpoch(targetEpoch abi.ChainEpoch) abi.StoragePower
 } */
 
 func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
-	vote, expert, knowledge, bandwidth, power abi.TokenAmount,
+	vote, expert, knowledge, retrieval, power abi.TokenAmount,
 ) {
 	// 1% to vote
 	vote = big.Div(blockReward, big.NewInt(100))
 	// 9% to expert
 	expert = big.Div(big.Mul(blockReward, big.NewInt(9)), big.NewInt(100))
 
-	// 15% to bandwidth and knowledge
+	// 15% to retrieval and knowledge
 	kb := big.Div(big.Mul(blockReward, big.NewInt(15)), big.NewInt(100))
 
 	power = big.Sub(blockReward, vote)
@@ -155,16 +155,16 @@ func distributeBlockRewards(blockReward, pledged, circulating abi.TokenAmount) (
 	// P - pledged, C - circulating
 	//
 	//                   n1      n2                       d
-	// bandwidth = min(P*100, 15*5*C) * blockReward / (C*5*100)
+	// retrieval = min(P*100, 15*5*C) * blockReward / (C*5*100)
 	n1 := big.Mul(pledged, big.NewInt(100))
 	n2 := big.Mul(circulating, big.NewInt(75))
 	d := big.Mul(circulating, big.NewInt(500))
 	if !d.IsZero() {
-		bandwidth = big.Div(big.Mul(min(n1, n2), blockReward), d)
+		retrieval = big.Div(big.Mul(min(n1, n2), blockReward), d)
 	} else {
-		bandwidth = big.Zero()
+		retrieval = big.Zero()
 	}
-	knowledge = big.Sub(kb, bandwidth)
+	knowledge = big.Sub(kb, retrieval)
 	Assert(knowledge.GreaterThanEqual(big.Zero()))
 	return
 }

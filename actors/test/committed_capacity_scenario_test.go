@@ -1,6 +1,6 @@
 package test_test
 
-import (
+/* import (
 	"context"
 	"testing"
 
@@ -421,3 +421,4 @@ func TestReplaceCommittedCapacitySectorWithDealLadenSector(t *testing.T) {
 	assert.Equal(t, upgradeSectorPower.Raw, networkStats.TotalBytesCommitted)
 	assert.Equal(t, upgradeSectorPower.QA, networkStats.TotalQABytesCommitted)
 }
+*/

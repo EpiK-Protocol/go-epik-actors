@@ -14,7 +14,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/verifreg"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
 	tutil "github.com/filecoin-project/specs-actors/v2/support/testing"
 	vm "github.com/filecoin-project/specs-actors/v2/support/vm"
@@ -25,7 +24,7 @@ func TestTerminateSectors(t *testing.T) {
 	ctx := context.Background()
 	v := vm.NewVMWithSingletons(ctx, t)
 	addrs := vm.CreateAccounts(ctx, t, v, 4, big.Mul(big.NewInt(10_000), vm.FIL), 93837778)
-	owner, verifier, unverifiedClient, verifiedClient := addrs[0], addrs[1], addrs[2], addrs[3]
+	owner /* , verifier */, unverifiedClient, verifiedClient := addrs[0] /* , addrs[1] */, addrs[2], addrs[3]
 	worker := owner
 
 	minerBalance := big.Mul(big.NewInt(1_000), vm.FIL)
@@ -48,7 +47,7 @@ func TestTerminateSectors(t *testing.T) {
 	// publish verified and unverified deals
 	//
 
-	// register verifier then verified client
+	/* // register verifier then verified client
 	vm.ApplyOk(t, v, vm.VerifregRoot, builtin.VerifiedRegistryActorAddr, big.Zero(), builtin.MethodsVerifiedRegistry.AddVerifier, &verifreg.AddVerifierParams{
 		Address:   verifier,
 		Allowance: abi.NewStoragePower(32 << 40),
@@ -57,7 +56,7 @@ func TestTerminateSectors(t *testing.T) {
 	vm.ApplyOk(t, v, verifier, builtin.VerifiedRegistryActorAddr, big.Zero(), builtin.MethodsVerifiedRegistry.AddVerifiedClient, &verifreg.AddVerifiedClientParams{
 		Address:   verifiedClient,
 		Allowance: abi.NewStoragePower(32 << 40),
-	})
+	}) */
 
 	// add market collateral for clients and miner
 	collateral := big.Mul(big.NewInt(3), vm.FIL)
@@ -89,13 +88,13 @@ func TestTerminateSectors(t *testing.T) {
 
 	// precommit sector with deals
 	vm.ApplyOk(t, v, addrs[0], minerAddrs.RobustAddress, big.Zero(), builtin.MethodsMiner.PreCommitSector, &miner.PreCommitSectorParams{
-		SealProof:       sealProof,
-		SectorNumber:    sectorNumber,
-		SealedCID:       sealedCid,
-		SealRandEpoch:   v.GetEpoch() - 1,
-		DealIDs:         dealIDs,
-		Expiration:      v.GetEpoch() + 220*builtin.EpochsInDay,
-		ReplaceCapacity: false,
+		SealProof:     sealProof,
+		SectorNumber:  sectorNumber,
+		SealedCID:     sealedCid,
+		SealRandEpoch: v.GetEpoch() - 1,
+		DealIDs:       dealIDs,
+		/* Expiration:      v.GetEpoch() + 220*builtin.EpochsInDay,
+		ReplaceCapacity: false, */
 	})
 
 	// advance time to min seal duration

@@ -46,6 +46,10 @@ var _ runtime.VMActor = Actor{}
 func (a Actor) Constructor(rt Runtime, initialPayee *address.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
+	if initialPayee.Protocol() != address.ID {
+		rt.Abortf(exitcode.ErrIllegalArgument, "intial payee address must be an ID address")
+	}
+
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 
@@ -54,17 +58,13 @@ func (a Actor) Constructor(rt Runtime, initialPayee *address.Address) *abi.Empty
 	return nil
 }
 
-type ChangePayeeParams struct {
-	Payee addr.Address
-}
-
-func (a Actor) ChangePayee(rt Runtime, params *ChangePayeeParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerAcceptAny()
+func (a Actor) ChangePayee(rt Runtime, newAddress *addr.Address) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsKnowledge.ChangePayee)
 
-	newPayee, ok := rt.ResolveAddress(params.Payee)
-	builtin.RequireParam(rt, ok, "unable to resolve address %v", params.Payee)
+	newPayee, ok := rt.ResolveAddress(*newAddress)
+	builtin.RequireParam(rt, ok, "unable to resolve address %v", newAddress)
 
 	code, ok := rt.GetActorCodeCID(newPayee)
 	builtin.RequireParam(rt, ok, "no code for address %v", newPayee)

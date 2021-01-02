@@ -13,7 +13,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{133}
+var lengthBufState = []byte{134}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -52,6 +52,11 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	if err := t.CumEarningsPerVote.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.FallbackReceiver (address.Address) (struct)
+	if err := t.FallbackReceiver.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -69,7 +74,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 5 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -121,6 +126,15 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.CumEarningsPerVote.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.CumEarningsPerVote: %w", err)
+		}
+
+	}
+	// t.FallbackReceiver (address.Address) (struct)
+
+	{
+
+		if err := t.FallbackReceiver.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.FallbackReceiver: %w", err)
 		}
 
 	}
@@ -364,18 +378,18 @@ func (t *VotingRecord) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.RevokingVotes (big.Int) (struct)
-	if err := t.RevokingVotes.MarshalCBOR(w); err != nil {
+	// t.RescindingVotes (big.Int) (struct)
+	if err := t.RescindingVotes.MarshalCBOR(w); err != nil {
 		return err
 	}
 
-	// t.LastRevokingEpoch (abi.ChainEpoch) (int64)
-	if t.LastRevokingEpoch >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.LastRevokingEpoch)); err != nil {
+	// t.LastRescindEpoch (abi.ChainEpoch) (int64)
+	if t.LastRescindEpoch >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.LastRescindEpoch)); err != nil {
 			return err
 		}
 	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.LastRevokingEpoch-1)); err != nil {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.LastRescindEpoch-1)); err != nil {
 			return err
 		}
 	}
@@ -409,16 +423,16 @@ func (t *VotingRecord) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.RevokingVotes (big.Int) (struct)
+	// t.RescindingVotes (big.Int) (struct)
 
 	{
 
-		if err := t.RevokingVotes.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.RevokingVotes: %w", err)
+		if err := t.RescindingVotes.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.RescindingVotes: %w", err)
 		}
 
 	}
-	// t.LastRevokingEpoch (abi.ChainEpoch) (int64)
+	// t.LastRescindEpoch (abi.ChainEpoch) (int64)
 	{
 		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
 		var extraI int64
@@ -441,19 +455,19 @@ func (t *VotingRecord) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
 
-		t.LastRevokingEpoch = abi.ChainEpoch(extraI)
+		t.LastRescindEpoch = abi.ChainEpoch(extraI)
 	}
 	return nil
 }
 
-var lengthBufRevokeParams = []byte{130}
+var lengthBufRescindParams = []byte{130}
 
-func (t *RevokeParams) MarshalCBOR(w io.Writer) error {
+func (t *RescindParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufRevokeParams); err != nil {
+	if _, err := w.Write(lengthBufRescindParams); err != nil {
 		return err
 	}
 
@@ -469,8 +483,8 @@ func (t *RevokeParams) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *RevokeParams) UnmarshalCBOR(r io.Reader) error {
-	*t = RevokeParams{}
+func (t *RescindParams) UnmarshalCBOR(r io.Reader) error {
+	*t = RescindParams{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -502,54 +516,6 @@ func (t *RevokeParams) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.Votes.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.Votes: %w", err)
-		}
-
-	}
-	return nil
-}
-
-var lengthBufVoteParams = []byte{129}
-
-func (t *VoteParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufVoteParams); err != nil {
-		return err
-	}
-
-	// t.Candidate (address.Address) (struct)
-	if err := t.Candidate.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *VoteParams) UnmarshalCBOR(r io.Reader) error {
-	*t = VoteParams{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.Candidate (address.Address) (struct)
-
-	{
-
-		if err := t.Candidate.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Candidate: %w", err)
 		}
 
 	}

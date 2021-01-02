@@ -61,6 +61,16 @@ type AwardBlockRewardParams struct {
 	RetrievalPledged abi.TokenAmount // total retrieval pledged epik
 }
 
+type AwardBlockRewardReturn struct {
+	PowerReward     abi.TokenAmount // to miner
+	GasReward       abi.TokenAmount // to miner
+	VoteReward      abi.TokenAmount // to vote fund
+	ExpertReward    abi.TokenAmount // to expert fund
+	RetrievalReward abi.TokenAmount // to retrieval fund
+	KnowledgeReward abi.TokenAmount // to knowledge fund
+	SendFailed      abi.TokenAmount
+}
+
 // Awards a reward to a block producer.
 // This method is called only by the system actor, implicitly, as the last message in the evaluation of a block.
 // The system actor thus computes the parameters and attached value.
@@ -71,7 +81,7 @@ type AwardBlockRewardParams struct {
 //
 // The reward is reduced before the residual is credited to the block producer, by:
 // - a penalty amount, provided as a parameter, which is burnt,
-func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardParams) *abi.EmptyValue {
+func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardParams) *AwardBlockRewardReturn {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 	priorBalance := rt.CurrentBalance()
 	if params.Penalty.LessThan(big.Zero()) {
@@ -96,80 +106,134 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	if !ok {
 		rt.Abortf(exitcode.ErrNotFound, "failed to resolve given owner address")
 	}
-	// The miner penalty is scaled up by a factor of PenaltyMultiplier
-	penalty := big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty)
-	expertReward := big.Zero()
-	minerReward := big.Zero()
-	voteReward := big.Zero()
-	knowledgeReward := big.Zero()
-	bandwidthReward := big.Zero()
+
+	gasReward := params.GasReward
 
 	var st State
-	rt.StateTransaction(&st, func() {
+	rt.StateReadonly(&st)
+
+	blockReward := big.Div(st.ThisEpochReward, big.NewInt(params.ShareCount))
+	totalReward := big.Add(blockReward, gasReward)
+	currBalance := rt.CurrentBalance()
+	if totalReward.GreaterThan(currBalance) {
+		rt.Log(rtt.WARN, "reward actor balance %d below totalReward expected %d, paying out rest of balance", currBalance, totalReward)
+		totalReward = currBalance
+		blockReward = big.Sub(totalReward, gasReward)
+	}
+	AssertMsg(totalReward.LessThanEqual(priorBalance), "total reward %v exceeds balance %v", totalReward, priorBalance)
+
+	voteReward, expertReward, knowledgeReward, retrievalReward, powerReward :=
+		distributeBlockRewards(blockReward, params.RetrievalPledged, rt.TotalFilCircSupply())
+
+	/* rt.StateTransaction(&st, func() {
 		// blockReward := big.Mul(st.ThisEpochReward, big.NewInt(params.WinCount))
 		// blockReward = big.Div(blockReward, big.NewInt(builtin.ExpectedLeadersPerEpoch))
 		blockReward := big.Div(st.ThisEpochReward, big.NewInt(params.ShareCount))
-		totalReward := big.Add(blockReward, params.GasReward)
+		totalReward := big.Add(blockReward, gasReward)
 		currBalance := rt.CurrentBalance()
 		if totalReward.GreaterThan(currBalance) {
 			rt.Log(rtt.WARN, "reward actor balance %d below totalReward expected %d, paying out rest of balance", currBalance, totalReward)
 			totalReward = currBalance
 
-			blockReward = big.Sub(totalReward, params.GasReward)
+			blockReward = big.Sub(totalReward, gasReward)
 			// // Since we have already asserted the balance is greater than gas reward blockReward is >= 0
 			// AssertMsg(blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward is %v below zero", blockReward)
 		}
 		AssertMsg(totalReward.LessThanEqual(priorBalance), "total reward %v exceeds balance %v", totalReward, priorBalance)
 
-		var powerReward big.Int
-		voteReward, expertReward, knowledgeReward, bandwidthReward, powerReward =
+		voteReward, expertReward, knowledgeReward, retrievalReward, powerReward =
 			distributeBlockRewards(blockReward, params.RetrievalPledged, rt.TotalFilCircSupply())
+	}) */
 
-		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, powerReward)
-		minerReward = big.Add(powerReward, params.GasReward)
-	})
+	sendFailed := big.Zero()
 
 	// if this fails, we can assume the miner is responsible and avoid failing here.
+	minerReward := big.Add(powerReward, gasReward)
 	rewardParams := builtin.ApplyRewardParams{
 		Reward:  minerReward,
-		Penalty: penalty,
+		Penalty: big.Mul(big.NewInt(PenaltyMultiplier), params.Penalty),
 	}
 	code := rt.Send(minerAddr, builtin.MethodsMiner.ApplyRewards, &rewardParams, minerReward, &builtin.Discard{})
 	if !code.IsSuccess() {
 		rt.Log(rtt.ERROR, "failed to send ApplyRewards call to the miner actor with funds: %v, code: %v", minerReward, code)
-		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, minerReward, &builtin.Discard{})
-		if !code.IsSuccess() {
-			rt.Log(rtt.ERROR, "failed to send unsent reward to the burnt funds actor, code: %v", code)
-		}
+		sendFailed = big.Add(sendFailed, minerReward)
+		powerReward = big.Zero() // clear
+		gasReward = big.Zero()   // clear
 	}
 
 	if !voteReward.IsZero() {
 		code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, voteReward, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send funds to vote")
+		if !code.IsSuccess() {
+			rt.Log(rtt.ERROR, "failed to send ApplyRewards call to vote fund actor with funds: %v, code: %v", voteReward, code)
+			sendFailed = big.Add(sendFailed, voteReward)
+			voteReward = big.Zero() // clear
+		}
 	}
 
 	if !expertReward.IsZero() {
 		code = rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, expertReward, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send funds to expert")
+		if !code.IsSuccess() {
+			rt.Log(rtt.ERROR, "failed to send ApplyRewards call to expert fund actor with funds: %v, code: %v", expertReward, code)
+			sendFailed = big.Add(sendFailed, expertReward)
+			expertReward = big.Zero() // clear
+		}
 	}
 
 	if !knowledgeReward.IsZero() {
 		code = rt.Send(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, knowledgeReward, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send funds to knowledge")
+		if !code.IsSuccess() {
+			rt.Log(rtt.ERROR, "failed to send ApplyRewards call to knowledge fund actor with funds: %v, code: %v", knowledgeReward, code)
+			sendFailed = big.Add(sendFailed, knowledgeReward)
+			knowledgeReward = big.Zero() // clear
+		}
 	}
 
-	if !bandwidthReward.IsZero() {
-		code = rt.Send(builtin.RetrievalFundActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, bandwidthReward, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send funds to retrieval")
+	if !retrievalReward.IsZero() {
+		code = rt.Send(builtin.RetrievalFundActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, retrievalReward, &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Log(rtt.ERROR, "failed to send ApplyRewards call to retrieval fund actor with funds: %v, code: %v", retrievalReward, code)
+			sendFailed = big.Add(sendFailed, retrievalReward)
+			retrievalReward = big.Zero() // clear
+		}
+	}
+	if !sendFailed.IsZero() {
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, sendFailed, &builtin.Discard{})
+		if !code.IsSuccess() {
+			rt.Log(rtt.ERROR, "failed to send unsent reward to the burnt funds actor: %v, code: %v", sendFailed, code)
+		}
 	}
 
-	return nil
+	// update totals
+	rt.StateTransaction(&st, func() {
+		st.TotalVoteReward = big.Add(st.TotalVoteReward, voteReward)
+		st.TotalExpertReward = big.Add(st.TotalExpertReward, expertReward)
+		st.TotalKnowledgeReward = big.Add(st.TotalKnowledgeReward, knowledgeReward)
+		st.TotalRetrievalReward = big.Add(st.TotalRetrievalReward, retrievalReward)
+		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, powerReward)
+		st.TotalSendFailed = big.Add(st.TotalSendFailed, sendFailed)
+	})
+
+	ret := &AwardBlockRewardReturn{
+		PowerReward:     powerReward,
+		GasReward:       gasReward,
+		VoteReward:      voteReward,
+		ExpertReward:    expertReward,
+		KnowledgeReward: knowledgeReward,
+		RetrievalReward: retrievalReward,
+		SendFailed:      sendFailed,
+	}
+	return ret
 }
 
 type ThisEpochRewardReturn struct {
 	Epoch                   abi.ChainEpoch
 	ThisEpochReward         abi.TokenAmount
 	TotalStoragePowerReward abi.TokenAmount
+	TotalExpertReward       abi.TokenAmount
+	TotalVoteReward         abi.TokenAmount
+	TotalKnowledgeReward    abi.TokenAmount
+	TotalRetrievalReward    abi.TokenAmount
+	TotalSendFailed         abi.TokenAmount
 }
 
 // The award value used for the current epoch, updated at the end of an epoch
@@ -184,6 +248,11 @@ func (a Actor) ThisEpochReward(rt runtime.Runtime, _ *abi.EmptyValue) *ThisEpoch
 		Epoch:                   st.Epoch,
 		ThisEpochReward:         st.ThisEpochReward,
 		TotalStoragePowerReward: st.TotalStoragePowerReward,
+		TotalExpertReward:       st.TotalExpertReward,
+		TotalVoteReward:         st.TotalVoteReward,
+		TotalKnowledgeReward:    st.TotalKnowledgeReward,
+		TotalRetrievalReward:    st.TotalRetrievalReward,
+		TotalSendFailed:         st.TotalSendFailed,
 	}
 }
 

@@ -20,15 +20,15 @@ func publishDeal(t *testing.T, v *vm.VM, provider, dealClient, minerID addr.Addr
 	pieceSize abi.PaddedPieceSize, verifiedDeal bool, dealStart abi.ChainEpoch, dealLifetime abi.ChainEpoch,
 ) *market.PublishStorageDealsReturn {
 	deal := market.DealProposal{
-		PieceCID:     tutil.MakeCID(dealLabel, &market.PieceCIDPrefix),
-		PieceSize:    pieceSize,
-		VerifiedDeal: verifiedDeal,
-		Client:       dealClient,
-		Provider:     minerID,
-		Label:        dealLabel,
-		StartEpoch:   dealStart,
-		EndEpoch:     dealStart + dealLifetime,
-		/* StoragePricePerEpoch: abi.NewTokenAmount(1 << 20),
+		PieceCID:  tutil.MakeCID(dealLabel, &market.PieceCIDPrefix),
+		PieceSize: pieceSize,
+		// VerifiedDeal: verifiedDeal,
+		Client:     dealClient,
+		Provider:   minerID,
+		Label:      dealLabel,
+		StartEpoch: dealStart,
+		/* EndEpoch:     dealStart + dealLifetime,
+		StoragePricePerEpoch: abi.NewTokenAmount(1 << 20),
 		ProviderCollateral:   big.Mul(big.NewInt(2), vm.FIL),
 		ClientCollateral:     big.Mul(big.NewInt(1), vm.FIL), */
 	}
@@ -48,13 +48,13 @@ func publishDeal(t *testing.T, v *vm.VM, provider, dealClient, minerID addr.Addr
 		{To: builtin.StoragePowerActorAddr, Method: builtin.MethodsPower.CurrentTotalPower, SubInvocations: []vm.ExpectInvocation{}},
 	}
 
-	if verifiedDeal {
+	/* if verifiedDeal {
 		expectedPublishSubinvocations = append(expectedPublishSubinvocations, vm.ExpectInvocation{
 			To:             builtin.VerifiedRegistryActorAddr,
 			Method:         builtin.MethodsVerifiedRegistry.UseBytes,
 			SubInvocations: []vm.ExpectInvocation{},
 		})
-	}
+	} */
 
 	vm.ExpectInvocation{
 		To:             builtin.StorageMarketActorAddr,

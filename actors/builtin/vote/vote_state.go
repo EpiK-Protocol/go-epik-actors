@@ -3,6 +3,7 @@ package vote
 import (
 	"sort"
 
+	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -21,13 +22,16 @@ type State struct {
 	// Information for each voter.
 	Voters cid.Cid // Map, HAMT [Voter ID-Address]Voter
 
-	// Total valid votes, excluding revoked and blocked votes.
+	// Total valid votes(atto), excluding rescinded and blocked votes(atto).
 	TotalVotes abi.TokenAmount
 
 	// Total unowned funds.
 	UnownedFunds abi.TokenAmount
-	// Cumulative earnings per vote since genesis.
+	// Cumulative earnings per vote(atto) since genesis.
 	CumEarningsPerVote abi.TokenAmount
+
+	// Fallback rewards receiver when no votes
+	FallbackReceiver address.Address
 }
 
 type Candidate struct {
@@ -37,7 +41,7 @@ type Candidate struct {
 	// CumEarningsPerVote in epoch just previous to BlockEpoch.
 	BlockCumEarningsPerVote abi.TokenAmount
 
-	// Number of votes currently received.
+	// Number of votes(atto) currently received.
 	Votes abi.TokenAmount
 }
 
@@ -55,7 +59,7 @@ type Voter struct {
 	// CumEarningsPerVote in epoch just previous to LastSettleEpoch.
 	SettleCumEarningsPerVote abi.TokenAmount
 
-	// Cumulative unclaimed funds(earnings and revoked votes) since last Claim.
+	// Cumulative unclaimed funds, including rewards and unlocked votes, since last withdrawal.
 	UnclaimedFunds abi.TokenAmount
 
 	// Voting record for each candidate.
@@ -63,21 +67,22 @@ type Voter struct {
 }
 
 type VotingRecord struct {
-	// Number of valid votes for candidate.
+	// Number of valid votes(atto) for candidate.
 	Votes abi.TokenAmount
-	// Number of votes being revoked.
-	RevokingVotes abi.TokenAmount
-	// Epoch during which the last revoking called.
-	LastRevokingEpoch abi.ChainEpoch
+	// Number of votes being rescinded.
+	RescindingVotes abi.TokenAmount
+	// Epoch during which the last rescind called.
+	LastRescindEpoch abi.ChainEpoch
 }
 
-func ConstructState(emptyMapCid cid.Cid) *State {
+func ConstructState(emptyMapCid cid.Cid, fallback address.Address) *State {
 	return &State{
 		Candidates:         emptyMapCid,
 		Voters:             emptyMapCid,
 		TotalVotes:         abi.NewTokenAmount(0),
 		UnownedFunds:       abi.NewTokenAmount(0),
 		CumEarningsPerVote: abi.NewTokenAmount(0),
+		FallbackReceiver:   fallback,
 	}
 }
 
@@ -102,7 +107,7 @@ func (st *State) blockCandidates(candidates *adt.Map, candAddrs map[addr.Address
 	return nil
 }
 
-// Allow to revoke from blocked candidate.
+// Allow to rescind from blocked candidate.
 func (st *State) subFromCandidate(
 	candidates *adt.Map,
 	candAddr addr.Address,
@@ -151,8 +156,8 @@ func (st *State) subFromVotingRecord(
 
 	// update voting records
 	record.Votes = big.Sub(record.Votes, votes)
-	record.RevokingVotes = big.Add(record.RevokingVotes, votes)
-	record.LastRevokingEpoch = cur
+	record.RescindingVotes = big.Add(record.RescindingVotes, votes)
+	record.LastRescindEpoch = cur
 	err = setVotingRecord(votingRecords, candAddr, record)
 	if err != nil {
 		return abi.NewTokenAmount(0), err
@@ -210,15 +215,15 @@ func (st *State) addVotingRecord(s adt.Store, voter *Voter, candAddr addr.Addres
 	}
 	if found {
 		record = &VotingRecord{
-			Votes:             big.Add(record.Votes, votes),
-			RevokingVotes:     record.RevokingVotes,
-			LastRevokingEpoch: record.LastRevokingEpoch,
+			Votes:            big.Add(record.Votes, votes),
+			RescindingVotes:  record.RescindingVotes,
+			LastRescindEpoch: record.LastRescindEpoch,
 		}
 	} else {
 		record = &VotingRecord{
-			Votes:             votes,
-			RevokingVotes:     big.Zero(),
-			LastRevokingEpoch: abi.ChainEpoch(0),
+			Votes:            votes,
+			RescindingVotes:  big.Zero(),
+			LastRescindEpoch: abi.ChainEpoch(0),
 		}
 	}
 
@@ -307,10 +312,10 @@ func (st *State) claimUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainEpoc
 
 	var old VotingRecord
 	err = votingRecords.ForEach(&old, func(key string) error {
-		if old.RevokingVotes.IsZero() || cur <= old.LastRevokingEpoch+RevokingUnlockDelay {
+		if old.RescindingVotes.IsZero() || cur <= old.LastRescindEpoch+RescindingUnlockDelay {
 			return nil
 		}
-		totalUnlocked = big.Add(totalUnlocked, old.RevokingVotes)
+		totalUnlocked = big.Add(totalUnlocked, old.RescindingVotes)
 
 		candAddr, err := addr.NewFromBytes([]byte(key))
 		if err != nil {
@@ -323,9 +328,9 @@ func (st *State) claimUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainEpoc
 		}
 		// update
 		updates[candAddr] = &VotingRecord{
-			Votes:             old.Votes,
-			RevokingVotes:     big.Zero(),
-			LastRevokingEpoch: old.LastRevokingEpoch,
+			Votes:            old.Votes,
+			RescindingVotes:  big.Zero(),
+			LastRescindEpoch: old.LastRescindEpoch,
 		}
 		return nil
 	})
