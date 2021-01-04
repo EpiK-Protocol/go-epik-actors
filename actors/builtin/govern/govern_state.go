@@ -109,6 +109,17 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 				if err != nil {
 					return errors.Wrapf(err, "failed to subtract bitfields")
 				}
+				empty, err := bf.IsEmpty()
+				if err != nil {
+					return errors.Wrapf(err, "failed to check bitfield empty(revoke)")
+				}
+				if empty {
+					err = mp.Delete(abi.CidKey(codeID))
+					if err != nil {
+						return errors.Wrapf(err, "failed to delete empty bitfield(revoke)")
+					}
+					continue
+				}
 			} else {
 				bf, err = bitfield.MergeBitFields(bf, bitfield.NewFromSet(setBits))
 				if err != nil {
@@ -121,11 +132,17 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 			return errors.Wrapf(err, "failed to put priviledges")
 		}
 	}
-
-	out.CodeMethods, err = mp.Root()
+	keys, err := mp.CollectKeys()
 	if err != nil {
-		return errors.Wrapf(err, "failed to flush CodeMethods")
+		return errors.Wrapf(err, "failed to collect keys")
 	}
-
-	return governors.Put(abi.AddrKey(governor), &out)
+	if len(keys) == 0 {
+		return governors.Delete(abi.AddrKey(governor))
+	} else {
+		out.CodeMethods, err = mp.Root()
+		if err != nil {
+			return errors.Wrapf(err, "failed to flush CodeMethods")
+		}
+		return governors.Put(abi.AddrKey(governor), &out)
+	}
 }

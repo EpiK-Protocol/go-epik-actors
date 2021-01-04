@@ -137,7 +137,7 @@ func (t *GrantedAuthorities) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufGrantOrRevokeParams = []byte{130}
+var lengthBufGrantOrRevokeParams = []byte{131}
 
 func (t *GrantOrRevokeParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -168,6 +168,11 @@ func (t *GrantOrRevokeParams) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.All (bool) (bool)
+	if err := cbg.WriteBool(w, t.All); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -185,7 +190,7 @@ func (t *GrantOrRevokeParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -227,10 +232,27 @@ func (t *GrantOrRevokeParams) UnmarshalCBOR(r io.Reader) error {
 		t.Authorities[i] = v
 	}
 
+	// t.All (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.All = false
+	case 21:
+		t.All = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
 	return nil
 }
 
-var lengthBufAuthority = []byte{130}
+var lengthBufAuthority = []byte{131}
 
 func (t *Authority) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -262,6 +284,11 @@ func (t *Authority) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.All (bool) (bool)
+	if err := cbg.WriteBool(w, t.All); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -279,7 +306,7 @@ func (t *Authority) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -328,5 +355,22 @@ func (t *Authority) UnmarshalCBOR(r io.Reader) error {
 		t.Methods[i] = abi.MethodNum(val)
 	}
 
+	// t.All (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.All = false
+	case 21:
+		t.All = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
 	return nil
 }

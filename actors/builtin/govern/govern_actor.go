@@ -78,16 +78,16 @@ func (a Actor) ValidateGranted(rt runtime.Runtime, params *builtin.ValidateGrant
 type GrantOrRevokeParams struct {
 	Governor    address.Address
 	Authorities []Authority
+	All         bool // Authorities will be ignored if true
 }
 
 type Authority struct {
 	ActorCodeID cid.Cid
 	Methods     []abi.MethodNum
+	All         bool // Methods will be ignored if true
 }
 
-// Grant all privileges to specified Governor if Authorities is empty.
-//
-// Grant all privileges on ActorCodeID to specified Governor if Methods is empty.
+// Grant privileges on ActorCodeID to specified Governor.
 func (a Actor) Grant(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.EmptyValue {
 
 	governor, targetCodeMethods := checkGrantOrRevokeParams(rt, params)
@@ -114,9 +114,7 @@ func (a Actor) Grant(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.Empty
 	return nil
 }
 
-// Revoke all privileges from specified Governor if Authorities is empty.
-//
-// Revoke all privileges on ActorCodeID from specified Governor if Methods is empty.
+// Revoke privileges on ActorCodeID from specified Governor.
 func (a Actor) Revoke(rt runtime.Runtime, params *GrantOrRevokeParams) *abi.EmptyValue {
 
 	governor, targetCodeMethods := checkGrantOrRevokeParams(rt, params)
@@ -146,7 +144,7 @@ func checkGrantOrRevokeParams(rt runtime.Runtime, params *GrantOrRevokeParams) (
 
 	target := make(map[cid.Cid][]abi.MethodNum)
 
-	if len(params.Authorities) != 0 {
+	if !params.All {
 		seenCodeID := make(map[cid.Cid]struct{})
 		seenMethod := make(map[abi.MethodNum]struct{})
 		for _, info := range params.Authorities {
@@ -158,7 +156,7 @@ func checkGrantOrRevokeParams(rt runtime.Runtime, params *GrantOrRevokeParams) (
 			governedMethods, ok := GovernedActors[info.ActorCodeID]
 			builtin.RequireParam(rt, ok, "actor code %s not found", info.ActorCodeID)
 
-			if len(info.Methods) != 0 {
+			if !info.All {
 				for _, method := range info.Methods {
 					_, ok = seenMethod[method]
 					builtin.RequireParam(rt, !ok, "duplicated method %s", method)
