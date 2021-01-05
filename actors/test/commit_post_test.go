@@ -251,6 +251,9 @@ func TestCommitPoStFlow(t *testing.T) {
 		assert.Equal(t, big.NewInt(int64(sectorSize)), networkStats.TotalBytesCommitted)
 		assert.True(t, networkStats.TotalPledgeCollateral.GreaterThan(big.Zero()))
 
+		// Trigger cron to keep reward accounting correct
+		vm.ApplyOk(t, tv, builtin.SystemActorAddr, builtin.CronActorAddr, big.Zero(), builtin.MethodsCron.EpochTick, nil)
+
 		stateTree, err := tv.GetStateTree()
 		require.NoError(t, err)
 		totalBalance, err := tv.GetTotalActorBalance()

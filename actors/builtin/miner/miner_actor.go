@@ -408,8 +408,12 @@ func (a Actor) SubmitWindowedPoSt(rt Runtime, params *SubmitWindowedPoStParams) 
 		rt.Abortf(exitcode.ErrIllegalArgument, "expected at most %d bytes of randomness, got %d", abi.RandomnessLength, len(params.ChainCommitRand))
 	}
 
-	var postResult *PoStResult
+	partitionIndexes := bitfield.New()
+	for _, partition := range params.Partitions {
+		partitionIndexes.Set(partition.Index)
+	}
 
+	var postResult *PoStResult
 	var info *MinerInfo
 	rt.StateTransaction(&st, func() {
 		info = getMinerInfo(rt, &st)
@@ -471,6 +475,14 @@ func (a Actor) SubmitWindowedPoSt(rt Runtime, params *SubmitWindowedPoStParams) 
 
 		deadline, err := deadlines.LoadDeadline(store, params.Deadline)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load deadline %d", params.Deadline)
+
+		alreadyProven, err := bitfield.IntersectBitField(deadline.PostSubmissions, partitionIndexes)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check proven partitions")
+		empty, err := alreadyProven.IsEmpty()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check proven intersection is empty")
+		if !empty {
+			rt.Abortf(exitcode.ErrIllegalArgument, "partition already proven: %v", alreadyProven)
+		}
 
 		// Record proven sectors/partitions, returning updates to power and the final set of sectors
 		// proven/skipped.

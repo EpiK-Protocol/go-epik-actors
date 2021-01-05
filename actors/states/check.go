@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
@@ -24,11 +25,12 @@ import (
 // Only errors thar are particularly troublesome to recover from should propagate as Go errors.
 func CheckStateInvariants(tree *Tree, expectedBalanceTotal abi.TokenAmount, priorEpoch abi.ChainEpoch) (*builtin.MessageAccumulator, error) {
 	acc := &builtin.MessageAccumulator{}
-	totalFIl := big.Zero()
+	totalEpk := big.Zero()
 	var initSummary *init_.StateSummary
 	var cronSummary *cron.StateSummary
 	// var verifregSummary *verifreg.StateSummary
 	var marketSummary *market.StateSummary
+	var rewardSummary *reward.StateSummary
 	var accountSummaries []*account.StateSummary
 	var powerSummary *power.StateSummary
 	var paychSummaries []*paych.StateSummary
@@ -40,7 +42,7 @@ func CheckStateInvariants(tree *Tree, expectedBalanceTotal abi.TokenAmount, prio
 		if key.Protocol() != addr.ID {
 			acc.Addf("unexpected address protocol in state tree root: %v", key)
 		}
-		totalFIl = big.Add(totalFIl, actor.Balance)
+		totalEpk = big.Add(totalEpk, actor.Balance)
 
 		switch actor.Code {
 		case builtin.SystemActorCodeID:
@@ -135,7 +137,16 @@ func CheckStateInvariants(tree *Tree, expectedBalanceTotal abi.TokenAmount, prio
 			}
 
 		case builtin.RewardActorCodeID:
-
+			var st reward.State
+			if err := tree.Store.Get(tree.Store.Context(), actor.Head, &st); err != nil {
+				return err
+			}
+			if summary, msgs, err := reward.CheckStateInvariants(&st, tree.Store, priorEpoch, actor.Balance); err != nil {
+				return err
+			} else {
+				acc.WithPrefix("reward: ").AddAll(msgs)
+				rewardSummary = summary
+			}
 		// case builtin.VerifiedRegistryActorCodeID:
 		// 	var st verifreg.State
 		// 	if err := tree.Store.Get(tree.Store.Context(), actor.Head, &st); err != nil {
@@ -167,9 +178,10 @@ func CheckStateInvariants(tree *Tree, expectedBalanceTotal abi.TokenAmount, prio
 	// _ = verifregSummary
 	_ = cronSummary
 	_ = marketSummary
+	_ = rewardSummary
 
-	if !totalFIl.Equals(expectedBalanceTotal) {
-		acc.Addf("total token balance is %v, expected %v", totalFIl, expectedBalanceTotal)
+	if !totalEpk.Equals(expectedBalanceTotal) {
+		acc.Addf("total token balance is %v, expected %v", totalEpk, expectedBalanceTotal)
 	}
 
 	return acc, nil
