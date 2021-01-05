@@ -595,15 +595,15 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 	store := adt.AsStore(rt)
 	var st State
 	var err error
-	newlyVested := big.Zero()
+	// newlyVested := big.Zero()
 	feeToBurn := abi.NewTokenAmount(0)
 	rt.StateTransaction(&st, func() {
-		newlyVested, err = st.UnlockVestedFunds(store, rt.CurrEpoch())
+		/* newlyVested, err = st.UnlockVestedFunds(store, rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to vest funds")
 		// available balance already accounts for fee debt so it is correct to call
 		// this before RepayDebts. We would have to
 		// subtract fee debt explicitly if we called this after.
-		/* availableBalance, err := st.GetAvailableBalance(rt.CurrentBalance())
+		availableBalance, err := st.GetAvailableBalance(rt.CurrentBalance())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate available balance") */
 		feeToBurn = RepayDebtsOrAbort(rt, &st)
 
@@ -692,7 +692,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 	err = st.CheckBalanceInvariants(rt.CurrentBalance())
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")
 
-	notifyPledgeChanged(rt, newlyVested.Neg())
+	// notifyPledgeChanged(rt, newlyVested.Neg())
 
 	return nil
 }
@@ -853,8 +853,8 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 
 	var newPower PowerPair
 	/* totalPledge := big.Zero()
-	depositToUnlock := big.Zero()*/
-	newlyVested := big.Zero()
+	depositToUnlock := big.Zero()
+	newlyVested := big.Zero()*/
 	newSectors := make([]*SectorOnChainInfo, 0)
 	rt.StateTransaction(&st, func() {
 		/* // Schedule expiration for replaced sectors to the end of their next deadline window.
@@ -922,16 +922,16 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 		newPower, err = st.AssignSectorsToDeadlines(store, rt.CurrEpoch(), newSectors, info.WindowPoStPartitionSectors, info.SectorSize)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to assign new sectors to deadlines")
 
-		// Add sector and pledge lock-up to miner state
+		/* // Add sector and pledge lock-up to miner state
 		newlyVested, err = st.UnlockVestedFunds(store, rt.CurrEpoch())
 		if err != nil {
 			rt.Abortf(exitcode.ErrIllegalState, "failed to vest new funds: %s", err)
 		}
 
-		/* // Unlock deposit for successful proofs, make it available for lock-up as initial pledge.
-		st.AddPreCommitDeposit(depositToUnlock.Neg()) */
+		// Unlock deposit for successful proofs, make it available for lock-up as initial pledge.
+		st.AddPreCommitDeposit(depositToUnlock.Neg())
 
-		/*unlockedBalance, err := st.GetUnlockedBalance(rt.CurrentBalance())
+		unlockedBalance, err := st.GetUnlockedBalance(rt.CurrentBalance())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate unlocked balance")
 		 if unlockedBalance.LessThan(totalPledge) {
 			rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds for aggregate initial pledge requirement %s, available: %s", totalPledge, unlockedBalance)
@@ -945,7 +945,7 @@ func (a Actor) ConfirmSectorProofsValid(rt Runtime, params *builtin.ConfirmSecto
 
 	// Request power and pledge update for activated sector.
 	requestUpdatePower(rt, big.Zero(), newPower)
-	notifyPledgeChanged(rt, newlyVested.Neg())
+	// notifyPledgeChanged(rt, newlyVested.Neg())
 
 	return nil
 }
@@ -1364,11 +1364,11 @@ func (a Actor) DeclareFaultsRecovered(rt Runtime, params *DeclareFaultsRecovered
 
 	store := adt.AsStore(rt)
 	var st State
-	feeToBurn := abi.NewTokenAmount(0)
+	// feeToBurn := abi.NewTokenAmount(0)
 	rt.StateTransaction(&st, func() {
-		// Verify unlocked funds cover both InitialPledgeRequirement and FeeDebt
+		/* // Verify unlocked funds cover both InitialPledgeRequirement and FeeDebt
 		// and repay fee debt now.
-		feeToBurn = RepayDebtsOrAbort(rt, &st)
+		feeToBurn = RepayDebtsOrAbort(rt, &st) */
 
 		info := getMinerInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(append(info.ControlAddresses, info.Owner, info.Worker)...)
@@ -1404,7 +1404,7 @@ func (a Actor) DeclareFaultsRecovered(rt Runtime, params *DeclareFaultsRecovered
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to save deadlines")
 	})
 
-	burnFunds(rt, feeToBurn)
+	// burnFunds(rt, feeToBurn)
 	rt.StateReadonly(&st)
 	err = st.CheckBalanceInvariants(rt.CurrentBalance())
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")

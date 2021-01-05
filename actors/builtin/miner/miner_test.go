@@ -2499,24 +2499,24 @@ func TestDeclareRecoveries(t *testing.T) {
 
 		st = getState(rt)
 
-		// Recovery fails when it can't pay back fee debt
-		rt.ExpectAbortContainsMessage(exitcode.ErrInsufficientFunds, "unlocked balance can not repay fee debt", func() {
-			actor.declareRecoveries(rt, dlIdx, pIdx, bf(uint64(oneSector[0].SectorNumber)), big.Zero())
-		})
+		// // Recovery fails when it can't pay back fee debt
+		// rt.ExpectAbortContainsMessage(exitcode.ErrInsufficientFunds, "unlocked balance can not repay fee debt", func() {
+		// 	actor.declareRecoveries(rt, dlIdx, pIdx, bf(uint64(oneSector[0].SectorNumber)), big.Zero())
+		// })
 
 		// Recovery pays back fee debt and IP requirements and succeeds
 		ff := feeDebt
 		funds := big.Add(ff, st.TotalPledge)
 		rt.SetBalance(funds) // this is how we send funds along with recovery message using mock rt
-		actor.declareRecoveries(rt, dlIdx, pIdx, bf(uint64(oneSector[0].SectorNumber)), ff)
-		assert.True(t, rt.Balance().Equals(big.Zero()))
+		actor.declareRecoveries(rt, dlIdx, pIdx, bf(uint64(oneSector[0].SectorNumber)), big.Zero())
+		assert.True(t, rt.Balance().Equals(ff))
 
 		dl := actor.getDeadline(rt, dlIdx)
 		p, err := dl.LoadPartition(rt.AdtStore(), pIdx)
 		require.NoError(t, err)
 		assert.Equal(t, p.Faults, p.Recoveries)
 		st = getState(rt)
-		assert.Equal(t, big.Zero(), st.FeeDebt)
+		assert.Equal(t, ff, st.FeeDebt)
 		actor.checkState(rt)
 	})
 
@@ -4793,10 +4793,10 @@ func (h *actorHarness) preCommitSector(rt *mock.Runtime, params *miner.PreCommit
 	}
 	st := getState(rt)
 
-	pledgeDelta := immediatelyVestingFunds(rt, st).Neg()
-	if !pledgeDelta.IsZero() {
-		rt.ExpectSend(builtin.StoragePowerActorAddr, builtin.MethodsPower.UpdatePledgeTotal, &pledgeDelta, big.Zero(), nil, exitcode.Ok)
-	}
+	// pledgeDelta := immediatelyVestingFunds(rt, st).Neg()
+	// if !pledgeDelta.IsZero() {
+	// 	rt.ExpectSend(builtin.StoragePowerActorAddr, builtin.MethodsPower.UpdatePledgeTotal, &pledgeDelta, big.Zero(), nil, exitcode.Ok)
+	// }
 
 	if st.FeeDebt.GreaterThan(big.Zero()) {
 		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.FeeDebt, nil, exitcode.Ok)
