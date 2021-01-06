@@ -22,7 +22,7 @@ package test_test
 
 func TestReplaceCommittedCapacitySectorWithDealLadenSector(t *testing.T) {
 	ctx := context.Background()
-	v := vm.NewVMWithSingletons(ctx, t)
+	v := vm.NewVMWithSingletons(ctx, t, ipld.NewBlockStoreInMemory())
 	addrs := vm.CreateAccounts(ctx, t, v, 4, big.Mul(big.NewInt(10_000), vm.FIL), 93837778)
 	worker, verifier, unverifiedClient, verifiedClient := addrs[0], addrs[1], addrs[2], addrs[3]
 

@@ -13,6 +13,7 @@ import (
 	"github.com/filecoin-project/go-state-types/dline"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/ipfs/go-cid"
+	ipldcbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,7 +29,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/states"
-	"github.com/filecoin-project/specs-actors/v2/support/ipld"
+	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	actor_testing "github.com/filecoin-project/specs-actors/v2/support/testing"
 )
 
@@ -48,25 +49,18 @@ func init() {
 //
 
 // Creates a new VM and initializes all singleton actors plus a root verifier account.
-func NewVMWithSingletons(ctx context.Context, t *testing.T) *VM {
-	store := ipld.NewADTStore(ctx)
-
+func NewVMWithSingletons(ctx context.Context, t testing.TB, bs ipldcbor.IpldBlockstore) *VM {
 	lookup := map[cid.Cid]runtime.VMActor{}
 	for _, ba := range exported.BuiltinActors() {
 		lookup[ba.Code()] = ba
 	}
 
+	store := adt.WrapBlockStore(ctx, bs)
 	vm := NewVM(ctx, lookup, store)
 
 	initializeActor(ctx, t, vm, &system.State{}, builtin.SystemActorCodeID, builtin.SystemActorAddr, big.Zero())
 
-	initState, err := initactor.ConstructState(store, "scenarios")
-	require.NoError(t, err)
-	initializeActor(ctx, t, vm, initState, builtin.InitActorCodeID, builtin.InitActorAddr, big.Zero())
-
-	rewardState := reward.ConstructState()
 	initializeActor(ctx, t, vm, rewardState, builtin.RewardActorCodeID, builtin.RewardActorAddr, reward.StorageMiningAllocationCheck)
-
 	cronState := cron.ConstructState(cron.BuiltInEntries())
 	initializeActor(ctx, t, vm, cronState, builtin.CronActorCodeID, builtin.CronActorAddr, big.Zero())
 
