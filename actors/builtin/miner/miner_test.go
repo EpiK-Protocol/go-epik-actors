@@ -14,6 +14,7 @@ import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/dline"
+	"github.com/filecoin-project/go-state-types/network"
 	cid "github.com/ipfs/go-cid"
 	"github.com/minio/blake2b-simd"
 	"github.com/stretchr/testify/assert"
@@ -55,7 +56,7 @@ func init() {
 	}
 
 	// permit 2KiB sectors in tests
-	miner.SupportedProofTypes[abi.RegisteredSealProof_StackedDrg2KiBV1] = struct{}{}
+	miner.PreCommitSealProofTypesV8[abi.RegisteredSealProof_StackedDrg2KiBV1_1] = struct{}{}
 }
 
 func TestExports(t *testing.T) {
@@ -88,7 +89,7 @@ func TestConstruction(t *testing.T) {
 			WorkerAddr:    worker,
 			Coinbase:      coinbase,
 			ControlAddrs:  controlAddrs,
-			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1,
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 			PeerId:        testPid,
 			Multiaddrs:    testMultiaddrs,
 		}
@@ -117,7 +118,7 @@ func TestConstruction(t *testing.T) {
 		assert.Equal(t, params.ControlAddrs, info.ControlAddresses)
 		assert.Equal(t, params.PeerId, info.PeerId)
 		assert.Equal(t, params.Multiaddrs, info.Multiaddrs)
-		assert.Equal(t, abi.RegisteredSealProof_StackedDrg8MiBV1, info.SealProofType)
+		assert.Equal(t, abi.RegisteredSealProof_StackedDrg8MiBV1_1, info.SealProofType)
 		assert.Equal(t, abi.SectorSize(1<<23), info.SectorSize)
 		assert.Equal(t, uint64(2), info.WindowPoStPartitionSectors)
 
@@ -160,10 +161,11 @@ func TestConstruction(t *testing.T) {
 		rt.AddIDAddress(control2, control2Id)
 
 		params := miner.ConstructorParams{
-			OwnerAddr:    owner,
-			WorkerAddr:   worker,
-			Coinbase:     coinbase,
-			ControlAddrs: []addr.Address{control1, control2},
+			OwnerAddr:     owner,
+			WorkerAddr:    worker,
+			Coinbase:      coinbase,
+			ControlAddrs:  []addr.Address{control1, control2},
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 		}
 
 		provingPeriodStart := abi.ChainEpoch(-2222) // This is just set from running the code.
@@ -192,10 +194,11 @@ func TestConstruction(t *testing.T) {
 		rt.SetAddressActorType(control1, builtin.PaymentChannelActorCodeID)
 
 		params := miner.ConstructorParams{
-			OwnerAddr:    owner,
-			WorkerAddr:   worker,
-			Coinbase:     coinbase,
-			ControlAddrs: []addr.Address{control1},
+			OwnerAddr:     owner,
+			WorkerAddr:    worker,
+			Coinbase:      coinbase,
+			ControlAddrs:  []addr.Address{control1},
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 		}
 
 		rt.ExpectValidateCallerAddr(builtin.InitActorAddr)
@@ -214,7 +217,7 @@ func TestConstruction(t *testing.T) {
 			OwnerAddr:     owner,
 			WorkerAddr:    worker,
 			Coinbase:      coinbase,
-			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1,
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 			PeerId:        pid[:],
 			Multiaddrs:    testMultiaddrs,
 		}
@@ -238,7 +241,7 @@ func TestConstruction(t *testing.T) {
 			OwnerAddr:     owner,
 			WorkerAddr:    worker,
 			Coinbase:      coinbase,
-			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1,
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 			PeerId:        testPid,
 			ControlAddrs:  controlAddrs,
 		}
@@ -260,7 +263,7 @@ func TestConstruction(t *testing.T) {
 			OwnerAddr:     owner,
 			WorkerAddr:    worker,
 			Coinbase:      coinbase,
-			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1,
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 			PeerId:        testPid,
 			Multiaddrs:    maddrs,
 		}
@@ -282,7 +285,7 @@ func TestConstruction(t *testing.T) {
 			OwnerAddr:     owner,
 			WorkerAddr:    worker,
 			Coinbase:      coinbase,
-			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1,
+			SealProofType: abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 			PeerId:        testPid,
 			Multiaddrs:    maddrs,
 		}
@@ -292,6 +295,20 @@ func TestConstruction(t *testing.T) {
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "invalid empty multiaddr", func() {
 			rt.Call(actor.Constructor, &params)
 		})
+	})
+
+	t.Run("checks seal proof version", func(t *testing.T) {
+		actor := newHarness(t, 0)
+		builder := builderForHarness(actor)
+		// only V1_1 accepted
+		rt := builder.Build(t)
+		actor.setProofType(abi.RegisteredSealProof_StackedDrg8MiBV1)
+		rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+			actor.constructAndVerify(rt)
+		})
+		rt.Reset()
+		actor.setProofType(abi.RegisteredSealProof_StackedDrg8MiBV1_1)
+		actor.constructAndVerify(rt)
 	})
 }
 
@@ -826,7 +843,7 @@ func TestCommitments(t *testing.T) {
 		sectorNo := abi.SectorNumber(100)
 
 		dealLimits := map[abi.RegisteredSealProof]int{
-			abi.RegisteredSealProof_StackedDrg8MiBV1: 256,
+			abi.RegisteredSealProof_StackedDrg8MiBV1_1: 256,
 			// abi.RegisteredSealProof_StackedDrg2KiBV1:  256,
 			// abi.RegisteredSealProof_StackedDrg32GiBV1: 256,
 			// abi.RegisteredSealProof_StackedDrg64GiBV1: 512,
@@ -847,6 +864,33 @@ func TestCommitments(t *testing.T) {
 			actor.preCommitSector(rt, precommit, preCommitConf{})
 			actor.checkState(rt)
 		}
+	})
+
+	t.Run("precommit checks seal proof version", func(t *testing.T) {
+		actor := newHarness(t, periodOffset)
+		actor.setProofType(abi.RegisteredSealProof_StackedDrg8MiBV1_1)
+		rt := builderForHarness(actor).
+			WithBalance(bigBalance, big.Zero()).
+			Build(t)
+
+		// Create miner before version 7
+		rt.SetNetworkVersion(network.Version6)
+		actor.constructAndVerify(rt)
+		precommitEpoch := periodOffset + 1
+		rt.SetEpoch(precommitEpoch)
+		challengeEpoch := precommitEpoch - 1
+
+		// only V1_1 accepted
+		pc := actor.makePreCommit(104, challengeEpoch, []abi.DealID{1})
+		pc.SealProof = abi.RegisteredSealProof_StackedDrg32GiBV1
+		rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+			actor.preCommitSector(rt, pc, preCommitConf{})
+		})
+		rt.Reset()
+		pc.SealProof = abi.RegisteredSealProof_StackedDrg8MiBV1_1
+		actor.preCommitSector(rt, pc, preCommitConf{})
+
+		actor.checkState(rt)
 	})
 }
 
@@ -1726,7 +1770,7 @@ func TestCCUpgrade(t *testing.T) {
 func TestWindowPost(t *testing.T) {
 	periodOffset := abi.ChainEpoch(100)
 	actor := newHarness(t, periodOffset)
-	actor.setProofType(abi.RegisteredSealProof_StackedDrg2KiBV1)
+	actor.setProofType(abi.RegisteredSealProof_StackedDrg2KiBV1_1)
 	precommitEpoch := abi.ChainEpoch(1)
 	builder := builderForHarness(actor).
 		WithEpoch(precommitEpoch).
@@ -4578,7 +4622,7 @@ func newHarness(t testing.TB, provingPeriodOffset abi.ChainEpoch) *actorHarness 
 		   		epochRewardSmooth:  smoothing.TestingConstantEstimate(rwd),
 		   		epochQAPowerSmooth: smoothing.TestingConstantEstimate(pwr), */
 	}
-	h.setProofType(abi.RegisteredSealProof_StackedDrg8MiBV1)
+	h.setProofType(abi.RegisteredSealProof_StackedDrg8MiBV1_1)
 	return h
 }
 

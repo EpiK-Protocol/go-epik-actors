@@ -98,8 +98,7 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 	checkControlAddresses(rt, params.ControlAddrs)
 	checkPeerInfo(rt, params.PeerId, params.Multiaddrs)
 
-	_, ok := SupportedProofTypes[params.SealProofType]
-	if !ok {
+	if !CanPreCommitSealProof(params.SealProofType, rt.NetworkVersion()) {
 		rt.Abortf(exitcode.ErrIllegalArgument, "proof type %d not allowed for new miner actors", params.SealProofType)
 	}
 
@@ -562,8 +561,8 @@ type PreCommitSectorParams struct {
 // Proposals must be posted on chain via sma.PublishStorageDeals before PreCommitSector.
 // Optimization: PreCommitSector could contain a list of deals that are not published yet.
 func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.EmptyValue {
-	if _, ok := SupportedProofTypes[params.SealProof]; !ok {
-		rt.Abortf(exitcode.ErrIllegalArgument, "unsupported seal proof type: %s", params.SealProof)
+	if !CanPreCommitSealProof(params.SealProof, rt.NetworkVersion()) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "unsupported seal proof type %v at network version %v", params.SealProof, rt.NetworkVersion())
 	}
 	if params.SectorNumber > abi.MaxSectorNumber {
 		rt.Abortf(exitcode.ErrIllegalArgument, "sector number %d out of range 0..(2^63-1)", params.SectorNumber)
@@ -626,8 +625,16 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 			rt.Abortf(exitcode.ErrForbidden, "precommit not allowed during active consensus fault")
 		}
 
-		if params.SealProof != info.SealProofType {
-			rt.Abortf(exitcode.ErrIllegalArgument, "sector seal proof %v must match miner seal proof type %d", params.SealProof, info.SealProofType)
+		// The pre-commit seal type must have the same Window PoSt proof type as the miner's
+		// recorded seal type has, rather than be exactly the same seal type.
+		// This permits a transition window from V1 to V1_1 seal types (which share Window PoSt proof type).
+		minerWPoStProof, err := info.SealProofType.RegisteredWindowPoStProof()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to lookup Window PoSt proof type for miner seal proof %d", info.SealProofType)
+		sectorWPoStProof, err := params.SealProof.RegisteredWindowPoStProof()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to lookup Window PoSt proof type for sector seal proof %d", params.SealProof)
+		if sectorWPoStProof != minerWPoStProof {
+			rt.Abortf(exitcode.ErrIllegalArgument, "sector Window PoSt proof type %d must match miner Window PoSt proof type %d (seal proof type %d)",
+				sectorWPoStProof, minerWPoStProof, params.SealProof)
 		}
 
 		dealCountMax := SectorDealsMax(info.SectorSize)

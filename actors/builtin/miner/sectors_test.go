@@ -24,7 +24,7 @@ func TestSectors(t *testing.T) {
 	makeSector := func(t *testing.T, i uint64) *miner.SectorOnChainInfo {
 		return &miner.SectorOnChainInfo{
 			SectorNumber: abi.SectorNumber(i),
-			SealProof:    abi.RegisteredSealProof_StackedDrg32GiBV1,
+			SealProof:    abi.RegisteredSealProof_StackedDrg8MiBV1_1,
 			SealedCID:    tutil.MakeCID(fmt.Sprintf("commR-%d", i), &miner.SealedCIDPrefix),
 			// DealWeight:         big.Zero(),
 			// VerifiedDealWeight: big.Zero(),
