@@ -98,7 +98,7 @@ func (a Actor) ControlAddress(rt Runtime, _ *abi.EmptyValue) *GetControlAddressR
 }
 
 func getExpertInfo(rt Runtime, st *State) *ExpertInfo {
-	err := st.AutoUpdateOwnerChange(rt)
+	err := st.AutoUpdateOwnerChange(adt.AsStore(rt), rt.CurrEpoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not update owner")
 	info, err := st.GetInfo(adt.AsStore(rt))
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not read expert info")
@@ -127,8 +127,8 @@ func (a Actor) ChangePeerID(rt Runtime, params *ChangePeerIDParams) *abi.EmptyVa
 		info := getExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
 		info.PeerId = params.NewID
-		st.SaveInfo(adt.AsStore(rt), info)
-
+		err := st.SaveInfo(adt.AsStore(rt), info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change peerID")
 	})
 	return nil
 }
@@ -143,7 +143,8 @@ func (a Actor) ChangeMultiaddrs(rt Runtime, params *ChangeMultiaddrsParams) *abi
 		info := getExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
 		info.Multiaddrs = params.NewMultiaddrs
-		st.SaveInfo(adt.AsStore(rt), info)
+		err := st.SaveInfo(adt.AsStore(rt), info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change multiaddrs")
 	})
 	return nil
 }
@@ -159,7 +160,8 @@ func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *abi.Empty
 		rt.ValidateImmediateCallerIs(info.Owner)
 		owner := resolveOwnerAddress(rt, params.NewOwner)
 		info.Owner = owner
-		st.SaveInfo(adt.AsStore(rt), info)
+		err := st.SaveInfo(adt.AsStore(rt), info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change address")
 	})
 	return nil
 }
@@ -167,7 +169,6 @@ func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *abi.Empty
 type ExpertDataParams struct {
 	PieceID   cid.Cid `checked:"true"`
 	PieceSize abi.PaddedPieceSize
-	Bounty    string
 }
 
 func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue {
@@ -177,7 +178,7 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 		info := getExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
 
-		err := st.Validate(rt)
+		err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
 
 		newDataInfo := &DataOnChainInfo{
@@ -204,7 +205,7 @@ func (a Actor) GetData(rt Runtime, params *ExpertDataParams) *DataOnChainInfo {
 }
 
 func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.ExpertFundActorCodeID)
+	rt.ValidateImmediateCallerType(builtin.StorageMarketActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -213,7 +214,8 @@ func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data %v", params.PieceID)
 		builtin.RequireParam(rt, found, "data %v has not imported", params.PieceID)
 		data.Redundancy++
-		st.PutData(store, data)
+		err = st.PutData(store, data)
+		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to store data")
 	})
 	builtin.NotifyExpertUpdate(rt, rt.Receiver(), params.PieceID)
 	return nil
@@ -225,7 +227,7 @@ func (a Actor) Validate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	var st State
 	rt.StateReadonly(&st)
 
-	err := st.Validate(rt)
+	err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
 	builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to validate expert")
 	return nil
 }
@@ -241,7 +243,7 @@ func (a Actor) Nominate(rt Runtime, params *NominateExpertParams) *abi.EmptyValu
 		info := getExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
 
-		err := st.Validate(rt)
+		err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
 	})
 
@@ -257,7 +259,8 @@ func (a Actor) NominateUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.StateTransaction(&st, func() {
 		info := getExpertInfo(rt, &st)
 		info.Proposer = rt.Caller()
-		st.SaveInfo(adt.AsStore(rt), info)
+		err := st.SaveInfo(adt.AsStore(rt), info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to update nominate")
 
 		st.Status = ExpertStateNormal
 	})
@@ -269,14 +272,20 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.GovernActorCodeID)
 
 	var st State
+	var info *ExpertInfo
 	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
+		info = getExpertInfo(rt, &st)
+
+		if info.Type == ExpertFoundation {
+			rt.Abortf(exitcode.ErrIllegalArgument, "foundation expert cannot be blocked")
+		}
 
 		st.Status = ExpertStateBlocked
-
-		code := rt.Send(info.Proposer, builtin.MethodsExpert.BlockUpdate, nil, abi.NewTokenAmount(0), &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to nominate expert")
 	})
+
+	code := rt.Send(info.Proposer, builtin.MethodsExpert.BlockUpdate, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to nominate expert")
+
 	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef)
 	return nil
 }
@@ -308,7 +317,8 @@ func (a Actor) FoundationChange(rt Runtime, params *FoundationChangeParams) *abi
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		st.ApplyOwnerChange(rt, params.Owner)
+		err := st.ApplyOwnerChange(adt.AsStore(rt), rt.CurrEpoch(), params.Owner)
+		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to change expert owner")
 	})
 	return nil
 }
@@ -318,7 +328,7 @@ type ExpertVoteParams struct {
 }
 
 func (a Actor) Vote(rt Runtime, params *ExpertVoteParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.ExpertFundActorCodeID)
+	rt.ValidateImmediateCallerType(builtin.VoteFundActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {

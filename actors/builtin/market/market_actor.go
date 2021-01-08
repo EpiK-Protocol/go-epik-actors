@@ -195,7 +195,7 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	}
 	code := rt.Send(
 		eaddr,
-		builtin.MethodsExpert.GetData,
+		builtin.MethodsExpert.StoreData,
 		&expert.ExpertDataParams{
 			PieceID: params.DataRef.RootCID,
 		},

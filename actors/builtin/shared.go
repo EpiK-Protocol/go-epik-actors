@@ -107,16 +107,6 @@ func NotifyExpertUpdate(rt runtime.Runtime, expertAddr addr.Address, pieceID cid
 	RequireSuccess(rt, code, "failed to notify expert update")
 }
 
-func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount abi.TokenAmount) {
-	// params := &NotifyVote{
-	// 	Expert: expertAddr,
-	// 	Amount: voteAmount,
-	// }
-	// code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.NotifyVote, params, abi.NewTokenAmount(0), &Discard{})
-	// RequireSuccess(rt, code, "failed to notify expert vote")
-
-}
-
 // NotifyVoteParams vote params
 type NotifyVote struct {
 	Expert address.Address

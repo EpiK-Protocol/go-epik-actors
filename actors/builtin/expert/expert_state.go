@@ -64,7 +64,6 @@ type DataOnChainInfo struct {
 	PieceID    string
 	PieceSize  abi.PaddedPieceSize
 	Redundancy uint64
-	Bounty     string
 }
 
 func ConstructExpertInfo(owner addr.Address, pid []byte, multiAddrs [][]byte, eType ExpertType, aHash string) (*ExpertInfo, error) {
@@ -174,22 +173,20 @@ func (st *State) ForEachData(store adt.Store, f func(*DataOnChainInfo)) error {
 	return nil
 }
 
-func (st *State) GetOwnerChange(rt Runtime) (*PendingOwnerChange, error) {
+func (st *State) GetOwnerChange(store adt.Store) (*PendingOwnerChange, error) {
 
 	var change PendingOwnerChange
-	store := adt.AsStore(rt)
 	if err := store.Get(store.Context(), st.OwnerChange, &change); err != nil {
 		return nil, xerrors.Errorf("failed to get owner change %w", err)
 	}
 	return &change, nil
 }
 
-func (st *State) ApplyOwnerChange(rt Runtime, applyOwner addr.Address) error {
+func (st *State) ApplyOwnerChange(store adt.Store, currEpoch abi.ChainEpoch, applyOwner addr.Address) error {
 	change := &PendingOwnerChange{
-		ApplyEpoch: rt.CurrEpoch(),
+		ApplyEpoch: currEpoch,
 		ApplyOwner: applyOwner,
 	}
-	store := adt.AsStore(rt)
 	c, err := store.Put(store.Context(), change)
 	if err != nil {
 		return err
@@ -198,31 +195,31 @@ func (st *State) ApplyOwnerChange(rt Runtime, applyOwner addr.Address) error {
 	return nil
 }
 
-func (st *State) AutoUpdateOwnerChange(rt Runtime) error {
-	info, err := st.GetInfo(adt.AsStore(rt))
+func (st *State) AutoUpdateOwnerChange(store adt.Store, currEpoch abi.ChainEpoch) error {
+	info, err := st.GetInfo(store)
 	if err != nil {
 		return err
 	}
 
-	change, err := st.GetOwnerChange(rt)
+	change, err := st.GetOwnerChange(store)
 	if err != nil {
 		return err
 	}
 	if info.Owner != change.ApplyOwner &&
 		change.ApplyEpoch > 0 &&
-		(rt.CurrEpoch()-change.ApplyEpoch) >= ExpertVoteCheckPeriod {
+		(currEpoch-change.ApplyEpoch) >= ExpertVoteCheckPeriod {
 		info.Owner = change.ApplyOwner
-		if err := st.SaveInfo(adt.AsStore(rt), info); err != nil {
+		if err := st.SaveInfo(store, info); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (st *State) Validate(rt Runtime) error {
+func (st *State) Validate(strore adt.Store, currEpoch abi.ChainEpoch) error {
 	switch st.Status {
 	case ExpertStateNormal:
-		info, err := st.GetInfo(adt.AsStore(rt))
+		info, err := st.GetInfo(strore)
 		if err != nil {
 			return err
 		}
@@ -230,7 +227,7 @@ func (st *State) Validate(rt Runtime) error {
 			if st.VoteAmount.LessThan(ExpertVoteThreshold) {
 				if st.LostEpoch < 0 {
 					return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
-				} else if (st.LostEpoch + ExpertVoteCheckPeriod) < rt.CurrEpoch() {
+				} else if (st.LostEpoch + ExpertVoteCheckPeriod) < currEpoch {
 					return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
 				}
 			}
@@ -239,7 +236,7 @@ func (st *State) Validate(rt Runtime) error {
 		if st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
 			if st.LostEpoch < 0 {
 				return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
-			} else if (st.LostEpoch + ExpertVoteCheckPeriod) < rt.CurrEpoch() {
+			} else if (st.LostEpoch + ExpertVoteCheckPeriod) < currEpoch {
 				return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
 			}
 		}

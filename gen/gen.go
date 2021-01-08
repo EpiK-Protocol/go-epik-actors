@@ -83,6 +83,7 @@ func main() {
 		expert.ChangeAddressParams{},
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},
+		expert.NominateExpertParams{},
 		expert.FoundationChangeParams{},
 		expert.ExpertVoteParams{},
 		// other types

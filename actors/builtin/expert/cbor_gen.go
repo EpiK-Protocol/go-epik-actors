@@ -740,7 +740,7 @@ func (t *ChangeAddressParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufExpertDataParams = []byte{131}
+var lengthBufExpertDataParams = []byte{130}
 
 func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -765,17 +765,6 @@ func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Bounty (string) (string)
-	if len(t.Bounty) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Bounty was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Bounty))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Bounty)); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -793,7 +782,7 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -823,20 +812,10 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		t.PieceSize = abi.PaddedPieceSize(extra)
 
 	}
-	// t.Bounty (string) (string)
-
-	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-
-		t.Bounty = string(sval)
-	}
 	return nil
 }
 
-var lengthBufDataOnChainInfo = []byte{132}
+var lengthBufDataOnChainInfo = []byte{131}
 
 func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -873,17 +852,6 @@ func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Bounty (string) (string)
-	if len(t.Bounty) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Bounty was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Bounty))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Bounty)); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -901,7 +869,7 @@ func (t *DataOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -943,15 +911,53 @@ func (t *DataOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		t.Redundancy = uint64(extra)
 
 	}
-	// t.Bounty (string) (string)
+	return nil
+}
+
+var lengthBufNominateExpertParams = []byte{129}
+
+func (t *NominateExpertParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufNominateExpertParams); err != nil {
+		return err
+	}
+
+	// t.Expert (address.Address) (struct)
+	if err := t.Expert.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *NominateExpertParams) UnmarshalCBOR(r io.Reader) error {
+	*t = NominateExpertParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Expert (address.Address) (struct)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
+
+		if err := t.Expert.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Expert: %w", err)
 		}
 
-		t.Bounty = string(sval)
 	}
 	return nil
 }

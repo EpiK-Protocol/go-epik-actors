@@ -7,6 +7,7 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -143,7 +144,7 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 		st.TotalVotes = big.Add(st.TotalVotes, votes)
 	})
 
-	builtin.NotifyExpertVote(rt, candAddr, afterVote.Votes)
+	NotifyExpertVote(rt, candAddr, afterVote.Votes)
 	return nil
 }
 
@@ -202,9 +203,17 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 	})
 
 	// send notification even if blocked
-	builtin.NotifyExpertVote(rt, candAddr, afterRescind.Votes)
+	NotifyExpertVote(rt, candAddr, afterRescind.Votes)
 
 	return nil
+}
+
+func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount abi.TokenAmount) {
+	params := &expert.ExpertVoteParams{
+		Amount: voteAmount,
+	}
+	code := rt.Send(expertAddr, builtin.MethodsExpert.Vote, params, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to notify expert vote")
 }
 
 // Withdraws unlocked rescinding votes and rewards.

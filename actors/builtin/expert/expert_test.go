@@ -6,9 +6,13 @@ import (
 	"encoding/binary"
 	"testing"
 
+	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
+
 	"github.com/dchest/blake2b"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
+	"github.com/filecoin-project/go-state-types/exitcode"
 	builtin "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	expert "github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
@@ -68,9 +72,11 @@ func TestConstruction(t *testing.T) {
 
 		var st expert.State
 		rt.GetState(&st)
-		assert.Equal(t, params.Owner, st.Info.Owner)
-		assert.Equal(t, params.PeerId, st.Info.PeerId)
-		assert.Equal(t, params.Multiaddrs, st.Info.Multiaddrs)
+		info, err := st.GetInfo(adt.AsStore(rt))
+		require.NoError(t, err)
+		assert.Equal(t, params.Owner, info.Owner)
+		assert.Equal(t, params.PeerId, info.PeerId)
+		assert.Equal(t, params.Multiaddrs, info.Multiaddrs)
 	})
 }
 
@@ -108,13 +114,98 @@ func TestExpertData(t *testing.T) {
 		actor.importData(rt, newExpertDataParams(pieceID))
 	})
 
-	t.Run("check data", func(t *testing.T) {
+	t.Run("store data", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+
+		pieceID := tutil.MakeCID("1", &miner.SealedCIDPrefix)
+		actor.importData(rt, newExpertDataParams(pieceID))
+
+		minerAddr := tutil.NewIDAddr(t, 101)
+		actor.storeData(rt, minerAddr, newExpertDataParams(pieceID))
+	})
+
+	t.Run("get data", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 
 		pieceID := tutil.MakeCID("1", &miner.SealedCIDPrefix)
 		actor.importData(rt, newExpertDataParams(pieceID))
 		actor.GetData(rt, newExpertDataParams(pieceID))
+	})
+}
+
+func TestNominate(t *testing.T) {
+	owner := tutil.NewIDAddr(t, 100)
+	actorAddr := tutil.NewIDAddr(t, 1000)
+	actor := newHarness(t, actorAddr, owner)
+	builder := mock.NewBuilder(context.Background(), actor.receiver).
+		WithActorType(owner, builtin.AccountActorCodeID).
+		WithHasher(fixedHasher(0)).
+		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
+
+	t.Run("Nominate", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+
+		actor.Nominate(rt, &expert.NominateExpertParams{
+			Expert: actorAddr,
+		})
+	})
+}
+
+func TestBlock(t *testing.T) {
+	owner := tutil.NewIDAddr(t, 100)
+	actorAddr := tutil.NewIDAddr(t, 1000)
+	actor := newHarness(t, actorAddr, owner)
+	builder := mock.NewBuilder(context.Background(), actor.receiver).
+		WithActorType(owner, builtin.AccountActorCodeID).
+		WithHasher(fixedHasher(0)).
+		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
+
+	t.Run("Block", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+
+		actor.Block(rt)
+	})
+}
+
+func TestFoundationChange(t *testing.T) {
+	owner := tutil.NewIDAddr(t, 100)
+	actorAddr := tutil.NewIDAddr(t, 1000)
+	actor := newHarness(t, actorAddr, owner)
+	builder := mock.NewBuilder(context.Background(), actor.receiver).
+		WithActorType(owner, builtin.AccountActorCodeID).
+		WithHasher(fixedHasher(0)).
+		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
+
+	t.Run("FoundationChange", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+
+		actor.FoundationChange(rt, &expert.FoundationChangeParams{
+			Owner: tutil.NewIDAddr(t, 101),
+		})
+	})
+}
+
+func TestVote(t *testing.T) {
+	owner := tutil.NewIDAddr(t, 100)
+	actorAddr := tutil.NewIDAddr(t, 1000)
+	actor := newHarness(t, actorAddr, owner)
+	builder := mock.NewBuilder(context.Background(), actor.receiver).
+		WithActorType(owner, builtin.AccountActorCodeID).
+		WithHasher(fixedHasher(0)).
+		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
+
+	t.Run("Vote", func(t *testing.T) {
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt)
+
+		actor.Vote(rt, &expert.ExpertVoteParams{
+			Amount: abi.NewTokenAmount(1),
+		})
 	})
 }
 
@@ -164,11 +255,86 @@ func (h *actorHarness) importData(rt *mock.Runtime, params *expert.ExpertDataPar
 	rt.Verify()
 }
 
+func (h *actorHarness) storeData(rt *mock.Runtime, miner addr.Address, params *expert.ExpertDataParams) {
+	rt.SetCaller(miner, builtin.StorageMinerActorCodeID)
+	rt.ExpectValidateCallerType(builtin.StorageMinerActorCodeID)
+
+	rt.Call(h.a.StoreData, params)
+	rt.Verify()
+}
+
 func (h *actorHarness) GetData(rt *mock.Runtime, params *expert.ExpertDataParams) {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 
 	rt.Call(h.a.GetData, params)
+	rt.Verify()
+}
+
+func (h *actorHarness) Nominate(rt *mock.Runtime, params *expert.NominateExpertParams) {
+
+	{
+		param := abi.EmptyValue{}
+		rt.ExpectSend(params.Expert, builtin.MethodsExpert.NominateUpdate, &param, big.Zero(), nil, exitcode.Ok)
+	}
+
+	{
+		cdcParams := builtin.NotifyUpdate{
+			Expert:  params.Expert,
+			PieceID: cid.Undef,
+		}
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
+	}
+
+	rt.ExpectValidateCallerAddr(h.owner)
+	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
+	rt.Call(h.a.Nominate, params)
+	rt.Verify()
+}
+
+func (h *actorHarness) Block(rt *mock.Runtime) {
+
+	{
+		param := abi.EmptyValue{}
+		rt.ExpectSend(h.receiver, builtin.MethodsExpert.BlockUpdate, &param, big.Zero(), nil, exitcode.Ok)
+	}
+
+	{
+		cdcParams := builtin.NotifyUpdate{
+			Expert:  h.receiver,
+			PieceID: cid.Undef,
+		}
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
+	}
+
+	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
+	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
+	param := abi.EmptyValue{}
+	rt.Call(h.a.Block, &param)
+	rt.Verify()
+}
+
+func (h *actorHarness) FoundationChange(rt *mock.Runtime, params *expert.FoundationChangeParams) {
+
+	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
+	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
+	rt.Call(h.a.FoundationChange, params)
+	rt.Verify()
+}
+
+func (h *actorHarness) Vote(rt *mock.Runtime, params *expert.ExpertVoteParams) {
+
+	{
+		cdcParams := builtin.NotifyUpdate{
+			Expert:  h.receiver,
+			PieceID: cid.Undef,
+		}
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
+	}
+
+	rt.ExpectValidateCallerAddr(builtin.VoteFundActorAddr)
+	rt.SetCaller(builtin.VoteFundActorAddr, builtin.VoteFundActorCodeID)
+	rt.Call(h.a.Vote, params)
 	rt.Verify()
 }
 
