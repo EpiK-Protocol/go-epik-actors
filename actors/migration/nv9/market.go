@@ -64,12 +64,16 @@ func (m marketMigrator) migrateState(ctx context.Context, store cbor.IpldStore, 
 
 	newHead, err := store.Put(ctx, &outState)
 	return &actorMigrationResult{
-		newCodeCID: builtin3.StorageMarketActorCodeID,
+		newCodeCID: m.migratedCodeCID(),
 		newHead:    newHead,
 	}, err
 }
 
-func (a MarketMigrator) MapPendingProposals(ctx context.Context, store cbor.IpldStore, pendingProposalsRoot cid.Cid) (cid.Cid, error) {
+func (m marketMigrator) migratedCodeCID() cid.Cid {
+	return builtin3.StorageMarketActorCodeID
+}
+
+func (a marketMigrator) MapPendingProposals(ctx context.Context, store cbor.IpldStore, pendingProposalsRoot cid.Cid) (cid.Cid, error) {
 	oldPendingProposals, err := adt2.AsMap(adt2.WrapStore(ctx, store), pendingProposalsRoot)
 	if err != nil {
 		return cid.Undef, err
@@ -98,4 +102,3 @@ type StringKey string
 func (k StringKey) Key() string {
 	return string(k)
 }
-*/
