@@ -58,8 +58,6 @@ var _ runtime.VMActor = Actor{}
 
 // Storage miner actor constructor params are defined here so the power actor can send them to the init actor
 // to instantiate miners.
-// Changed since v0:
-// - Added ControlAddrs
 type MinerConstructorParams struct {
 	OwnerAddr     addr.Address
 	WorkerAddr    addr.Address
@@ -143,6 +141,10 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put power in claimed table while creating miner")
 
 		st.MinerCount += 1
+
+		// call addToClaim to ensure new claim updates all power stats
+		err = st.updateStatsForNewMiner(params.SealProofType)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed update power stats for new miner %v", addresses.IDAddress)
 
 		st.Claims, err = claims.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush claims")
@@ -234,7 +236,7 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	code := rt.Send(
 		builtin.RewardActorAddr,
 		builtin.MethodsReward.UpdateNetworkKPI,
-		nil, //&st.ThisEpochRawBytePower,
+		nil,
 		abi.NewTokenAmount(0),
 		&builtin.Discard{},
 	)
@@ -490,6 +492,9 @@ func (a Actor) processDeferredCronEvents(rt Runtime) {
 					rt.Log(rtt.ERROR, "failed to delete claim for miner %s after failing OnDeferredCronEvent: %s", minerAddr, err)
 					continue
 				}
+
+				// Decrement miner count to keep stats consistent.
+				st.MinerCount--
 			}
 
 			st.Claims, err = claims.Root()

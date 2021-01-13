@@ -109,6 +109,7 @@ func NewVMAtEpoch(ctx context.Context, actorImpls ActorImplLookup, store adt.Sto
 	return &VM{
 		ctx:            ctx,
 		actorImpls:     actorImpls,
+		currentEpoch:   epoch,
 		store:          store,
 		actors:         actors,
 		stateRoot:      stateRoot,
@@ -209,8 +210,8 @@ func (vm *VM) setActor(ctx context.Context, key address.Address, a *states.Actor
 	return nil
 }
 
-// setActorState stores the state and updates the addressed actor
-func (vm *VM) setActorState(ctx context.Context, key address.Address, state cbor.Marshaler) error {
+// SetActorState stores the state and updates the addressed actor
+func (vm *VM) SetActorState(ctx context.Context, key address.Address, state cbor.Marshaler) error {
 	stateCid, err := vm.store.Put(ctx, state)
 	if err != nil {
 		return err
@@ -353,6 +354,10 @@ func (vm *VM) ApplyMessage(from, to address.Address, value abi.TokenAmount, meth
 	}
 
 	return ret.inner, exitCode
+}
+
+func (vm *VM) StateRoot() cid.Cid {
+	return vm.stateRoot
 }
 
 func (vm *VM) GetState(addr address.Address, out cbor.Unmarshaler) error {

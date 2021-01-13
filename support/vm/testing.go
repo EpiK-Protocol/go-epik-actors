@@ -114,7 +114,7 @@ func CreateAccounts(ctx context.Context, t testing.TB, vm *VM, n int, balance ab
 			idAddr:  idAddr,
 		}
 	}
-	err = vm.setActorState(ctx, builtin.InitActorAddr, &initState)
+	err = vm.SetActorState(ctx, builtin.InitActorAddr, &initState)
 	require.NoError(t, err)
 
 	pubAddrs := make([]address.Address, len(addrPairs))
