@@ -5,50 +5,50 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Policy values associated with a seal proof type.
+/* // Policy values associated with a seal proof type.
 type SealProofPolicy struct {
-	ConsensusMinerMinPower stabi.StoragePower
+	SectorMaxLifetime      stabi.ChainEpoch
 }
 
-/* // For all Stacked DRG sectors, the max is 5 years
+// For all Stacked DRG sectors, the max is 5 years
 const epochsPerYear = 1_051_200
-const fiveYears = stabi.ChainEpoch(5 * epochsPerYear) */
+const fiveYears = stabi.ChainEpoch(5 * epochsPerYear)
 
 // Partition sizes must match those used by the proofs library.
 // See https://github.com/filecoin-project/rust-fil-proofs/blob/master/filecoin-proofs/src/constants.rs#L85
 var SealProofPolicies = map[stabi.RegisteredSealProof]*SealProofPolicy{
 	stabi.RegisteredSealProof_StackedDrg2KiBV1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(0),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg8MiBV1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(1 << 9),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg512MiBV1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(1 << 30),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg32GiBV1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(10 << 40),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg64GiBV1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(20 << 40),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 
 	stabi.RegisteredSealProof_StackedDrg2KiBV1_1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(0),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg8MiBV1_1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(1 << 9),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg512MiBV1_1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(1 << 30),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg32GiBV1_1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(10 << 40),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
 	stabi.RegisteredSealProof_StackedDrg64GiBV1_1: {
-		ConsensusMinerMinPower: stabi.NewStoragePower(20 << 40),
+		SectorMaxLifetime:      EpochsInFiveYears,
 	},
-}
+} */
 
 // Returns the partition size, in sectors, associated with a proof type.
 // The partition size is the number of sectors proved in a single PoSt proof.
@@ -77,8 +77,8 @@ func SealProofSectorMaximumLifetime(p stabi.RegisteredSealProof) (stabi.ChainEpo
 // - Ensures that a specific soundness for the power table
 // Note: We may be able to reduce this in the future, addressing consensus faults with more complicated penalties,
 // sybil generation with crypto-economic mechanism, and PoSt soundness by increasing the challenges for small miners.
-func ConsensusMinerMinPower(p stabi.RegisteredSealProof) (stabi.StoragePower, error) {
-	info, ok := SealProofPolicies[p]
+func ConsensusMinerMinPower(p stabi.RegisteredPoStProof) (stabi.StoragePower, error) {
+	info, ok := PoStProofPolicies[p]
 	if !ok {
 		return stabi.NewStoragePower(0), errors.Errorf("unsupported proof type: %v", p)
 	}
@@ -88,6 +88,7 @@ func ConsensusMinerMinPower(p stabi.RegisteredSealProof) (stabi.StoragePower, er
 // Policy values associated with a PoSt proof type.
 type PoStProofPolicy struct {
 	WindowPoStPartitionSectors uint64
+	ConsensusMinerMinPower     stabi.StoragePower
 }
 
 // Partition sizes must match those used by the proofs library.
@@ -95,18 +96,23 @@ type PoStProofPolicy struct {
 var PoStProofPolicies = map[stabi.RegisteredPoStProof]*PoStProofPolicy{
 	stabi.RegisteredPoStProof_StackedDrgWindow2KiBV1: {
 		WindowPoStPartitionSectors: 2,
+		ConsensusMinerMinPower:     stabi.NewStoragePower(0),
 	},
 	stabi.RegisteredPoStProof_StackedDrgWindow8MiBV1: {
 		WindowPoStPartitionSectors: 2,
+		ConsensusMinerMinPower:     stabi.NewStoragePower(1 << 9),
 	},
 	stabi.RegisteredPoStProof_StackedDrgWindow512MiBV1: {
 		WindowPoStPartitionSectors: 2,
+		ConsensusMinerMinPower:     stabi.NewStoragePower(1 << 30),
 	},
 	stabi.RegisteredPoStProof_StackedDrgWindow32GiBV1: {
 		WindowPoStPartitionSectors: 2349,
+		ConsensusMinerMinPower:     stabi.NewStoragePower(10 << 40),
 	},
 	stabi.RegisteredPoStProof_StackedDrgWindow64GiBV1: {
 		WindowPoStPartitionSectors: 2300,
+		ConsensusMinerMinPower:     stabi.NewStoragePower(20 << 40),
 	},
 	// Winning PoSt proof types omitted.
 }

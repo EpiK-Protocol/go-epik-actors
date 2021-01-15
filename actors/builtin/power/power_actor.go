@@ -59,14 +59,16 @@ var _ runtime.VMActor = Actor{}
 
 // Storage miner actor constructor params are defined here so the power actor can send them to the init actor
 // to instantiate miners.
+// Changed since v2:
+// - Seal proof type replaced with PoSt proof type
 type MinerConstructorParams struct {
-	OwnerAddr     addr.Address
-	WorkerAddr    addr.Address
-	Coinbase      addr.Address
-	ControlAddrs  []addr.Address
-	SealProofType abi.RegisteredSealProof
-	PeerId        abi.PeerID
-	Multiaddrs    []abi.Multiaddrs
+	OwnerAddr           addr.Address
+	WorkerAddr          addr.Address
+	Coinbase            addr.Address
+	ControlAddrs        []addr.Address
+	WindowPoStProofType abi.RegisteredPoStProof
+	PeerId              abi.PeerID
+	Multiaddrs          []abi.Multiaddrs
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,13 +84,15 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
+// Changed since v2:
+// - Seal proof type replaced with PoSt proof types
 type CreateMinerParams struct {
-	Owner         addr.Address
-	Worker        addr.Address
-	Coinbase      addr.Address
-	SealProofType abi.RegisteredSealProof
-	Peer          abi.PeerID
-	Multiaddrs    []abi.Multiaddrs
+	Owner               addr.Address
+	Worker              addr.Address
+	Coinbase            addr.Address
+	WindowPoStProofType abi.RegisteredPoStProof
+	Peer                abi.PeerID
+	Multiaddrs          []abi.Multiaddrs
 }
 
 type CreateMinerReturn struct {
@@ -100,12 +104,12 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	ctorParams := MinerConstructorParams{
-		OwnerAddr:     params.Owner,
-		WorkerAddr:    params.Worker,
-		Coinbase:      params.Coinbase,
-		SealProofType: params.SealProofType,
-		PeerId:        params.Peer,
-		Multiaddrs:    params.Multiaddrs,
+		OwnerAddr:           params.Owner,
+		WorkerAddr:          params.Worker,
+		Coinbase:            params.Coinbase,
+		WindowPoStProofType: params.WindowPoStProofType,
+		PeerId:              params.Peer,
+		Multiaddrs:          params.Multiaddrs,
 	}
 	ctorParamBuf := new(bytes.Buffer)
 	err := ctorParams.MarshalCBOR(ctorParamBuf)
@@ -129,18 +133,13 @@ func (a Actor) CreateMiner(rt Runtime, params *CreateMinerParams) *CreateMinerRe
 		claims, err := adt.AsMap(adt.AsStore(rt), st.Claims, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load claims")
 
-		err = setClaim(claims, addresses.IDAddress, &Claim{
-			params.SealProofType,
-			abi.NewStoragePower(0),
-			abi.NewStoragePower(0),
-			abi.NewTokenAmount(0),
-		})
+		err = setClaim(claims, addresses.IDAddress, &Claim{params.WindowPoStProofType, abi.NewStoragePower(0), abi.NewStoragePower(0), abi.NewTokenAmount(0)})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put power in claimed table while creating miner")
 
 		st.MinerCount += 1
 
-		// call addToClaim to ensure new claim updates all power stats
-		err = st.updateStatsForNewMiner(params.SealProofType)
+		// Ensure new claim updates all power stats
+		err = st.updateStatsForNewMiner(params.WindowPoStProofType)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed update power stats for new miner %v", addresses.IDAddress)
 
 		st.Claims, err = claims.Root()

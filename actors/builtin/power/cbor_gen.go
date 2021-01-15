@@ -408,13 +408,13 @@ func (t *Claim) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.SealProofType (abi.RegisteredSealProof) (int64)
-	if t.SealProofType >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.SealProofType)); err != nil {
+	// t.WindowPoStProofType (abi.RegisteredPoStProof) (int64)
+	if t.WindowPoStProofType >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.WindowPoStProofType)); err != nil {
 			return err
 		}
 	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.SealProofType-1)); err != nil {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.WindowPoStProofType-1)); err != nil {
 			return err
 		}
 	}
@@ -454,7 +454,7 @@ func (t *Claim) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.SealProofType (abi.RegisteredSealProof) (int64)
+	// t.WindowPoStProofType (abi.RegisteredPoStProof) (int64)
 	{
 		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
 		var extraI int64
@@ -477,7 +477,7 @@ func (t *Claim) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
 
-		t.SealProofType = abi.RegisteredSealProof(extraI)
+		t.WindowPoStProofType = abi.RegisteredPoStProof(extraI)
 	}
 	// t.RawBytePower (big.Int) (struct)
 
@@ -621,13 +621,13 @@ func (t *CreateMinerParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.SealProofType (abi.RegisteredSealProof) (int64)
-	if t.SealProofType >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.SealProofType)); err != nil {
+	// t.WindowPoStProofType (abi.RegisteredPoStProof) (int64)
+	if t.WindowPoStProofType >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.WindowPoStProofType)); err != nil {
 			return err
 		}
 	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.SealProofType-1)); err != nil {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.WindowPoStProofType-1)); err != nil {
 			return err
 		}
 	}
@@ -714,7 +714,7 @@ func (t *CreateMinerParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.SealProofType (abi.RegisteredSealProof) (int64)
+	// t.WindowPoStProofType (abi.RegisteredPoStProof) (int64)
 	{
 		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
 		var extraI int64
@@ -737,7 +737,7 @@ func (t *CreateMinerParams) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
 
-		t.SealProofType = abi.RegisteredSealProof(extraI)
+		t.WindowPoStProofType = abi.RegisteredPoStProof(extraI)
 	}
 	// t.Peer ([]uint8) (slice)
 
@@ -1172,13 +1172,13 @@ func (t *MinerConstructorParams) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.SealProofType (abi.RegisteredSealProof) (int64)
-	if t.SealProofType >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.SealProofType)); err != nil {
+	// t.WindowPoStProofType (abi.RegisteredPoStProof) (int64)
+	if t.WindowPoStProofType >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.WindowPoStProofType)); err != nil {
 			return err
 		}
 	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.SealProofType-1)); err != nil {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.WindowPoStProofType-1)); err != nil {
 			return err
 		}
 	}
@@ -1294,7 +1294,7 @@ func (t *MinerConstructorParams) UnmarshalCBOR(r io.Reader) error {
 		t.ControlAddrs[i] = v
 	}
 
-	// t.SealProofType (abi.RegisteredSealProof) (int64)
+	// t.WindowPoStProofType (abi.RegisteredPoStProof) (int64)
 	{
 		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
 		var extraI int64
@@ -1317,7 +1317,7 @@ func (t *MinerConstructorParams) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
 
-		t.SealProofType = abi.RegisteredSealProof(extraI)
+		t.WindowPoStProofType = abi.RegisteredPoStProof(extraI)
 	}
 	// t.PeerId ([]uint8) (slice)
 

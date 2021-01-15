@@ -2,10 +2,11 @@ package agent
 
 import (
 	"crypto/sha256"
-	mh "github.com/multiformats/go-multihash"
 	"math/bits"
 	"math/rand"
 	"strconv"
+
+	mh "github.com/multiformats/go-multihash"
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -140,9 +141,9 @@ func (dca *DealClientAgent) createDeal(s SimState, provider DealProvider) error 
 	// deal start is earliest possible epoch, deal end is uniformly distributed between start and max.
 	dealStart, maxDealEnd := provider.DealRange(s.GetEpoch())
 	dealEnd := dealStart + abi.ChainEpoch(dca.rnd.Int63n(int64(maxDealEnd-dealStart)))
-	if dealEnd-dealStart < market.DealMinDuration {
-		dealEnd = dealStart + market.DealMinDuration
-	}
+	// if dealEnd-dealStart < market.DealMinDuration {
+	// 	dealEnd = dealStart + market.DealMinDuration
+	// }
 
 	// lower expected balance in anticipation of market actor locking storage fee
 	storageFee := big.Mul(big.NewInt(int64(dealEnd-dealStart)), price)
@@ -155,17 +156,17 @@ func (dca *DealClientAgent) createDeal(s SimState, provider DealProvider) error 
 	dca.expectedMarketBalance = big.Sub(dca.expectedMarketBalance, storageFee)
 
 	proposal := market.DealProposal{
-		PieceCID:             pieceCid,
-		PieceSize:            abi.PaddedPieceSize(pieceSize),
-		VerifiedDeal:         false,
-		Client:               dca.account,
-		Provider:             provider.Address(),
-		Label:                dca.account.String() + ":" + strconv.Itoa(dca.DealCount),
-		StartEpoch:           dealStart,
-		EndEpoch:             dealEnd,
-		StoragePricePerEpoch: price,
-		ProviderCollateral:   providerCollateral,
-		ClientCollateral:     big.Zero(),
+		PieceCID:  pieceCid,
+		PieceSize: abi.PaddedPieceSize(pieceSize),
+		// VerifiedDeal:         false,
+		Client:     dca.account,
+		Provider:   provider.Address(),
+		Label:      dca.account.String() + ":" + strconv.Itoa(dca.DealCount),
+		StartEpoch: dealStart,
+		// EndEpoch:             dealEnd,
+		// StoragePricePerEpoch: price,
+		// ProviderCollateral:   providerCollateral,
+		// ClientCollateral:     big.Zero(),
 	}
 
 	provider.CreateDeal(market.ClientDealProposal{
@@ -203,7 +204,8 @@ func calculateProviderCollateral(s SimState, pieceSize abi.PaddedPieceSize) (abi
 		return big.Zero(), err
 	}
 
-	min, _ := market.DealProviderCollateralBounds(pieceSize, false, powerSt.TotalRawBytePower,
-		powerSt.TotalQualityAdjPower, rewardSt.ThisEpochBaselinePower, s.NetworkCirculatingSupply())
-	return min, nil
+	// min, _ := market.DealProviderCollateralBounds(pieceSize, false, powerSt.TotalRawBytePower,
+	// 	powerSt.TotalQualityAdjPower, rewardSt.ThisEpochBaselinePower, s.NetworkCirculatingSupply())
+	// return min, nil
+	return big.Zero(), nil
 }

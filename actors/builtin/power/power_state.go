@@ -72,7 +72,7 @@ type State struct {
 
 type Claim struct {
 	// Miner's proof type used to determine minimum miner size
-	SealProofType abi.RegisteredSealProof
+	WindowPoStProofType abi.RegisteredPoStProof
 
 	// Sum of raw byte power for a miner's sectors.
 	RawBytePower abi.StoragePower
@@ -144,7 +144,7 @@ func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 	if claim.TotalMiningPledge.LessThan(ConsensusMinerMinPledge) {
 		minerNominalPower = big.Zero()
 	}
-	minerMinPower, err := builtin.ConsensusMinerMinPower(claim.SealProofType)
+	minerMinPower, err := builtin.ConsensusMinerMinPower(claim.WindowPoStProofType)
 	if err != nil {
 		return false, xerrors.Errorf("could not get miner min power from proof type: %w", err)
 	}
@@ -212,16 +212,16 @@ func (st *State) addToClaim(
 	st.TotalPledgeCollateral = big.Add(st.TotalPledgeCollateral, pledge)
 
 	newClaim := Claim{
-		SealProofType:     oldClaim.SealProofType,
-		RawBytePower:      big.Add(oldClaim.RawBytePower, power),
-		QualityAdjPower:   big.Add(oldClaim.QualityAdjPower, qapower),
-		TotalMiningPledge: big.Add(oldClaim.TotalMiningPledge, pledge),
+		WindowPoStProofType: oldClaim.WindowPoStProofType,
+		RawBytePower:        big.Add(oldClaim.RawBytePower, power),
+		QualityAdjPower:     big.Add(oldClaim.QualityAdjPower, qapower),
+		TotalMiningPledge:   big.Add(oldClaim.TotalMiningPledge, pledge),
 	}
 
 	newSuff := newClaim.TotalMiningPledge.GreaterThanEqual(ConsensusMinerMinPledge)
 	oldSuff := oldClaim.TotalMiningPledge.GreaterThanEqual(ConsensusMinerMinPledge)
 
-	minPower, err := builtin.ConsensusMinerMinPower(oldClaim.SealProofType)
+	minPower, err := builtin.ConsensusMinerMinPower(oldClaim.WindowPoStProofType)
 	if err != nil {
 		return xerrors.Errorf("could not get consensus miner min power: %w", err)
 	}
@@ -250,8 +250,8 @@ func (st *State) addToClaim(
 	return setClaim(claims, miner, &newClaim)
 }
 
-func (st *State) updateStatsForNewMiner(sealProof abi.RegisteredSealProof) error {
-	minPower, err := builtin.ConsensusMinerMinPower(sealProof)
+func (st *State) updateStatsForNewMiner(windowPoStProof abi.RegisteredPoStProof) error {
+	minPower, err := builtin.ConsensusMinerMinPower(windowPoStProof)
 	if err != nil {
 		return xerrors.Errorf("could not get consensus miner min power: %w", err)
 	}

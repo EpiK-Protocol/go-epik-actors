@@ -209,7 +209,7 @@ func publishV3Deal(t *testing.T, v *vm3.VM, provider, dealClient, minerID addr.A
 	}
 
 	publishDealParams := market3.PublishStorageDealsParams{
-		Deals: []market2.ClientDealProposal{{
+		Deals: []market3.ClientDealProposal{{
 			Proposal:        deal,
 			ClientSignature: crypto.Signature{},
 		}},

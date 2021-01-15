@@ -201,12 +201,12 @@ func (ma *MinerAgent) Address() address.Address {
 
 func (ma *MinerAgent) DealRange(currentEpoch abi.ChainEpoch) (abi.ChainEpoch, abi.ChainEpoch) {
 	// maximum sector start and maximum expiration
-	return currentEpoch + miner.MaxProveCommitDuration[ma.Config.ProofType] + miner.MinSectorExpiration,
-		currentEpoch + miner.MaxSectorExpirationExtension
+	return currentEpoch, //+ miner.MaxProveCommitDuration[ma.Config.ProofType] + miner.MinSectorExpiration,
+		currentEpoch // + miner.MaxSectorExpirationExtension
 }
 
 func (ma *MinerAgent) CreateDeal(proposal market.ClientDealProposal) {
-	ma.expectedMarketBalance = big.Sub(ma.expectedMarketBalance, proposal.Proposal.ProviderCollateral)
+	ma.expectedMarketBalance = ma.expectedMarketBalance //big.Sub(ma.expectedMarketBalance, proposal.Proposal.ProviderCollateral)
 	ma.pendingDeals = append(ma.pendingDeals, proposal)
 }
 
@@ -238,33 +238,33 @@ func (ma *MinerAgent) createPreCommit(s SimState, currentEpoch abi.ChainEpoch) (
 		SectorNumber:  sectorNumber,
 		SealedCID:     sectorSealCID(ma.rnd),
 		SealRandEpoch: currentEpoch - 1,
-		Expiration:    expiration,
+		// Expiration:    expiration,
 	}
 
 	// upgrade sector if upgrades are on, this sector has deals, and we have a cc sector
 	isUpgrade := ma.Config.UpgradeSectors && len(dealIds) > 0 && len(ma.ccSectors) > 0
 	if isUpgrade {
-		var upgradeNumber uint64
-		upgradeNumber, ma.ccSectors = PopRandom(ma.ccSectors, ma.rnd)
+		// var upgradeNumber uint64
+		// upgradeNumber, ma.ccSectors = PopRandom(ma.ccSectors, ma.rnd)
 
-		// prevent sim from attempting to upgrade to sector with shorter duration
-		sinfo, err := ma.sectorInfo(s, upgradeNumber)
-		if err != nil {
-			return message{}, err
-		}
-		if sinfo.Expiration > expiration {
-			params.Expiration = sinfo.Expiration
-		}
+		// // prevent sim from attempting to upgrade to sector with shorter duration
+		// sinfo, err := ma.sectorInfo(s, upgradeNumber)
+		// if err != nil {
+		// 	return message{}, err
+		// }
+		// if sinfo.Expiration > expiration {
+		// 	params.Expiration = sinfo.Expiration
+		// }
 
-		dlInfo, pIdx, err := ma.dlInfoForSector(s, upgradeNumber)
-		if err != nil {
-			return message{}, err
-		}
+		// dlInfo, pIdx, err := ma.dlInfoForSector(s, upgradeNumber)
+		// if err != nil {
+		// 	return message{}, err
+		// }
 
-		params.ReplaceCapacity = true
-		params.ReplaceSectorNumber = abi.SectorNumber(upgradeNumber)
-		params.ReplaceSectorDeadline = dlInfo.Index
-		params.ReplaceSectorPartition = pIdx
+		// params.ReplaceCapacity = true
+		// params.ReplaceSectorNumber = abi.SectorNumber(upgradeNumber)
+		// params.ReplaceSectorDeadline = dlInfo.Index
+		// params.ReplaceSectorPartition = pIdx
 		ma.UpgradedSectors++
 	}
 
@@ -483,7 +483,7 @@ func (ma *MinerAgent) publishStorageDeals() []message {
 				ma.dealsPendingInclusion = append(ma.dealsPendingInclusion, pendingDeal{
 					id:   dealId,
 					size: params.Deals[idx].Proposal.PieceSize,
-					ends: params.Deals[idx].Proposal.EndEpoch,
+					// ends: params.Deals[idx].Proposal.EndEpoch,
 				})
 			}
 			return nil
@@ -780,11 +780,11 @@ func (ma *MinerAgent) dlInfoForSector(v SimState, sectorNumber uint64) (*dline.I
 func (ma *MinerAgent) sectorExpiration(currentEpoch abi.ChainEpoch) abi.ChainEpoch {
 	// Require sector lifetime meets minimum by assuming activation happens at last epoch permitted for seal proof
 	// to meet the constraints imposed in PreCommit.
-	minExp := currentEpoch + miner.MaxProveCommitDuration[ma.Config.ProofType] + miner.MinSectorExpiration
+	minExp := currentEpoch + miner.MaxProveCommitDuration[ma.Config.ProofType] //+ miner.MinSectorExpiration
 	// Require duration of sector from now does not exceed the maximum sector extension. This constraint
 	// is also imposed by PreCommit, and along with the first constraint define the bounds for a valid
 	// expiration of a new sector.
-	maxExp := currentEpoch + miner.MaxSectorExpirationExtension
+	maxExp := currentEpoch //+ miner.MaxSectorExpirationExtension
 
 	// generate a uniformly distributed expiration in the valid range.
 	return minExp + abi.ChainEpoch(ma.rnd.Int63n(int64(maxExp-minExp)))
