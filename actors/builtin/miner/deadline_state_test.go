@@ -212,7 +212,7 @@ func TestDeadlines(t *testing.T) {
 		}
 
 		// Mark faulty.
-		powerDelta, err := dl.DeclareFaults(
+		powerDelta, err := dl.RecordFaults(
 			store, sectorsArr(t, store, sectors), sectorSize, quantSpec, 9,
 			map[uint64]bitfield.BitField{
 				0: bf(1),
@@ -592,7 +592,6 @@ func TestDeadlines(t *testing.T) {
 			).assert(t, store, dl)
 
 		postResult2, err := dl.RecordProvenSectors(store, sectorArr, sectorSize, quantSpec, 13, []miner.PoStPartition{
-			{Index: 1, Skipped: bf()}, // ignore already posted partitions
 			{Index: 2, Skipped: bf()},
 		})
 		require.NoError(t, err)
@@ -787,6 +786,28 @@ func TestDeadlines(t *testing.T) {
 		require.Contains(t, err.Error(), "no such partition")
 	})
 
+	t.Run("post partition twice", func(t *testing.T) {
+		store := ipld.NewADTStore(context.Background())
+
+		dl := emptyDeadline(t, store)
+		addSectors(t, store, dl, true)
+
+		// add an inactive sector
+		power, err := dl.AddSectors(store, partitionSize, true, extraSectors, sectorSize, quantSpec)
+		require.NoError(t, err)
+		expectedPower := miner.PowerForSectors(sectorSize, extraSectors)
+		assert.True(t, expectedPower.Equals(power))
+
+		sectorArr := sectorsArr(t, store, allSectors)
+
+		_, err = dl.RecordProvenSectors(store, sectorArr, sectorSize, quantSpec, 13, []miner.PoStPartition{
+			{Index: 0, Skipped: bf()},
+			{Index: 0, Skipped: bf()},
+		})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "duplicate partitions proven")
+	})
+
 	t.Run("retract recoveries", func(t *testing.T) {
 		store := ipld.NewADTStore(context.Background())
 		dl := emptyDeadline(t, store)
@@ -803,7 +824,7 @@ func TestDeadlines(t *testing.T) {
 		}))
 
 		// Retract recovery for sector 1.
-		powerDelta, err := dl.DeclareFaults(store, sectorArr, sectorSize, quantSpec, 13, map[uint64]bitfield.BitField{
+		powerDelta, err := dl.RecordFaults(store, sectorArr, sectorSize, quantSpec, 13, map[uint64]bitfield.BitField{
 			0: bf(1),
 		})
 
@@ -910,7 +931,7 @@ func TestDeadlines(t *testing.T) {
 		sectorArr := sectorsArr(t, store, allSectors)
 
 		// Declare sectors 1 & 6 faulty.
-		_, err := dl.DeclareFaults(store, sectorArr, sectorSize, quantSpec, 17, map[uint64]bitfield.BitField{
+		_, err := dl.RecordFaults(store, sectorArr, sectorSize, quantSpec, 17, map[uint64]bitfield.BitField{
 			0: bf(1),
 			4: bf(6),
 		})
@@ -1013,7 +1034,7 @@ func (s expectedDeadlineState) assert(t *testing.T, store adt.Store, dl *miner.D
 	assertBitfieldsEqual(t, s.recovering, recoveries)
 	assertBitfieldsEqual(t, s.terminations, terminations)
 	assertBitfieldsEqual(t, s.unproven, unproven)
-	assertBitfieldsEqual(t, s.posts, dl.PostSubmissions)
+	assertBitfieldsEqual(t, s.posts, dl.PartitionsPoSted)
 
 	partitions, err := dl.PartitionsArray(store)
 	require.NoError(t, err)

@@ -11,6 +11,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/ipfs/go-cid"
+	cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 )
@@ -197,12 +198,13 @@ type CheckedCID struct {
 	CID cid.Cid `checked:"true"`
 }
 
-func EnsureMinerNoPieces(rt runtime.Runtime, maddr address.Address, pieceCids []CheckedCID) error {
-	code := rt.Send(maddr, MethodsMiner.EnsureNoPiece, &BatchPieceCIDParams{PieceCIDs: pieceCids}, abi.NewTokenAmount(0), &Discard{})
+func CheckMinerStoredAnyPiece(rt runtime.Runtime, maddr address.Address, pieceCids []CheckedCID) (bool, error) {
+	var out cbg.CborBool
+	code := rt.Send(maddr, MethodsMiner.StoredAny, &BatchPieceCIDParams{PieceCIDs: pieceCids}, abi.NewTokenAmount(0), &out)
 	if !code.IsSuccess() {
-		return code.Wrapf("failed to check miner has no pieces %s", maddr)
+		return false, code.Wrapf("failed to check if miner %s stored %v", maddr, pieceCids)
 	}
-	return nil
+	return bool(out), nil
 }
 
 // Changed since v0:

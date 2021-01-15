@@ -40,6 +40,31 @@ func init() {
 	if abi.ChainEpoch(WPoStPeriodDeadlines)*WPoStChallengeWindow != WPoStProvingPeriod {
 		panic(fmt.Sprintf("incompatible proving period %d and challenge window %d", WPoStProvingPeriod, WPoStChallengeWindow))
 	}
+
+	// Check to make sure the dispute window is longer than finality so there's always some time to dispute bad proofs.
+	if WPoStDisputeWindow <= ChainFinality {
+		panic(fmt.Sprintf("the proof dispute period %d must exceed finality %d", WPoStDisputeWindow, ChainFinality))
+	}
+
+	// A deadline becomes immutable one challenge window before it's challenge window opens.
+	// The challenge lookback must fall within this immutability period.
+	if WPoStChallengeLookback > WPoStChallengeWindow {
+		panic("the challenge lookback cannot exceed one challenge window")
+	}
+
+	// Deadlines are immutable when the challenge window is open, and during
+	// the previous challenge window.
+	immutableWindow := 2 * WPoStChallengeWindow
+
+	// We want to reserve at least one deadline's worth of time to compact a
+	// deadline.
+	minCompactionWindow := WPoStChallengeWindow
+
+	// Make sure we have enough time in the proving period to do everything we need.
+	if (minCompactionWindow + immutableWindow + WPoStDisputeWindow) > WPoStProvingPeriod {
+		panic(fmt.Sprintf("together, the minimum compaction window (%d) immutability window (%d) and the dispute window (%d) exceed the proving period (%d)",
+			minCompactionWindow, immutableWindow, WPoStDisputeWindow, WPoStProvingPeriod))
+	}
 }
 
 // The maximum number of partitions that can be loaded in a single invocation.
@@ -66,6 +91,9 @@ const (
 
 // Maximum size of a single prove-commit proof, in bytes.
 const MaxProveCommitSize = 10240
+
+// Maximum size of a single prove-commit proof, in bytes (the expected size is 192).
+const MaxPoStProofSize = 1024
 
 // Maximum number of control addresses a miner may register.
 const MaxControlAddresses = 10
@@ -167,7 +195,12 @@ const DealWinIncentiveMultiplier = 2
 // for permissioned actor methods and winning block elections.
 const ConsensusFaultIneligibilityDuration = ChainFinality
 
-/* // DealWeight and VerifiedDealWeight are spacetime occupied by regular deals and verified deals in a sector.
+// WPoStDisputeWindow is the period after a challenge window ends during which
+// PoSts submitted during that period may be disputed.
+const WPoStDisputeWindow = 2 * ChainFinality // PARAM_TODO
+
+/*
+// DealWeight and VerifiedDealWeight are spacetime occupied by regular deals and verified deals in a sector.
 // Sum of DealWeight and VerifiedDealWeight should be less than or equal to total SpaceTime of a sector.
 // Sectors full of VerifiedDeals will have a SectorQuality of VerifiedDealWeightMultiplier/QualityBaseMultiplier.
 // Sectors full of Deals will have a SectorQuality of DealWeightMultiplier/QualityBaseMultiplier.
@@ -308,4 +341,10 @@ func RewardForConsensusSlashReport(elapsedEpoch abi.ChainEpoch, collateral abi.T
 	// Min(rewardNum/rewardDenom, maxReporterShareNum/maxReporterShareDen*collateral)
 	return big.Min(big.Div(num, denom), big.Div(big.Mul(collateral, consensusFaultMaxReporterShare.Numerator),
 		consensusFaultMaxReporterShare.Denominator))
+}
+
+// The reward given for successfully disputing a window post.
+func RewardForDisputedWindowPoSt(proofType abi.RegisteredPoStProof, disputedPower PowerPair) abi.TokenAmount {
+	// This is currently just the base. In the future, the fee may scale based on the disputed power.
+	return BaseRewardForDisputedWindowPoSt
 }

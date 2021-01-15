@@ -195,8 +195,9 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &builtin.BatchPieceCIDParams{PieceCIDs: pids}, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to batch check expert data")
 
-	err := builtin.EnsureMinerNoPieces(rt, provider, pids)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to check miner pieces")
+	stored, err := builtin.CheckMinerStoredAnyPiece(rt, provider, pids)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to check miner stored pieces")
+	builtin.RequireState(rt, stored == false, "one or more files already stored")
 
 	/* resolvedAddrs := make(map[addr.Address]addr.Address, len(params.Deals))
 	baselinePower := requestCurrentBaselinePower(rt)
@@ -728,7 +729,7 @@ func genRandNextEpoch(currEpoch abi.ChainEpoch, deal *DealProposal, rbF func(cry
 }
 
 func genTerminateEpoch(currEpoch abi.ChainEpoch, dealID abi.DealID) (abi.ChainEpoch, error) {
-	offset := uint64(dealID) % uint64(DealUpdatesInterval)
+	offset := uint64(dealID) % uint64(DealTerminateLatency)
 	return currEpoch + DealTerminateLatency + abi.ChainEpoch(offset), nil
 }
 

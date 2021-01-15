@@ -243,6 +243,7 @@ func main() {
 		miner.WorkerKeyChange{},
 		miner.VestingFunds{},
 		miner.VestingFund{},
+		miner.WindowedPoSt{},
 		// method params and returns
 		// miner.ConstructorParams{},        // in power actor
 		miner.SubmitWindowedPoStParams{},
@@ -263,6 +264,7 @@ func main() {
 		miner.CompactSectorNumbersParams{},
 		miner.CronEventPayload{},
 		miner.WithdrawPledgeParams{},
+		miner.DisputeWindowedPoStParams{},
 		// other types
 		miner.FaultDeclaration{},
 		miner.RecoveryDeclaration{},

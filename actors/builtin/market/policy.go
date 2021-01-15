@@ -1,12 +1,13 @@
 package market
 
 import (
+	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
 
 // The number of epochs between payment and other state processing for deals.
 const DealUpdatesInterval = builtin.EpochsInDay // PARAM_SPEC //TODO:
-const DealTerminateLatency = 240                // 4 deadlines
+const DealTerminateLatency = abi.ChainEpoch(60) // 1 deadline
 
 /* // The percentage of normalized cirulating
 // supply that must be covered by provider collateral in a deal

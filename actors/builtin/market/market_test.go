@@ -28,6 +28,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	cbgFalse = cbg.CborBool(false)
+	cbgTrue = cbg.CborBool(true)
+)
+
 func mustCbor(o cbor.Marshaler) []byte {
 	buf := new(bytes.Buffer)
 	if err := o.MarshalCBOR(buf); err != nil {
@@ -490,7 +495,7 @@ func TestPublishStorageDeals(t *testing.T) {
 		expectGetControlAddresses(rt, providerResolved, mAddr.owner, mAddr.worker, mAddr.coinbase)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: deal.PieceCID}}}
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids,big.Zero(), nil, exitcode.Ok)
-		rt.ExpectSend(providerResolved,builtin.MethodsMiner.EnsureNoPiece,&batchPids,big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(providerResolved, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		// expectQueryNetworkInfo(rt, actor)
 		//  create a client proposal with a valid signature
 		params := market.PublishStorageDealsParams{
@@ -868,7 +873,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 
 				batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: dealProposal.PieceCID}}}
 				rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids,big.Zero(), nil, exitcode.Ok)
-				rt.ExpectSend( provider, builtin.MethodsMiner.EnsureNoPiece, &batchPids,big.Zero(), nil, exitcode.Ok, )
+				rt.ExpectSend( provider, builtin.MethodsMiner.StoredAny, &batchPids,big.Zero(), &cbgFalse, exitcode.Ok, )
 				/* expectQueryNetworkInfo(rt, actor) */
 				rt.SetCaller(worker, builtin.AccountActorCodeID)
 				rt.ExpectVerifySignature(crypto.Signature{}, dealProposal.Client, mustCbor(&dealProposal), tc.signatureVerificationError)
@@ -949,7 +954,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 				{CID: deal2.PieceCID},
 			}}
 			rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids,big.Zero(), nil, exitcode.Ok)
-			rt.ExpectSend(deal1.Provider, builtin.MethodsMiner.EnsureNoPiece, &batchPids, big.Zero(), nil, exitcode.Ok)
+			rt.ExpectSend(deal1.Provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		
 			rt.SetCaller(worker, builtin.AccountActorCodeID)
 			rt.ExpectVerifySignature(crypto.Signature{}, deal1.Client, mustCbor(&deal1), nil)
@@ -1379,7 +1384,7 @@ func TestOnMinerSectorsTerminate(t *testing.T) {
 		actor.terminateDeals(rt, provider, dealId1)
 		ss = actor.checkState(rt)
 		require.True(t, len(ss.DealOpEpochStats)==2 )
-		_, ok := ss.DealOpEpochStats[currentEpoch+abi.ChainEpoch(market.DealTerminateLatency+dealId1)]
+		_, ok := ss.DealOpEpochStats[currentEpoch + market.DealTerminateLatency + abi.ChainEpoch(dealId1)]
 		require.True(t, ok)
 
 		// set a new epoch and terminate again -> however slash epoch will still be the old epoch.
@@ -1387,10 +1392,10 @@ func TestOnMinerSectorsTerminate(t *testing.T) {
 		rt.SetEpoch(newEpoch)
 		actor.terminateDeals(rt, provider, dealId1, dealId2, dealId3)
 		ss = actor.checkState(rt)
-		require.True(t, len(ss.DealOpEpochStats)==4 )
-		_, ok = ss.DealOpEpochStats[newEpoch+abi.ChainEpoch(market.DealTerminateLatency+dealId2)]
+		require.True(t, len(ss.DealOpEpochStats) == 4)
+		_, ok = ss.DealOpEpochStats[newEpoch + market.DealTerminateLatency + abi.ChainEpoch(dealId2)]
 		require.True(t, ok)
-		_, ok = ss.DealOpEpochStats[newEpoch+abi.ChainEpoch(market.DealTerminateLatency+dealId3)]
+		_, ok = ss.DealOpEpochStats[newEpoch + market.DealTerminateLatency + abi.ChainEpoch(dealId3)]
 		require.True(t, ok)
 
 		st := actor.getDealState(rt, dealId1)
@@ -1599,7 +1604,7 @@ func TestCronTick(t *testing.T) {
 
 		// slash deal1
 		slashEpoch := abi.ChainEpoch(150)
-		terminateEpoch := slashEpoch + abi.ChainEpoch(market.DealTerminateLatency + dealId1)
+		terminateEpoch := slashEpoch + market.DealTerminateLatency + abi.ChainEpoch(dealId1)
 		rt.SetEpoch(slashEpoch)
 		actor.terminateDeals(rt, provider, dealId1)
 
@@ -1637,7 +1642,7 @@ func TestCronTick(t *testing.T) {
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: d2.PieceCID}}}
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(),nil,exitcode.Ok)
-		rt.ExpectSend(d2.Provider, builtin.MethodsMiner.EnsureNoPiece, &batchPids, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(d2.Provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
 		rt.ExpectVerifySignature(crypto.Signature{}, d2.Client, mustCbor(&d2), nil)
@@ -1942,7 +1947,7 @@ func TestCronTickTimedoutDeals(t *testing.T) {
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner,Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: d2.PieceCID}}}
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(),nil,exitcode.Ok)
-		rt.ExpectSend(d2.Provider, builtin.MethodsMiner.EnsureNoPiece, &batchPids, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(d2.Provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -2361,7 +2366,7 @@ func TestMarketActorDeals(t *testing.T) {
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: dealProposal.PieceCID}}}
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(),nil,exitcode.Ok)
-		rt.ExpectSend(provider, builtin.MethodsMiner.EnsureNoPiece, &batchPids, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
@@ -2419,7 +2424,7 @@ func TestMaxDealLabelSize(t *testing.T) {
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner,Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: dealProposal.PieceCID}}}
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(),nil,exitcode.Ok)
-		rt.ExpectSend(provider, builtin.MethodsMiner.EnsureNoPiece, &batchPids, big.Zero(),nil,exitcode.Ok)
+		rt.ExpectSend(provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
@@ -3085,7 +3090,7 @@ func (h *marketActorTestHarness) publishDeals(rt *mock.Runtime, minerAddrs *mine
 		batchPids.PieceCIDs = append(batchPids.PieceCIDs, builtin.CheckedCID{CID: dr.deal.PieceCID})
 	}
 	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
-	rt.ExpectSend(minerAddrs.provider, builtin.MethodsMiner.EnsureNoPiece, &batchPids, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(minerAddrs.provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 	/* expectQueryNetworkInfo(rt, h) */
 
 	params := market.PublishStorageDealsParams{

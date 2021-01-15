@@ -1241,6 +1241,8 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 
 	// No live sectors in this deadline, nothing to do.
 	if deadline.LiveSectors == 0 {
+		// We should do some more checks here. See:
+		// Fix: https://github.com/filecoin-project/specs-actors/issues/1348
 		return &AdvanceDeadlineResult{
 			/* pledgeDelta, */
 			powerDelta,
@@ -1318,7 +1320,7 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 	}, nil
 }
 
-// Assumes pieces are all checked before by MustNotContainAnyPiece
+// Assumes pieces are all checked before by ContainsAnyPiece
 func (st *State) AddPieces(store adt.Store, sdi market.SectorDealInfos, sno abi.SectorNumber) error {
 	if len(sdi.PieceCIDs) == 0 {
 		return nil
@@ -1341,11 +1343,11 @@ func (st *State) AddPieces(store adt.Store, sdi market.SectorDealInfos, sno abi.
 	return nil
 }
 
-func (st *State) MustNotContainAnyPiece(store adt.Store, pieceCIDs []builtin.CheckedCID) error {
+func (st *State) ContainsAnyPiece(store adt.Store, pieceCIDs []builtin.CheckedCID) (bool, error) {
 
 	pieces, err := adt.AsMap(store, st.Pieces, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return xerrors.Errorf("failed to load Pieces: %w", err)
+		return false, xerrors.Errorf("failed to load Pieces: %w", err)
 	}
 
 	for _, pieceCID := range pieceCIDs {
@@ -1353,7 +1355,7 @@ func (st *State) MustNotContainAnyPiece(store adt.Store, pieceCIDs []builtin.Che
 
 		found, err := pieces.Get(abi.CidKey(pieceCID.CID), &out)
 		if err != nil {
-			return xerrors.Errorf("failed to get piece %s: %w", pieceCID, err)
+			return false, xerrors.Errorf("failed to get piece %s: %w", pieceCID, err)
 		}
 		if !found {
 			continue
@@ -1363,26 +1365,26 @@ func (st *State) MustNotContainAnyPiece(store adt.Store, pieceCIDs []builtin.Che
 		sno := abi.SectorNumber(out)
 		_, found, err = st.GetPrecommittedSector(store, sno)
 		if err != nil {
-			return xerrors.Errorf("failed to get precommit %d: %s", sno, pieceCID)
+			return false, xerrors.Errorf("failed to get precommit %d, %s: %w", sno, pieceCID, err)
 		}
 		if found {
-			return xerrors.Errorf("piece contained in precommit %d: %s", sno, pieceCID)
+			return true, nil
 		}
 
 		// check exist in live sector
 		live, err := st.isSectorLive(store, sno)
 		if err != nil {
-			return xerrors.Errorf("failed to check sector live %d, %s: %w", sno, pieceCID, err)
+			return false, xerrors.Errorf("failed to check sector live %d, %s: %w", sno, pieceCID, err)
 		}
 		if live {
-			return xerrors.Errorf("piece in active %d: %s", sno, pieceCID)
+			return true, nil
 		}
 
 		// Otherwise sector already removed, but we did not remove this piece record.
 		//
 	}
 
-	return nil
+	return false, nil
 }
 
 func (st *State) isSectorLive(store adt.Store, sector abi.SectorNumber) (bool, error) {
