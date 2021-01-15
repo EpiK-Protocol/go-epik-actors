@@ -330,7 +330,7 @@ func (t *WithdrawBalanceParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufPublishStorageDataRef = []byte{129}
+var lengthBufPublishStorageDataRef = []byte{130}
 
 func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -342,6 +342,12 @@ func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
+
+	// t.RootCID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.RootCID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.RootCID: %w", err)
+	}
 
 	// t.Expert (string) (string)
 	if len(t.Expert) > cbg.MaxLength {
@@ -371,10 +377,22 @@ func (t *PublishStorageDataRef) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
+	// t.RootCID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.RootCID: %w", err)
+		}
+
+		t.RootCID = c
+
+	}
 	// t.Expert (string) (string)
 
 	{

@@ -146,7 +146,8 @@ func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *ab
 }
 
 type PublishStorageDataRef struct {
-	Expert string
+	RootCID cid.Cid `checked:"true"`
+	Expert  string
 }
 
 type PublishStorageDealsParams struct {
