@@ -330,7 +330,7 @@ func (t *WithdrawBalanceParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufPublishStorageDataRef = []byte{131}
+var lengthBufPublishStorageDataRef = []byte{129}
 
 func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -343,12 +343,6 @@ func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.RootCID (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.RootCID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.RootCID: %w", err)
-	}
-
 	// t.Expert (string) (string)
 	if len(t.Expert) > cbg.MaxLength {
 		return xerrors.Errorf("Value in field t.Expert was too long")
@@ -358,18 +352,6 @@ func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 	if _, err := io.WriteString(w, string(t.Expert)); err != nil {
-		return err
-	}
-
-	// t.Bounty (string) (string)
-	if len(t.Bounty) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.Bounty was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.Bounty))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.Bounty)); err != nil {
 		return err
 	}
 	return nil
@@ -389,22 +371,10 @@ func (t *PublishStorageDataRef) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 1 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.RootCID (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.RootCID: %w", err)
-		}
-
-		t.RootCID = c
-
-	}
 	// t.Expert (string) (string)
 
 	{
@@ -414,16 +384,6 @@ func (t *PublishStorageDataRef) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Expert = string(sval)
-	}
-	// t.Bounty (string) (string)
-
-	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
-		}
-
-		t.Bounty = string(sval)
 	}
 	return nil
 }

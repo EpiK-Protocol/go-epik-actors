@@ -193,8 +193,6 @@ func constructStateHarness(t *testing.T) *stateHarness {
 
 	info := &expert.ExpertInfo{
 		Owner:           owner,
-		PeerId:          abi.PeerID("peer"),
-		Multiaddrs:      testMultiaddrs,
 		Type:            expert.ExpertFoundation,
 		ApplicationHash: "aHash",
 		Proposer:        owner,

@@ -146,10 +146,7 @@ func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *ab
 }
 
 type PublishStorageDataRef struct {
-	RootCID cid.Cid `checked:"true"`
-
 	Expert string
-	Bounty string
 }
 
 type PublishStorageDealsParams struct {
@@ -193,16 +190,18 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	if err != nil {
 		rt.Abortf(exitcode.ErrIllegalArgument, "invalid expert actor %v", params.DataRef.Expert)
 	}
-	code := rt.Send(
-		eaddr,
-		builtin.MethodsExpert.StoreData,
-		&expert.ExpertDataParams{
-			PieceID: params.DataRef.RootCID,
-		},
-		abi.NewTokenAmount(0),
-		&builtin.Discard{},
-	)
-	builtin.RequireSuccess(rt, code, "failed to check expert data")
+	for _, deal := range params.Deals {
+		code := rt.Send(
+			eaddr,
+			builtin.MethodsExpert.StoreData,
+			&expert.ExpertDataParams{
+				PieceID: deal.Proposal.PieceCID,
+			},
+			abi.NewTokenAmount(0),
+			&builtin.Discard{},
+		)
+		builtin.RequireSuccess(rt, code, "failed to check expert data")
+	}
 
 	/* resolvedAddrs := make(map[addr.Address]addr.Address, len(params.Deals))
 	baselinePower := requestCurrentBaselinePower(rt)

@@ -58,9 +58,7 @@ func TestConstruction(t *testing.T) {
 	t.Run("simple construction", func(t *testing.T) {
 		rt := builder.Build(t)
 		params := expert.ConstructorParams{
-			Owner:      owner,
-			PeerId:     testPid,
-			Multiaddrs: testMultiaddrs,
+			Owner: owner,
 		}
 
 		rt.ExpectValidateCallerAddr(builtin.InitActorAddr)
@@ -75,8 +73,6 @@ func TestConstruction(t *testing.T) {
 		info, err := st.GetInfo(adt.AsStore(rt))
 		require.NoError(t, err)
 		assert.Equal(t, params.Owner, info.Owner)
-		assert.Equal(t, params.PeerId, info.PeerId)
-		assert.Equal(t, params.Multiaddrs, info.Multiaddrs)
 	})
 }
 

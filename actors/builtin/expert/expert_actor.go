@@ -24,18 +24,16 @@ func (a Actor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.ControlAddress,
 		3:                         a.ChangeAddress,
-		4:                         a.ChangePeerID,
-		5:                         a.ChangeMultiaddrs,
-		6:                         a.ImportData,
-		7:                         a.GetData,
-		8:                         a.StoreData,
-		9:                         a.Nominate,
-		10:                        a.NominateUpdate,
-		11:                        a.Block,
-		12:                        a.BlockUpdate,
-		13:                        a.FoundationChange,
-		14:                        a.Vote,
-		15:                        a.Validate,
+		4:                         a.ImportData,
+		5:                         a.GetData,
+		6:                         a.StoreData,
+		7:                         a.Nominate,
+		8:                         a.NominateUpdate,
+		9:                         a.Block,
+		10:                        a.BlockUpdate,
+		11:                        a.FoundationChange,
+		12:                        a.Vote,
+		13:                        a.Validate,
 	}
 }
 
@@ -64,7 +62,7 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 	emptyMap, err := adt.MakeEmptyMap(adt.AsStore(rt)).Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct initial state")
 
-	info, err := ConstructExpertInfo(owner, params.PeerId, params.Multiaddrs, ExpertType(params.Type), params.ApplicationHash)
+	info, err := ConstructExpertInfo(owner, ExpertType(params.Type), params.ApplicationHash)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to construct initial expert info")
 	infoCid := rt.StorePut(info)
 
@@ -115,38 +113,6 @@ func resolveOwnerAddress(rt Runtime, raw addr.Address) addr.Address {
 	builtin.RequireParam(rt, ok, "no code for address %v", resolved)
 	builtin.RequireParam(rt, builtin.IsPrincipal(ownerCode), "owner actor type must be a principal, was %v", ownerCode)
 	return resolved
-}
-
-type ChangePeerIDParams struct {
-	NewID abi.PeerID
-}
-
-func (a Actor) ChangePeerID(rt Runtime, params *ChangePeerIDParams) *abi.EmptyValue {
-	var st State
-	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
-		rt.ValidateImmediateCallerIs(info.Owner)
-		info.PeerId = params.NewID
-		err := st.SaveInfo(adt.AsStore(rt), info)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change peerID")
-	})
-	return nil
-}
-
-type ChangeMultiaddrsParams struct {
-	NewMultiaddrs []abi.Multiaddrs
-}
-
-func (a Actor) ChangeMultiaddrs(rt Runtime, params *ChangeMultiaddrsParams) *abi.EmptyValue {
-	var st State
-	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
-		rt.ValidateImmediateCallerIs(info.Owner)
-		info.Multiaddrs = params.NewMultiaddrs
-		err := st.SaveInfo(adt.AsStore(rt), info)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change multiaddrs")
-	})
-	return nil
 }
 
 type ChangeAddressParams struct {

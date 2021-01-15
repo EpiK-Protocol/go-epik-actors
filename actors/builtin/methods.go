@@ -118,8 +118,6 @@ var MethodsExpert = struct {
 	Constructor      abi.MethodNum
 	ControlAddress   abi.MethodNum
 	ChangeAddress    abi.MethodNum
-	ChangePeerID     abi.MethodNum
-	ChangeMultiaddrs abi.MethodNum
 	ImportData       abi.MethodNum
 	GetData          abi.MethodNum
 	StoreData        abi.MethodNum
@@ -130,7 +128,7 @@ var MethodsExpert = struct {
 	FoundationChange abi.MethodNum
 	Vote             abi.MethodNum
 	Validate         abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
 
 var MethodsExpertFunds = struct {
 	Constructor      abi.MethodNum

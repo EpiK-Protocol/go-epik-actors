@@ -44,12 +44,6 @@ type ExpertInfo struct {
 	// - Income and returned collateral are paid to this address.
 	Owner addr.Address // Must be an ID-address.
 
-	// Byte array representing a Libp2p identity that should be used when connecting to this miner.
-	PeerId abi.PeerID
-
-	// Slice of byte arrays representing Libp2p multi-addresses used for establishing a connection with this miner.
-	Multiaddrs []abi.Multiaddrs
-
 	// Type expert type
 	Type ExpertType
 
@@ -66,11 +60,9 @@ type DataOnChainInfo struct {
 	Redundancy uint64
 }
 
-func ConstructExpertInfo(owner addr.Address, pid []byte, multiAddrs [][]byte, eType ExpertType, aHash string) (*ExpertInfo, error) {
+func ConstructExpertInfo(owner addr.Address, eType ExpertType, aHash string) (*ExpertInfo, error) {
 	return &ExpertInfo{
 		Owner:           owner,
-		PeerId:          pid,
-		Multiaddrs:      multiAddrs,
 		Type:            eType,
 		ApplicationHash: aHash,
 		Proposer:        owner,

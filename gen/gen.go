@@ -78,8 +78,6 @@ func main() {
 		// method params
 		// expert.ConstructorParams{},
 		expert.GetControlAddressReturn{},
-		expert.ChangePeerIDParams{},
-		expert.ChangeMultiaddrsParams{},
 		expert.ChangeAddressParams{},
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},

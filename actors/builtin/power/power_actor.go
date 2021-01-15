@@ -512,9 +512,7 @@ type CreateExpertParams struct {
 }
 
 type ExpertConstructorParams struct {
-	Owner      addr.Address
-	PeerId     abi.PeerID
-	Multiaddrs []abi.Multiaddrs
+	Owner addr.Address
 	// ApplicationHash expert application hash
 	ApplicationHash string
 
@@ -547,8 +545,6 @@ func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExper
 
 	ctorParams := ExpertConstructorParams{
 		Owner:           params.Owner,
-		PeerId:          params.PeerId,
-		Multiaddrs:      params.Multiaddrs,
 		ApplicationHash: params.ApplicationHash,
 		Proposer:        caller,
 		Type:            expertType,
