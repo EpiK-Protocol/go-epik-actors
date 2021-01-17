@@ -199,3 +199,53 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 
 	return exitcode.Ok, nil
 }
+
+// ConfirmData record the retrieval data
+func (st *State) ConfirmData(rt Runtime, fromAddr addr.Address, state *RetrievalState) (exitcode.ExitCode, error) {
+	mmap, err := adt.AsMultimap(adt.AsStore(rt), st.RetrievalBatch)
+	if err != nil {
+		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval batch set: %w", err)
+	}
+
+	curEpochDay := rt.CurrEpoch() / RetrievalStateDuration
+
+	found := false
+	var totalSize abi.PaddedPieceSize
+	var out RetrievalState
+	err = mmap.ForEach(abi.AddrKey(fromAddr), &out, func(i int64) error {
+		if out.PieceID == state.PieceID {
+			found = true
+			out.PieceSize = state.PieceSize
+		}
+		if out.Epoch/RetrievalStateDuration >= curEpochDay {
+			totalSize += out.PieceSize
+		}
+		return nil
+	})
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	if found != true {
+		return exitcode.ErrIllegalState, xerrors.Errorf("retrieval data not found for addr %s", fromAddr)
+	}
+
+	escrow, err := adt.AsBalanceTable(adt.AsStore(rt), st.EscrowTable)
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	balance, err := escrow.Get(fromAddr)
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+
+	required := big.Mul(big.NewInt(int64(totalSize/RetrievalSizePerEPK)), builtin.TokenPrecision)
+	if big.Sub(balance, required).LessThan(big.Zero()) {
+		return exitcode.ErrInsufficientFunds, xerrors.Errorf("not enough balance to statistics for addr %s: escrow balance %s < required %s", fromAddr, balance, required)
+	}
+	mmap.Add(abi.AddrKey(fromAddr), state)
+	if st.LockedTable, err = mmap.Root(); err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+
+	return exitcode.Ok, nil
+}

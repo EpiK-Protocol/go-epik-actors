@@ -328,7 +328,7 @@ func (t *ApplyRewardParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufNotifyUpdate = []byte{130}
+var lengthBufNotifyUpdate = []byte{131}
 
 func (t *NotifyUpdate) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -352,6 +352,10 @@ func (t *NotifyUpdate) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
 	}
 
+	// t.IsImport (bool) (bool)
+	if err := cbg.WriteBool(w, t.IsImport); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -369,7 +373,7 @@ func (t *NotifyUpdate) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -393,6 +397,23 @@ func (t *NotifyUpdate) UnmarshalCBOR(r io.Reader) error {
 
 		t.PieceID = c
 
+	}
+	// t.IsImport (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.IsImport = false
+	case 21:
+		t.IsImport = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}
 	return nil
 }

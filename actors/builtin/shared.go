@@ -94,14 +94,16 @@ func ValidateCallerGranted(rt runtime.Runtime, caller addr.Address, method abi.M
 
 // NotifyUpdate expert params
 type NotifyUpdate struct {
-	Expert  address.Address
-	PieceID cid.Cid
+	Expert   address.Address
+	PieceID  cid.Cid
+	IsImport bool
 }
 
-func NotifyExpertUpdate(rt runtime.Runtime, expertAddr addr.Address, pieceID cid.Cid) {
+func NotifyExpertUpdate(rt runtime.Runtime, expertAddr addr.Address, pieceID cid.Cid, isImport bool) {
 	params := &NotifyUpdate{
-		Expert:  expertAddr,
-		PieceID: pieceID,
+		Expert:   expertAddr,
+		PieceID:  pieceID,
+		IsImport: isImport,
 	}
 	code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.NotifyUpdate, params, abi.NewTokenAmount(0), &Discard{})
 	RequireSuccess(rt, code, "failed to notify expert update")

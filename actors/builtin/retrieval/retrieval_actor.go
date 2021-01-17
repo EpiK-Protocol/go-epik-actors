@@ -24,8 +24,9 @@ func (a Actor) Exports() []interface{} {
 		3:                         a.ApplyForWithdraw,
 		4:                         a.WithdrawBalance,
 		5:                         a.RetrievalData,
-		6:                         a.ApplyRewards,
-		7:                         a.TotalCollateral,
+		6:                         a.ConfirmData,
+		7:                         a.ApplyRewards,
+		8:                         a.TotalCollateral,
 	}
 }
 
@@ -120,6 +121,8 @@ func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.E
 		code, err := st.Withdraw(rt, nominal, params.Amount)
 		builtin.RequireNoErr(rt, err, code, "failed to withdraw")
 	})
+	code := rt.Send(params.ProviderOrClientAddress, builtin.MethodSend, nil, params.Amount, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send withdraw amount")
 	return nil
 }
 
@@ -170,6 +173,27 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 		}
 		code, err := st.RetrievalData(rt, nominal, statistics)
 		builtin.RequireNoErr(rt, err, code, "failed to Statistics")
+	})
+	return nil
+}
+
+// ConfirmData retrieval data statistics
+func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
+	nominal, _, approvedCallers := escrowAddress(rt, params.Provider)
+	// for providers -> only corresponding owner or worker can withdraw
+	// for clients -> only the client i.e the recipient can withdraw
+	rt.ValidateImmediateCallerIs(approvedCallers...)
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		statistics := &RetrievalState{
+			PieceID:   params.Provider.String(),
+			PieceSize: abi.PaddedPieceSize(params.Size),
+			Provider:  params.Provider,
+			Epoch:     rt.CurrEpoch(),
+		}
+		code, err := st.ConfirmData(rt, nominal, statistics)
+		builtin.RequireNoErr(rt, err, code, "failed to confirm data")
 	})
 	return nil
 }

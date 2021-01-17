@@ -99,6 +99,8 @@ func main() {
 		expertfund.NotifyUpdateParams{},
 		expertfund.VestingFunds{},
 		expertfund.VestingFund{},
+		expertfund.DataParams{},
+		expertfund.BatchDataParams{},
 		// other types
 	); err != nil {
 		panic(err)

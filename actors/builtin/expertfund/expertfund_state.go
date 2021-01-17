@@ -8,6 +8,7 @@ import (
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	cid "github.com/ipfs/go-cid"
+	"github.com/pkg/errors"
 	xerrors "golang.org/x/xerrors"
 )
 
@@ -17,6 +18,8 @@ type State struct {
 	Experts cid.Cid // Map, AMT[key]ExpertInfo
 
 	PoolInfo cid.Cid
+
+	Datas cid.Cid // Map, AMT[key]address
 
 	// TotalExpertDataSize total expert registered data size
 	TotalExpertDataSize abi.PaddedPieceSize
@@ -56,12 +59,54 @@ func ConstructState(emptyMapCid cid.Cid, pool cid.Cid) *State {
 	return &State{
 		Experts:  emptyMapCid,
 		PoolInfo: pool,
+		Datas:    emptyMapCid,
 
 		TotalExpertDataSize: abi.PaddedPieceSize(0),
 		TotalExpertReward:   abi.NewTokenAmount(0),
 		LastFundBalance:     abi.NewTokenAmount(0),
 		DataStoreThreshold:  DefaultDataStoreThreshold,
 	}
+}
+
+func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
+	pieces, err := adt.AsMap(store, st.Datas)
+	if err != nil {
+		return false, err
+	}
+
+	var expert addr.Address
+	found, err := pieces.Get(adt.StringKey(pieceID), &expert)
+	if err != nil {
+		return false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
+	}
+	return found, nil
+}
+
+func (st *State) PutData(store adt.Store, pieceID string, expert addr.Address) error {
+	datas, err := adt.AsMap(store, st.Datas)
+	if err != nil {
+		return err
+	}
+
+	if err := datas.Put(adt.StringKey(pieceID), &expert); err != nil {
+		return errors.Wrapf(err, "failed to put expert %v", expert)
+	}
+	st.Datas, err = datas.Root()
+	return err
+}
+
+func (st *State) GetData(store adt.Store, pieceID string) (addr.Address, bool, error) {
+	datas, err := adt.AsMap(store, st.Datas)
+	if err != nil {
+		return addr.Undef, false, err
+	}
+
+	var expert addr.Address
+	found, err := datas.Get(adt.StringKey(pieceID), &expert)
+	if err != nil {
+		return addr.Undef, false, errors.Wrapf(err, "failed to get data %v", pieceID)
+	}
+	return expert, found, nil
 }
 
 // LoadVestingFunds loads the vesting funds table from the store

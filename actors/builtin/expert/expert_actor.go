@@ -147,13 +147,21 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 		err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
 
+		_, found, err := st.GetData(store, params.PieceID.String())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data")
+		if found {
+			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "duplicate expert import")
+		}
+
 		newDataInfo := &DataOnChainInfo{
-			PieceID: params.PieceID.String(),
+			PieceID:   params.PieceID.String(),
+			PieceSize: params.PieceSize,
 		}
 
 		err = st.PutData(store, newDataInfo)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to import data")
 	})
+	builtin.NotifyExpertUpdate(rt, rt.Receiver(), params.PieceID, true)
 	return nil
 }
 
@@ -171,7 +179,7 @@ func (a Actor) GetData(rt Runtime, params *ExpertDataParams) *DataOnChainInfo {
 }
 
 func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.StorageMarketActorCodeID)
+	rt.ValidateImmediateCallerType(builtin.ExpertFundActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -183,7 +191,7 @@ func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue {
 		err = st.PutData(store, data)
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to store data")
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), params.PieceID)
+	builtin.NotifyExpertUpdate(rt, rt.Receiver(), params.PieceID, false)
 	return nil
 }
 
@@ -230,7 +238,7 @@ func (a Actor) NominateUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 		st.Status = ExpertStateNormal
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef)
+	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
 	return nil
 }
 
@@ -252,7 +260,7 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	code := rt.Send(info.Proposer, builtin.MethodsExpert.BlockUpdate, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to nominate expert")
 
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef)
+	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
 	return nil
 }
 
@@ -270,7 +278,7 @@ func (a Actor) BlockUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 			}
 		}
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef)
+	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
 	return nil
 }
 
@@ -300,6 +308,6 @@ func (a Actor) Vote(rt Runtime, params *ExpertVoteParams) *abi.EmptyValue {
 	rt.StateTransaction(&st, func() {
 		st.VoteAmount = params.Amount
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef)
+	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
 	return nil
 }

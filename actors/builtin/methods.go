@@ -136,7 +136,9 @@ var MethodsExpertFunds = struct {
 	Claim            abi.MethodNum
 	NotifyUpdate     abi.MethodNum
 	FoundationChange abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5}
+	BatchCheckData   abi.MethodNum
+	BatchStoreData   abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7}
 
 var MethodsVote = struct {
 	Constructor     abi.MethodNum
@@ -154,9 +156,10 @@ var MethodsRetrieval = struct {
 	ApplyForWithdraw abi.MethodNum
 	WithdrawBalance  abi.MethodNum
 	RetrievalData    abi.MethodNum
+	ConfirmData      abi.MethodNum
 	ApplyRewards     abi.MethodNum
 	TotalCollateral  abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
 
 var MethodsKnowledge = struct {
 	Constructor  abi.MethodNum
