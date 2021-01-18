@@ -222,7 +222,7 @@ func QAPowerForWeight(dealWin bool, dealSpace uint64) abi.StoragePower {
 func QAPowerForSector(sector *SectorOnChainInfo) abi.StoragePower {
 	pwr := big.Zero()
 	for i := range sector.DealIDs {
-		pwr = big.Add(pwr, QAPowerForWeight(sector.DealWins[i].Bool, sector.PieceSizes[i]))
+		pwr = big.Add(pwr, QAPowerForWeight(sector.DealWins[i].Bool, uint64(sector.PieceSizes[i])))
 	}
 	return pwr
 }
@@ -230,7 +230,7 @@ func QAPowerForSector(sector *SectorOnChainInfo) abi.StoragePower {
 func RawPowerForSector(sector *SectorOnChainInfo) abi.StoragePower {
 	pwr := big.Zero()
 	for i := range sector.DealIDs {
-		pwr = big.Add(pwr, QAPowerForWeight(false, sector.PieceSizes[i]))
+		pwr = big.Add(pwr, QAPowerForWeight(false, uint64(sector.PieceSizes[i])))
 	}
 	return pwr
 }

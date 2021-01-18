@@ -47,6 +47,8 @@ var bigRewards = big.Mul(big.NewInt(1_000), big.NewInt(1e18))
 // an expriration 1 greater than min expiration
 const defaultSectorExpiration = 27 // (190 / uint64(miner.WPoStProvingPeriod/builtin.EpochsInDay))
 
+var emptyPieceCID = tutil.MakeCID("", &market.PieceCIDPrefix)
+
 func init() {
 	testPid = abi.PeerID("peerID")
 
@@ -435,9 +437,11 @@ func TestCommitments(t *testing.T) {
 		dealIDs := []abi.DealID{1}
 		// Pre-commit with a deal in order to exercise non-zero deal weights.
 		precommitParams := actor.makePreCommit(sectorNo, precommitEpoch-1, dealIDs)
-		pieceSizes := []uint64{1<<10 + 1}
+		pieceSizes := []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)}
 		precommit := actor.preCommitSector(rt, precommitParams, preCommitConf{
-			PieceSizes: pieceSizes,
+			ValidDeals: []market.ValidDealInfo{
+				{PieceSize: pieceSizes[0], PieceCID: emptyPieceCID},
+			},
 		})
 
 		// assert precommit exists and meets expectations
@@ -537,7 +541,9 @@ func TestCommitments(t *testing.T) {
 
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "deals too large to fit in sector", func() {
 			actor.preCommitSector(rt, actor.makePreCommit(101, challengeEpoch, []abi.DealID{1}), preCommitConf{
-				PieceSizes: []uint64{uint64(actor.sectorSize) + 1},
+				ValidDeals: []market.ValidDealInfo{
+					{PieceSize: abi.PaddedPieceSize(actor.sectorSize + 1), PieceCID: emptyPieceCID},
+				},
 			})
 		})
 		actor.checkState(rt)
@@ -717,7 +723,9 @@ func TestCommitments(t *testing.T) {
 		sectorNo := abi.SectorNumber(100)
 		params := actor.makePreCommit(sectorNo, precommitEpoch-1, []abi.DealID{1})
 		precommit := actor.preCommitSector(rt, params, preCommitConf{
-			PieceSizes: []uint64{1<<10 + 1},
+			ValidDeals: []market.ValidDealInfo{
+				{PieceSize: abi.PaddedPieceSize(1<<10 + 1), PieceCID: tutil.MakeCID("rand", &market.PieceCIDPrefix)},
+			},
 		})
 
 		// Sector pre-commitment missing.
@@ -2265,13 +2273,17 @@ func TestProveCommit(t *testing.T) {
 		rt.SetEpoch(precommitEpoch)
 		paramsA := actor.makePreCommit(actor.nextSectorNo, rt.Epoch()-1, []abi.DealID{1})
 		preCommitA := actor.preCommitSector(rt, paramsA, preCommitConf{
-			PieceSizes: []uint64{1<<10 + 1},
+			ValidDeals: []market.ValidDealInfo{
+				{PieceSize: abi.PaddedPieceSize(1<<10 + 1), PieceCID: emptyPieceCID},
+			},
 		})
 		sectorNoA := actor.nextSectorNo
 		actor.nextSectorNo++
 		paramsB := actor.makePreCommit(actor.nextSectorNo, rt.Epoch()-1, []abi.DealID{2})
 		preCommitB := actor.preCommitSector(rt, paramsB, preCommitConf{
-			PieceSizes: []uint64{1<<10 + 2},
+			ValidDeals: []market.ValidDealInfo{
+				{PieceSize: abi.PaddedPieceSize(1<<10 + 2), PieceCID: emptyPieceCID},
+			},
 		})
 		sectorNoB := actor.nextSectorNo
 
@@ -4889,7 +4901,10 @@ type preCommitConf struct {
 	// dealWeight         abi.DealWeight
 	// verifiedDealWeight abi.DealWeight
 	// dealSpace          abi.SectorSize
-	PieceSizes []uint64
+	// PieceSizes []abi.PaddedPieceSize
+	// PieceCIDs  []cid.Cid
+
+	ValidDeals []market.ValidDealInfo
 }
 
 func (h *actorHarness) preCommitSector(rt *mock.Runtime, params *miner.PreCommitSectorParams, conf preCommitConf) *miner.SectorPreCommitOnChainInfo {
@@ -4904,21 +4919,12 @@ func (h *actorHarness) preCommitSector(rt *mock.Runtime, params *miner.PreCommit
 		vdParams := market.VerifyDealsForActivationParams{
 			DealIDs:     params.DealIDs,
 			SectorStart: rt.Epoch(),
-			// SectorExpiry: params.Expiration,
 		}
 
 		vdReturn := market.VerifyDealsForActivationReturn{
-			PieceSizes: conf.PieceSizes,
-			// DealWeight:         conf.dealWeight,
-			// VerifiedDealWeight: conf.verifiedDealWeight,
-			// DealSpace:          uint64(conf.dealSpace),
+			ValidDeals: conf.ValidDeals,
 		}
-		// if vdReturn.DealWeight.Nil() {
-		// 	vdReturn.DealWeight = big.Zero()
-		// }
-		// if vdReturn.VerifiedDealWeight.Nil() {
-		// 	vdReturn.VerifiedDealWeight = big.Zero()
-		// }
+
 		rt.ExpectSend(builtin.StorageMarketActorAddr, builtin.MethodsMarket.VerifyDealsForActivation, &vdParams, big.Zero(), &vdReturn, exitcode.Ok)
 	}
 	st := getState(rt)
@@ -5021,8 +5027,8 @@ func (h *actorHarness) confirmSectorProofsValid(rt *mock.Runtime, conf proveComm
 				vdReturn.DealWins = append(vdReturn.DealWins, builtin.BoolValue{Bool: win})
 				if exit == exitcode.Ok {
 					pwr := miner.PowerPair{
-						QA:  miner.QAPowerForWeight(win, precommit.PieceSizes[i]),
-						Raw: miner.QAPowerForWeight(false, precommit.PieceSizes[i]),
+						QA:  miner.QAPowerForWeight(win, uint64(precommit.PieceSizes[i])),
+						Raw: miner.QAPowerForWeight(false, uint64(precommit.PieceSizes[i])),
 					}
 					powerDelta = powerDelta.Add(pwr)
 				}
@@ -5107,13 +5113,16 @@ func (h *actorHarness) commitAndProveSectors(rt *mock.Runtime, n int /* , lifeti
 		if dealIDs != nil {
 			sectorDealIDs = dealIDs[i]
 		}
-		sizes := make([]uint64, len(sectorDealIDs))
+		vds := make([]market.ValidDealInfo, len(sectorDealIDs))
 		for j, dealID := range sectorDealIDs {
-			sizes[j] = 1<<10 + uint64(dealID)
+			vds[j] = market.ValidDealInfo{
+				PieceSize: abi.PaddedPieceSize(1<<10 + dealID),
+				PieceCID:  emptyPieceCID,
+			}
 		}
 		params := h.makePreCommit(sectorNo, precommitEpoch-1, sectorDealIDs)
 		precommit := h.preCommitSector(rt, params, preCommitConf{
-			PieceSizes: sizes,
+			ValidDeals: vds,
 		})
 		precommits[i] = precommit
 		h.nextSectorNo++
@@ -6034,15 +6043,15 @@ func fixedHasher(target uint64) func([]byte) [32]byte {
 	}
 }
 
-func powerPairFrom(t *testing.T, dealIDs []abi.DealID, pieceSizes []uint64, wins map[abi.DealID]bool) miner.PowerPair {
+func powerPairFrom(t *testing.T, dealIDs []abi.DealID, pieceSizes []abi.PaddedPieceSize, wins map[abi.DealID]bool) miner.PowerPair {
 	require.True(t, len(pieceSizes) == len(wins) && len(dealIDs) == len(pieceSizes))
 	total := miner.NewPowerPairZero()
 	for i, dealID := range dealIDs {
 		win, ok := wins[dealID]
 		require.True(t, ok)
 		total = total.Add(miner.PowerPair{
-			QA:  miner.QAPowerForWeight(win, pieceSizes[i]),
-			Raw: miner.QAPowerForWeight(false, pieceSizes[i]),
+			QA:  miner.QAPowerForWeight(win, uint64(pieceSizes[i])),
+			Raw: miner.QAPowerForWeight(false, uint64(pieceSizes[i])),
 		})
 	}
 	return total

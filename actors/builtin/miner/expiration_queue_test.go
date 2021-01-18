@@ -672,7 +672,7 @@ func testSector( /* expiration, */ number /* weight, vweight, pledge */ int64) *
 		// InitialPledge:      abi.NewTokenAmount(pledge),
 		DealIDs:    []abi.DealID{abi.DealID(number)},
 		DealWins:   []builtin.BoolValue{{Bool: true}},
-		PieceSizes: []uint64{1<<10 + uint64(number)}, // 1kb
+		PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + uint64(number))}, // 1kb
 		SealedCID:  tutil.MakeCID(fmt.Sprintf("commR-%d", number), &miner.SealedCIDPrefix),
 	}
 }

@@ -17,7 +17,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{142}
+var lengthBufState = []byte{143}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -114,6 +114,13 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	if err := t.EarlyTerminations.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.Pieces (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.Pieces); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Pieces: %w", err)
+	}
+
 	return nil
 }
 
@@ -131,7 +138,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 14 {
+	if extra != 15 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -304,6 +311,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		if err := t.EarlyTerminations.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.EarlyTerminations: %w", err)
 		}
+
+	}
+	// t.Pieces (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Pieces: %w", err)
+		}
+
+		t.Pieces = c
 
 	}
 	return nil
@@ -1277,7 +1296,7 @@ func (t *PowerPair) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufSectorPreCommitOnChainInfo = []byte{131}
+var lengthBufSectorPreCommitOnChainInfo = []byte{132}
 
 func (t *SectorPreCommitOnChainInfo) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -1306,7 +1325,21 @@ func (t *SectorPreCommitOnChainInfo) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.PieceSizes ([]uint64) (slice)
+	// t.PieceCIDs ([]cid.Cid) (slice)
+	if len(t.PieceCIDs) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.PieceCIDs was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.PieceCIDs))); err != nil {
+		return err
+	}
+	for _, v := range t.PieceCIDs {
+		if err := cbg.WriteCidBuf(scratch, w, v); err != nil {
+			return xerrors.Errorf("failed writing cid field t.PieceCIDs: %w", err)
+		}
+	}
+
+	// t.PieceSizes ([]abi.PaddedPieceSize) (slice)
 	if len(t.PieceSizes) > cbg.MaxLength {
 		return xerrors.Errorf("Slice value in field t.PieceSizes was too long")
 	}
@@ -1336,7 +1369,7 @@ func (t *SectorPreCommitOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -1374,7 +1407,35 @@ func (t *SectorPreCommitOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 
 		t.PreCommitEpoch = abi.ChainEpoch(extraI)
 	}
-	// t.PieceSizes ([]uint64) (slice)
+	// t.PieceCIDs ([]cid.Cid) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.PieceCIDs: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.PieceCIDs = make([]cid.Cid, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("reading cid field t.PieceCIDs failed: %w", err)
+		}
+		t.PieceCIDs[i] = c
+	}
+
+	// t.PieceSizes ([]abi.PaddedPieceSize) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1390,7 +1451,7 @@ func (t *SectorPreCommitOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.PieceSizes = make([]uint64, extra)
+		t.PieceSizes = make([]abi.PaddedPieceSize, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
@@ -1404,7 +1465,7 @@ func (t *SectorPreCommitOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 			return xerrors.Errorf("value read for array t.PieceSizes was not a uint, instead got %d", maj)
 		}
 
-		t.PieceSizes[i] = uint64(val)
+		t.PieceSizes[i] = abi.PaddedPieceSize(val)
 	}
 
 	return nil
@@ -1664,7 +1725,7 @@ func (t *SectorOnChainInfo) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.PieceSizes ([]uint64) (slice)
+	// t.PieceSizes ([]abi.PaddedPieceSize) (slice)
 	if len(t.PieceSizes) > cbg.MaxLength {
 		return xerrors.Errorf("Slice value in field t.PieceSizes was too long")
 	}
@@ -1821,7 +1882,7 @@ func (t *SectorOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		t.DealIDs[i] = abi.DealID(val)
 	}
 
-	// t.PieceSizes ([]uint64) (slice)
+	// t.PieceSizes ([]abi.PaddedPieceSize) (slice)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1837,7 +1898,7 @@ func (t *SectorOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 	}
 
 	if extra > 0 {
-		t.PieceSizes = make([]uint64, extra)
+		t.PieceSizes = make([]abi.PaddedPieceSize, extra)
 	}
 
 	for i := 0; i < int(extra); i++ {
@@ -1851,7 +1912,7 @@ func (t *SectorOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 			return xerrors.Errorf("value read for array t.PieceSizes was not a uint, instead got %d", maj)
 		}
 
-		t.PieceSizes[i] = uint64(val)
+		t.PieceSizes[i] = abi.PaddedPieceSize(val)
 	}
 
 	// t.DealWins ([]builtin.BoolValue) (slice)

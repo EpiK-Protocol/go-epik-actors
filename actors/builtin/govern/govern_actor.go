@@ -82,7 +82,7 @@ type GrantOrRevokeParams struct {
 }
 
 type Authority struct {
-	ActorCodeID cid.Cid
+	ActorCodeID cid.Cid `checked:"true"`
 	Methods     []abi.MethodNum
 	All         bool // Methods will be ignored if true
 }

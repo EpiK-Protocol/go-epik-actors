@@ -45,6 +45,8 @@ func main() {
 		builtin.BlockCandidatesParams{},
 		builtin.BoolValue{},
 		builtin.ValidateGrantedParams{},
+		builtin.EnsureMinerNoPieceParams{},
+		builtin.CheckedCID{},
 	); err != nil {
 		panic(err)
 	}
@@ -208,6 +210,7 @@ func main() {
 		market.ActivateDealsReturn{},
 		market.VerifyDealsForActivationParams{},
 		market.VerifyDealsForActivationReturn{},
+		market.ValidDealInfo{},
 		market.ComputeDataCommitmentParams{},
 		market.OnMinerSectorsTerminateParams{},
 		market.NewQuota{},

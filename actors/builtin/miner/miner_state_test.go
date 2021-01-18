@@ -1066,7 +1066,7 @@ func newSectorPreCommitOnChainInfo(sectorNo abi.SectorNumber, sealed cid.Cid, de
 	return &miner.SectorPreCommitOnChainInfo{
 		Info:           *info,
 		PreCommitEpoch: epoch,
-		PieceSizes:     []uint64{1<<10 + uint64(sectorNo)},
+		PieceSizes:     []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + uint64(sectorNo))},
 	}
 }
 
@@ -1083,7 +1083,7 @@ func newSectorOnChainInfo(sectorNo abi.SectorNumber, sealed cid.Cid, weight big.
 		SealedCID:    sealed,
 		DealIDs:      []abi.DealID{abi.DealID(sectorNo)},
 		Activation:   activation,
-		PieceSizes:   []uint64{1<<10 + uint64(sectorNo)},
+		PieceSizes:   []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + uint64(sectorNo))},
 		DealWins:     []builtin.BoolValue{{Bool: sectorNo%2 == 0}},
 		// Expiration:         sectorExpiration,
 		// DealWeight:         weight,

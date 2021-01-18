@@ -15,7 +15,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -187,22 +187,18 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 		rt.Abortf(exitcode.ErrForbidden, "caller is not provider %v", provider)
 	}
 
-	eaddr, err := addr.NewFromString(params.DataRef.Expert)
-	if err != nil {
-		rt.Abortf(exitcode.ErrIllegalArgument, "invalid expert actor %v", params.DataRef.Expert)
-	}
+	checked := make([]builtin.CheckedCID, 0, len(params.Deals))
+	datas := make([]expertfund.DataParams, 0, len(params.Deals))
 	for _, deal := range params.Deals {
-		code := rt.Send(
-			eaddr,
-			builtin.MethodsExpert.StoreData,
-			&expert.ExpertDataParams{
-				PieceID: deal.Proposal.PieceCID,
-			},
-			abi.NewTokenAmount(0),
-			&builtin.Discard{},
-		)
-		builtin.RequireSuccess(rt, code, "failed to check expert data")
+		datas = append(datas, expertfund.DataParams{PieceID: deal.Proposal.PieceCID})
+		checked = append(checked, builtin.CheckedCID{CID: deal.Proposal.PieceCID})
 	}
+
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &expertfund.BatchDataParams{Datas: datas}, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to batch check expert data")
+
+	err := builtin.EnsureMinerNoPieces(rt, provider, checked)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to check miner pieces")
 
 	/* resolvedAddrs := make(map[addr.Address]addr.Address, len(params.Deals))
 	baselinePower := requestCurrentBaselinePower(rt)
@@ -301,9 +297,12 @@ type VerifyDealsForActivationParams struct {
 // Changed since v0:
 // - Added DealSpace
 type VerifyDealsForActivationReturn struct {
-	/* DealWeight abi.DealWeight
-	VerifiedDealWeight abi.DealWeight */
-	PieceSizes []uint64
+	ValidDeals []ValidDealInfo
+}
+
+type ValidDealInfo struct {
+	PieceCID  cid.Cid
+	PieceSize abi.PaddedPieceSize
 }
 
 // Verify that a given set of storage deals is valid for a sector currently being PreCommitted
@@ -317,20 +316,16 @@ func (A Actor) VerifyDealsForActivation(rt Runtime, params *VerifyDealsForActiva
 	rt.StateReadonly(&st)
 	store := adt.AsStore(rt)
 
-	/* dealWeight verifiedWeight, */
-	pieceSizes, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, params.SectorStart)
+	deals, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, params.SectorStart)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to validate dealProposals for activation")
 
 	return &VerifyDealsForActivationReturn{
-		/* DealWeight: dealWeight,
-		VerifiedDealWeight: verifiedWeight, */
-		PieceSizes: pieceSizes,
+		ValidDeals: deals,
 	}
 }
 
 type ActivateDealsParams struct {
 	DealIDs []abi.DealID
-	/* SectorExpiry abi.ChainEpoch */
 }
 
 type ActivateDealsReturn struct {
@@ -351,6 +346,7 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 	var st State
 	store := adt.AsStore(rt)
 
+	datas := make([]expertfund.DataParams, 0, len(params.DealIDs))
 	// Update deal dealStates.
 	rt.StateTransaction(&st, func() {
 		_, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, currEpoch)
@@ -371,6 +367,8 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 
 			proposal, err := getDealProposal(msm.dealProposals, dealID)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get dealId %d", dealID)
+
+			datas = append(datas, expertfund.DataParams{PieceID: proposal.PieceCID})
 
 			propc, err := proposal.Cid()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate proposal CID")
@@ -407,6 +405,9 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 		err = msm.commitState()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
 	})
+
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchStoreData, &expertfund.BatchDataParams{Datas: datas}, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to batch store expert data")
 
 	return ret
 }
@@ -751,11 +752,10 @@ func deleteDealProposalAndState(dealId abi.DealID, states *DealMetaArray, propos
 // Exported functions
 //
 
-// Validates a collection of deal dealProposals for activation, and returns their combined weight,
-// split into regular deal weight and verified deal weight.
+// Validates a collection of deal dealProposals for activation.
 func ValidateDealsForActivation(
 	st *State, store adt.Store, dealIDs []abi.DealID, minerAddr addr.Address /* sectorExpiry, */, currEpoch abi.ChainEpoch,
-) ([]uint64, error) {
+) ([]ValidDealInfo, error) {
 
 	proposals, err := AsDealProposalArray(store, st.Proposals)
 	if err != nil {
@@ -764,11 +764,8 @@ func ValidateDealsForActivation(
 
 	seenDealIDs := make(map[abi.DealID]struct{}, len(dealIDs))
 
-	pieceSizes := make([]uint64, len(dealIDs))
-	/* totalDealSpace := uint64(0)
-	totalDealSpaceTime := big.Zero()
-	totalVerifiedSpaceTime := big.Zero() */
-	for i, dealID := range dealIDs {
+	valids := make([]ValidDealInfo, 0, len(dealIDs))
+	for _, dealID := range dealIDs {
 		// Make sure we don't double-count deals.
 		if _, seen := seenDealIDs[dealID]; seen {
 			return nil, exitcode.ErrIllegalArgument.Wrapf("deal ID %d present multiple times", dealID)
@@ -782,21 +779,16 @@ func ValidateDealsForActivation(
 		if !found {
 			return nil, exitcode.ErrNotFound.Wrapf("no such deal %d", dealID)
 		}
-		if err = validateDealCanActivate(proposal, minerAddr /* sectorExpiry, */, currEpoch); err != nil {
+		if err = validateDealCanActivate(proposal, minerAddr, currEpoch); err != nil {
 			return nil, xerrors.Errorf("cannot activate deal %d: %w", dealID, err)
 		}
 
-		pieceSizes[i] = uint64(proposal.PieceSize)
-		/* // Compute deal weight
-		totalDealSpace += uint64(proposal.PieceSize)
-		dealSpaceTime := DealWeight(proposal)
-		if proposal.VerifiedDeal {
-			totalVerifiedSpaceTime = big.Add(totalVerifiedSpaceTime, dealSpaceTime)
-		} else {
-			totalDealSpaceTime = big.Add(totalDealSpaceTime, dealSpaceTime)
-		} */
+		valids = append(valids, ValidDealInfo{
+			PieceCID:  proposal.PieceCID,
+			PieceSize: proposal.PieceSize,
+		})
 	}
-	return /* totalDealSpaceTime totalVerifiedSpaceTime, totalDealSpace,*/ pieceSizes, nil
+	return valids, nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////

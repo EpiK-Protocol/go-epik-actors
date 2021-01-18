@@ -13,9 +13,11 @@ import (
 	xc "github.com/filecoin-project/go-state-types/exitcode"
 	cid "github.com/ipfs/go-cid"
 	errors "github.com/pkg/errors"
+	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -77,6 +79,9 @@ type State struct {
 
 	// Deadlines with outstanding fees for early sector termination.
 	EarlyTerminations bitfield.BitField
+
+	// Processed piece, including all pre-commit, prove-commit, sealed.
+	Pieces cid.Cid // Map, HAMT[PieceCID]SectorNumber
 }
 
 type MinerInfo struct {
@@ -145,12 +150,10 @@ type SectorPreCommitInfo struct {
 
 // Information stored on-chain for a pre-committed sector.
 type SectorPreCommitOnChainInfo struct {
-	Info SectorPreCommitInfo
-	// PreCommitDeposit   abi.TokenAmount
+	Info           SectorPreCommitInfo
 	PreCommitEpoch abi.ChainEpoch
-	PieceSizes     []uint64 // Corresponding to Info.DealIDs
-	/* DealWeight         abi.DealWeight // Integral of active deals over sector lifetime
-	VerifiedDealWeight abi.DealWeight // Integral of active verified deals over sector lifetime */
+	PieceCIDs      []cid.Cid             // Corresponding to Info.DealIDs
+	PieceSizes     []abi.PaddedPieceSize // Corresponding to Info.DealIDs
 }
 
 // Information stored on-chain for a proven sector.
@@ -160,8 +163,8 @@ type SectorOnChainInfo struct {
 	SealedCID    cid.Cid                 // CommR
 	Activation   abi.ChainEpoch          // Epoch during which the sector proof was accepted
 	DealIDs      []abi.DealID
-	PieceSizes   []uint64            // Space size of deal corresponding to DealIDs
-	DealWins     []builtin.BoolValue // If deal wins extra power incentive corresponding to DealIDs // TODO: merge
+	PieceSizes   []abi.PaddedPieceSize // Space size of deal corresponding to DealIDs
+	DealWins     []builtin.BoolValue   // If deal wins extra power incentive corresponding to DealIDs // TODO: merge
 	/* Expiration         abi.ChainEpoch // Epoch during which the sector expires */
 	/* DealWeight         abi.DealWeight // Integral of active deals over sector lifetime
 	VerifiedDealWeight abi.DealWeight // Integral of active verified deals over sector lifetime
@@ -194,6 +197,7 @@ func ConstructState(infoCid cid.Cid, periodStart abi.ChainEpoch, deadlineIndex u
 		CurrentDeadline:           deadlineIndex,
 		Deadlines:                 emptyDeadlinesCid,
 		EarlyTerminations:         bitfield.New(),
+		Pieces:                    emptyMapCid,
 	}, nil
 }
 
@@ -1236,6 +1240,97 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 		DetectedFaultyPower:   detectedFaultyPower,
 		TotalFaultyPower:      totalFaultyPower,
 	}, nil
+}
+
+// Assumes pieces are all checked before by MustNotContainAnyPiece
+func (st *State) AddPieces(store adt.Store, vds []market.ValidDealInfo, sno abi.SectorNumber) error {
+	if len(vds) == 0 {
+		return nil
+	}
+	pieces, err := adt.AsMap(store, st.Pieces)
+	if err != nil {
+		return errors.Wrap(err, "failed to load Pieces")
+	}
+	v := cbg.CborInt(sno)
+	for _, vd := range vds {
+		err = pieces.Put(abi.CidKey(vd.PieceCID), &v)
+		if err != nil {
+			return errors.Wrapf(err, "failed to add piece %d: %s", sno, vd.PieceCID)
+		}
+	}
+	st.Pieces, err = pieces.Root()
+	if err != nil {
+		return errors.Wrap(err, "failed to flush Pieces")
+	}
+	return nil
+}
+
+func (st *State) MustNotContainAnyPiece(store adt.Store, pieceCIDs []builtin.CheckedCID) error {
+
+	pieces, err := adt.AsMap(store, st.Pieces)
+	if err != nil {
+		return errors.Wrap(err, "failed to load Pieces")
+	}
+
+	for _, pieceCID := range pieceCIDs {
+		var out cbg.CborInt
+
+		found, err := pieces.Get(abi.CidKey(pieceCID.CID), &out)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get piece %s", pieceCID)
+		}
+		if !found {
+			continue
+		}
+
+		// check exist in precommit
+		sno := abi.SectorNumber(out)
+		_, found, err = st.GetPrecommittedSector(store, sno)
+		if err != nil {
+			return errors.Errorf("failed to get precommit %d: %s", sno, pieceCID)
+		}
+		if found {
+			return errors.Errorf("piece contained in precommit %d: %s", sno, pieceCID)
+		}
+
+		// check exist in live sector
+		live, err := st.isSectorLive(store, sno)
+		if err != nil {
+			return errors.Wrapf(err, "failed to check sector live %d: %s", sno, pieceCID)
+		}
+		if live {
+			return errors.Errorf("piece in active %d: %s", sno, pieceCID)
+		}
+
+		// Otherwise sector already removed, but we did not remove this piece record.
+		//
+	}
+
+	return nil
+}
+
+func (st *State) isSectorLive(store adt.Store, sector abi.SectorNumber) (bool, error) {
+	dls, err := st.LoadDeadlines(store)
+	if err != nil {
+		return false, err
+	}
+
+	dlIdx, pIdx, err := FindSector(store, dls, sector)
+	if err != nil {
+		return false, err
+	}
+
+	dl, err := dls.LoadDeadline(store, dlIdx)
+	if err != nil {
+		return false, err
+	}
+
+	partition, err := dl.LoadPartition(store, pIdx)
+	if err != nil {
+		return false, err
+	}
+
+	return partition.Sectors.IsSet(uint64(sector))
 }
 
 //

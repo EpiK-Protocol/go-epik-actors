@@ -193,7 +193,7 @@ func (a Actor) BatchCheckData(rt Runtime, params *BatchDataParams) *abi.EmptyVal
 
 // BatchStoreData batch store data
 func (a Actor) BatchStoreData(rt Runtime, params *BatchDataParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.StorageMarketActorCodeID)
+	rt.ValidateImmediateCallerIs(builtin.StorageMarketActorAddr)
 
 	var st State
 	rt.StateTransaction(&st, func() {

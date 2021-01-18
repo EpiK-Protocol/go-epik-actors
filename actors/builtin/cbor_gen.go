@@ -623,3 +623,137 @@ func (t *ValidateGrantedParams) UnmarshalCBOR(r io.Reader) error {
 	}
 	return nil
 }
+
+var lengthBufEnsureMinerNoPieceParams = []byte{129}
+
+func (t *EnsureMinerNoPieceParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufEnsureMinerNoPieceParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.PieceCIDs ([]builtin.CheckedCID) (slice)
+	if len(t.PieceCIDs) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.PieceCIDs was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.PieceCIDs))); err != nil {
+		return err
+	}
+	for _, v := range t.PieceCIDs {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *EnsureMinerNoPieceParams) UnmarshalCBOR(r io.Reader) error {
+	*t = EnsureMinerNoPieceParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.PieceCIDs ([]builtin.CheckedCID) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.PieceCIDs: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.PieceCIDs = make([]CheckedCID, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v CheckedCID
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.PieceCIDs[i] = v
+	}
+
+	return nil
+}
+
+var lengthBufCheckedCID = []byte{129}
+
+func (t *CheckedCID) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufCheckedCID); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.CID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.CID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.CID: %w", err)
+	}
+
+	return nil
+}
+
+func (t *CheckedCID) UnmarshalCBOR(r io.Reader) error {
+	*t = CheckedCID{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.CID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.CID: %w", err)
+		}
+
+		t.CID = c
+
+	}
+	return nil
+}

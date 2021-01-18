@@ -165,6 +165,22 @@ func ResolveToIDAddr(rt runtime.Runtime, address addr.Address) (addr.Address, er
 	return idAddr, nil
 }
 
+type EnsureMinerNoPieceParams struct {
+	PieceCIDs []CheckedCID
+}
+
+type CheckedCID struct {
+	CID cid.Cid `checked:"true"`
+}
+
+func EnsureMinerNoPieces(rt runtime.Runtime, maddr address.Address, pieceCids []CheckedCID) error {
+	code := rt.Send(maddr, MethodsMiner.EnsureNoPiece, &EnsureMinerNoPieceParams{PieceCIDs: pieceCids}, abi.NewTokenAmount(0), &Discard{})
+	if !code.IsSuccess() {
+		return code.Wrapf("failed to check miner has no pieces %s", maddr)
+	}
+	return nil
+}
+
 // Changed since v0:
 // - Wrapping struct, added Penalty
 type ApplyRewardParams struct {
