@@ -162,27 +162,16 @@ func (a Actor) FoundationChange(rt Runtime, params *FoundationChangeParams) *abi
 	return nil
 }
 
-// DataParams data params
-type DataParams struct {
-	PieceID cid.Cid
-	Expert  address.Address
-}
-
-// BatchDataParams batch data params
-type BatchDataParams struct {
-	Datas []DataParams
-}
-
 // BatchCheckData batch check data imported
-func (a Actor) BatchCheckData(rt Runtime, params *BatchDataParams) *abi.EmptyValue {
+func (a Actor) BatchCheckData(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
 	rt.StateReadonly(&st)
 	store := adt.AsStore(rt)
 
-	for _, data := range params.Datas {
-		found, err := st.HasDataID(store, data.PieceID.String())
+	for _, checked := range params.PieceCIDs {
+		found, err := st.HasDataID(store, checked.CID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
 		if !found {
 			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to find data in expertfund record")
@@ -192,24 +181,25 @@ func (a Actor) BatchCheckData(rt Runtime, params *BatchDataParams) *abi.EmptyVal
 }
 
 // BatchStoreData batch store data
-func (a Actor) BatchStoreData(rt Runtime, params *BatchDataParams) *abi.EmptyValue {
+func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.StorageMarketActorAddr)
 
+	experts := make([]address.Address, 0, len(params.PieceCIDs))
 	var st State
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
 
-		for _, data := range params.Datas {
-			expert, found, err := st.GetData(store, data.PieceID.String())
+		for _, checked := range params.PieceCIDs {
+			expert, found, err := st.GetData(store, checked.CID.String())
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
 			if !found {
 				builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to find data in expertfund record")
 			}
-			data.Expert = expert
+			experts = append(experts, expert)
 		}
 	})
-	for _, data := range params.Datas {
-		code := rt.Send(data.Expert, builtin.MethodsExpert.StoreData, &expert.ExpertDataParams{PieceID: data.PieceID}, abi.NewTokenAmount(0), &builtin.Discard{})
+	for i, checked := range params.PieceCIDs {
+		code := rt.Send(experts[i], builtin.MethodsExpert.StoreData, &expert.ExpertDataParams{PieceID: checked.CID}, abi.NewTokenAmount(0), &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send claim amount")
 	}
 	return nil

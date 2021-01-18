@@ -1772,7 +1772,7 @@ func (a Actor) ChangeCoinbase(rt Runtime, newAddress *addr.Address) *abi.EmptyVa
 	return nil
 }
 
-func (a Actor) EnsureNoPiece(rt Runtime, params *builtin.EnsureMinerNoPieceParams) *abi.EmptyValue {
+func (a Actor) EnsureNoPiece(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.StorageMarketActorAddr)
 
 	var st State

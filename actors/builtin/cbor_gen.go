@@ -624,14 +624,14 @@ func (t *ValidateGrantedParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufEnsureMinerNoPieceParams = []byte{129}
+var lengthBufBatchPieceCIDParams = []byte{129}
 
-func (t *EnsureMinerNoPieceParams) MarshalCBOR(w io.Writer) error {
+func (t *BatchPieceCIDParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufEnsureMinerNoPieceParams); err != nil {
+	if _, err := w.Write(lengthBufBatchPieceCIDParams); err != nil {
 		return err
 	}
 
@@ -653,8 +653,8 @@ func (t *EnsureMinerNoPieceParams) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *EnsureMinerNoPieceParams) UnmarshalCBOR(r io.Reader) error {
-	*t = EnsureMinerNoPieceParams{}
+func (t *BatchPieceCIDParams) UnmarshalCBOR(r io.Reader) error {
+	*t = BatchPieceCIDParams{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)

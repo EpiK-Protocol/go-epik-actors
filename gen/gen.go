@@ -45,7 +45,7 @@ func main() {
 		builtin.BlockCandidatesParams{},
 		builtin.BoolValue{},
 		builtin.ValidateGrantedParams{},
-		builtin.EnsureMinerNoPieceParams{},
+		builtin.BatchPieceCIDParams{},
 		builtin.CheckedCID{},
 	); err != nil {
 		panic(err)
@@ -101,8 +101,6 @@ func main() {
 		expertfund.NotifyUpdateParams{},
 		expertfund.VestingFunds{},
 		expertfund.VestingFund{},
-		expertfund.DataParams{},
-		expertfund.BatchDataParams{},
 		// other types
 	); err != nil {
 		panic(err)

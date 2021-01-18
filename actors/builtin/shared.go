@@ -165,7 +165,7 @@ func ResolveToIDAddr(rt runtime.Runtime, address addr.Address) (addr.Address, er
 	return idAddr, nil
 }
 
-type EnsureMinerNoPieceParams struct {
+type BatchPieceCIDParams struct {
 	PieceCIDs []CheckedCID
 }
 
@@ -174,7 +174,7 @@ type CheckedCID struct {
 }
 
 func EnsureMinerNoPieces(rt runtime.Runtime, maddr address.Address, pieceCids []CheckedCID) error {
-	code := rt.Send(maddr, MethodsMiner.EnsureNoPiece, &EnsureMinerNoPieceParams{PieceCIDs: pieceCids}, abi.NewTokenAmount(0), &Discard{})
+	code := rt.Send(maddr, MethodsMiner.EnsureNoPiece, &BatchPieceCIDParams{PieceCIDs: pieceCids}, abi.NewTokenAmount(0), &Discard{})
 	if !code.IsSuccess() {
 		return code.Wrapf("failed to check miner has no pieces %s", maddr)
 	}

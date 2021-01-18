@@ -15,7 +15,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -187,17 +186,15 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 		rt.Abortf(exitcode.ErrForbidden, "caller is not provider %v", provider)
 	}
 
-	checked := make([]builtin.CheckedCID, 0, len(params.Deals))
-	datas := make([]expertfund.DataParams, 0, len(params.Deals))
+	pids := make([]builtin.CheckedCID, 0, len(params.Deals))
 	for _, deal := range params.Deals {
-		datas = append(datas, expertfund.DataParams{PieceID: deal.Proposal.PieceCID})
-		checked = append(checked, builtin.CheckedCID{CID: deal.Proposal.PieceCID})
+		pids = append(pids, builtin.CheckedCID{CID: deal.Proposal.PieceCID})
 	}
 
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &expertfund.BatchDataParams{Datas: datas}, abi.NewTokenAmount(0), &builtin.Discard{})
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &builtin.BatchPieceCIDParams{PieceCIDs: pids}, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to batch check expert data")
 
-	err := builtin.EnsureMinerNoPieces(rt, provider, checked)
+	err := builtin.EnsureMinerNoPieces(rt, provider, pids)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to check miner pieces")
 
 	/* resolvedAddrs := make(map[addr.Address]addr.Address, len(params.Deals))
@@ -346,7 +343,7 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 	var st State
 	store := adt.AsStore(rt)
 
-	datas := make([]expertfund.DataParams, 0, len(params.DealIDs))
+	pids := make([]builtin.CheckedCID, 0, len(params.DealIDs))
 	// Update deal dealStates.
 	rt.StateTransaction(&st, func() {
 		_, err := ValidateDealsForActivation(&st, store, params.DealIDs, minerAddr /* params.SectorExpiry, */, currEpoch)
@@ -368,7 +365,7 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 			proposal, err := getDealProposal(msm.dealProposals, dealID)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get dealId %d", dealID)
 
-			datas = append(datas, expertfund.DataParams{PieceID: proposal.PieceCID})
+			pids = append(pids, builtin.CheckedCID{CID: proposal.PieceCID})
 
 			propc, err := proposal.Cid()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate proposal CID")
@@ -406,7 +403,7 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
 	})
 
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchStoreData, &expertfund.BatchDataParams{Datas: datas}, abi.NewTokenAmount(0), &builtin.Discard{})
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchStoreData, &builtin.BatchPieceCIDParams{PieceCIDs: pids}, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to batch store expert data")
 
 	return ret
