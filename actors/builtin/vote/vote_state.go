@@ -79,7 +79,7 @@ func ConstructState(store adt.Store, fallback address.Address) (*State, error) {
 		return nil, xerrors.New("fallback not a ID-Address")
 	}
 
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}

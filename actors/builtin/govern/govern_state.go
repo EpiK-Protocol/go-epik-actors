@@ -31,7 +31,7 @@ func ConstructState(store adt.Store, supervisor address.Address) (*State, error)
 		return nil, xerrors.New("supervisor address must be an ID address")
 	}
 
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
@@ -85,7 +85,10 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 		if !grant { // do nothing for revoke
 			return nil
 		}
-		mp = adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth)
+		mp, err = adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth)
+		if err != nil {
+			return xerrors.Errorf("failed to create empty map: %w", err)
+		}
 	} else {
 		mp, err = adt.AsMap(store, out.CodeMethods, builtin.DefaultHamtBitwidth)
 		if err != nil {

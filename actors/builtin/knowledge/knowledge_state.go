@@ -21,7 +21,7 @@ func ConstructState(store adt.Store, initialPayee address.Address) (*State, erro
 		return nil, xerrors.New("intial payee address must be an ID address")
 	}
 
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}

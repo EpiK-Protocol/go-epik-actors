@@ -55,7 +55,7 @@ type PoolInfo struct {
 
 // ConstructState expert fund construct
 func ConstructState(store adt.Store, pool cid.Cid) (*State, error) {
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}

@@ -53,11 +53,11 @@ type LockedState struct {
 // ConstructState retrieval construct
 func ConstructState(store adt.Store) (*State, error) {
 
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
-	emptyRetrievalBatchMMapCid, err := adt.MakeEmptyMultimap(store, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth).Root()
+	emptyRetrievalBatchMMapCid, err := adt.StoreEmptyMultimap(store, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty multi map: %w", err)
 	}

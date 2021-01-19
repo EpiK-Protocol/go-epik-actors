@@ -114,7 +114,7 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 		voter, found, err := getVoter(voters, rt.Caller())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
 		if !found {
-			tally, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+			tally, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to make tally for voter")
 			voter = &Voter{
 				SettleEpoch:              rt.CurrEpoch(),

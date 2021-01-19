@@ -2,7 +2,6 @@ package market
 
 import (
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-hamt-ipld/v3"
 	"github.com/filecoin-project/go-state-types/abi"
 	cid "github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
@@ -29,14 +28,21 @@ func AsIndexMultimap(s adt.Store, r cid.Cid, outerBitwidth, innerBitwidth int) (
 }
 
 // Creates a new map backed by an empty HAMT and flushes it to the store.
-func MakeEmptyIndexMultimap(s adt.Store, bitwidth int) *IndexMultimap {
-	m := adt.MakeEmptyMap(s, bitwidth)
-	return &IndexMultimap{mp: m, store: s, innerBitwidth: bitwidth}
+func MakeEmptyIndexMultimap(s adt.Store, bitwidth int) (*IndexMultimap, error) {
+	m, err := adt.MakeEmptyMap(s, bitwidth)
+	if err != nil {
+		return nil, err
+	}
+	return &IndexMultimap{mp: m, store: s, innerBitwidth: bitwidth}, nil
 }
 
 // Writes a new empty map to the store and returns its CID.
 func StoreEmptyIndexMultimap(s adt.Store, bitwidth int) (cid.Cid, error) {
-	return MakeEmptyIndexMultimap(s, bitwidth).Root()
+	mm, err := MakeEmptyIndexMultimap(s, bitwidth)
+	if err != nil {
+		return cid.Undef, err
+	}
+	return mm.Root()
 }
 
 // Returns the root cid of the underlying HAMT.
@@ -56,7 +62,10 @@ func (mm *IndexMultimap) Put(epoch abi.ChainEpoch, providerIndexes map[address.A
 		return err
 	}
 	if !found {
-		pimap = adt.MakeEmptyMap(mm.store, mm.innerBitwidth)
+		pimap, err = adt.MakeEmptyMap(mm.store, mm.innerBitwidth)
+		if err != nil {
+			return err
+		}
 	}
 
 	for provider, indexes := range providerIndexes {
@@ -115,18 +124,8 @@ func (mm *IndexMultimap) Put(epoch abi.ChainEpoch, providerIndexes map[address.A
 
 // Removes all values for a piece.
 func (mm *IndexMultimap) RemoveAll(key abi.ChainEpoch) error {
-	k := abi.UIntKey(uint64(key))
-	found, err := mm.mp.Has(k)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return nil
-	}
-
-	err = mm.mp.Delete(k)
-	if err != nil && !xerrors.Is(err, hamt.ErrNotFound) {
-		return xerrors.Errorf("failed to delete map key %v: %w", key, err)
+	if _, err := mm.mp.TryDelete(abi.UIntKey(uint64(key))); err != nil {
+		return xerrors.Errorf("failed to delete set key %v: %w", key, err)
 	}
 	return nil
 }

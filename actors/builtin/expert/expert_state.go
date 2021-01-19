@@ -71,7 +71,7 @@ func ConstructExpertInfo(owner addr.Address, eType ExpertType, aHash string) (*E
 }
 
 func ConstructState(store adt.Store, info cid.Cid, state ExpertState, emptyChange cid.Cid) (*State, error) {
-	emptyMapCid, err := adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth).Root()
+	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}

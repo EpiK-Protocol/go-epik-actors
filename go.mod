@@ -5,9 +5,9 @@ go 1.13
 require (
 	github.com/dchest/blake2b v1.0.0
 	github.com/filecoin-project/go-address v0.0.3
-	github.com/filecoin-project/go-amt-ipld/v3 v3.0.0-20201124192204-2b387ce1bab7
+	github.com/filecoin-project/go-amt-ipld/v3 v3.0.0
 	github.com/filecoin-project/go-bitfield v0.2.0
-	github.com/filecoin-project/go-hamt-ipld/v3 v3.0.0-20201203140949-5cdbb5191437
+	github.com/filecoin-project/go-hamt-ipld/v3 v3.0.0
 	github.com/filecoin-project/go-state-types v0.0.0-20210119062722-4adba5aaea71
 	github.com/ipfs/go-block-format v0.0.2
 	github.com/ipfs/go-cid v0.0.7
