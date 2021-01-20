@@ -151,7 +151,7 @@ func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, reci
 
 // RetrievalDataParams retrieval data params
 type RetrievalDataParams struct {
-	PieceID  abi.PeerID
+	PieceID  cid.Cid
 	Size     uint64
 	Provider addr.Address
 }
@@ -184,6 +184,7 @@ func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyVa
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerIs(approvedCallers...)
 
+	var reward abi.TokenAmount
 	var st State
 	rt.StateTransaction(&st, func() {
 		statistics := &RetrievalState{
@@ -192,9 +193,12 @@ func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyVa
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
-		code, err := st.ConfirmData(rt, nominal, statistics)
-		builtin.RequireNoErr(rt, err, code, "failed to confirm data")
+		amount, err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, statistics)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to confirm data")
+		reward = amount
 	})
+	code := rt.Send(params.Provider, builtin.MethodSend, nil, reward, &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to send retrieval reward")
 	return nil
 }
 
