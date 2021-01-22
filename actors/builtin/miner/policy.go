@@ -22,6 +22,10 @@ var WPoStProvingPeriod = abi.ChainEpoch(7 * builtin.EpochsInDay) // 7 * 24 hours
 // This provides a miner enough time to compute and propagate a Window PoSt proof.
 var WPoStChallengeWindow = abi.ChainEpoch(30 * 60 / builtin.EpochDurationSeconds) //  30 minutes (336 per week) PARAM_SPEC
 
+// WPoStDisputeWindow is the period after a challenge window ends during which
+// PoSts submitted during that period may be disputed.
+var WPoStDisputeWindow = 2 * ChainFinality // PARAM_SPEC
+
 // The number of non-overlapping PoSt deadlines in a proving period.
 // This spreads a miner's Window PoSt work across a proving period.
 const WPoStPeriodDeadlines = uint64(336) // PARAM_SPEC
@@ -194,10 +198,6 @@ const DealWinIncentiveMultiplier = 2
 // Number of epochs after a consensus fault for which a miner is ineligible
 // for permissioned actor methods and winning block elections.
 const ConsensusFaultIneligibilityDuration = ChainFinality
-
-// WPoStDisputeWindow is the period after a challenge window ends during which
-// PoSts submitted during that period may be disputed.
-const WPoStDisputeWindow = 2 * ChainFinality // PARAM_TODO
 
 /*
 // DealWeight and VerifiedDealWeight are spacetime occupied by regular deals and verified deals in a sector.
