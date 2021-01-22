@@ -165,10 +165,25 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
 
+	var out RetrievalState
 	curEpochDay := rt.CurrEpoch() / RetrievalStateDuration
 
+	array, found, err := mmap.Get(abi.AddrKey(fromAddr))
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	if found && array.Length() > 0 {
+		_, err = array.Get(array.Length()-1, &out)
+		if err != nil {
+			return exitcode.ErrIllegalState, err
+		}
+		lastEpochDay := out.Epoch / RetrievalStateDuration
+		if lastEpochDay < curEpochDay {
+			mmap.RemoveAll(abi.AddrKey(fromAddr))
+		}
+	}
+
 	var totalSize abi.PaddedPieceSize
-	var out RetrievalState
 	err = mmap.ForEach(abi.AddrKey(fromAddr), &out, func(i int64) error {
 		if out.Epoch/RetrievalStateDuration >= curEpochDay {
 			totalSize += out.PieceSize
@@ -207,26 +222,24 @@ func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
 
-	curEpochDay := currEpoch / RetrievalStateDuration
-
-	found := false
+	index := int64(-1)
 	var totalSize abi.PaddedPieceSize
 	var out RetrievalState
 	err = mmap.ForEach(abi.AddrKey(fromAddr), &out, func(i int64) error {
 		if out.PieceID == state.PieceID {
-			found = true
-			out.PieceSize = state.PieceSize
+			index = i
 		}
-		if out.Epoch/RetrievalStateDuration >= curEpochDay {
-			totalSize += out.PieceSize
-		}
+		totalSize += state.PieceSize
 		return nil
 	})
 	if err != nil {
 		return abi.NewTokenAmount(0), err
 	}
-	if found != true {
-		return abi.NewTokenAmount(0), xerrors.Errorf("retrieval data not found for addr %s", fromAddr)
+	if index < 0 {
+		return abi.NewTokenAmount(0), xerrors.Errorf("confirm data not found for addr %s", fromAddr)
+	}
+	if err = mmap.Set(abi.AddrKey(fromAddr), uint64(index), state); err != nil {
+		return abi.NewTokenAmount(0), err
 	}
 
 	escrow, err := adt.AsBalanceTable(store, st.EscrowTable)
@@ -254,4 +267,53 @@ func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr
 		st.PendingReward = abi.NewTokenAmount(0)
 	}
 	return amount, nil
+}
+
+// EscrowBalance balance for address
+func (st *State) EscrowBalance(store adt.Store, fromAddr addr.Address) (abi.TokenAmount, error) {
+	escrowTable, err := adt.AsBalanceTable(store, st.EscrowTable)
+	if err != nil {
+		return abi.NewTokenAmount(0), err
+	}
+
+	escrowBalance, err := escrowTable.Get(fromAddr)
+	if err != nil {
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to get escrow balance: %w", err)
+	}
+	return escrowBalance, nil
+}
+
+// DayExpend balance for address
+func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, fromAddr addr.Address) (abi.TokenAmount, error) {
+	mmap, err := adt.AsMultimap(store, st.RetrievalBatch)
+	if err != nil {
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
+	}
+
+	curEpochDay := epoch / RetrievalStateDuration
+
+	var totalSize abi.PaddedPieceSize
+	var out RetrievalState
+	err = mmap.ForEach(abi.AddrKey(fromAddr), &out, func(i int64) error {
+		if out.Epoch/RetrievalStateDuration >= curEpochDay {
+			totalSize += out.PieceSize
+		}
+		return nil
+	})
+	if err != nil {
+		return abi.NewTokenAmount(0), err
+	}
+	expend := big.Mul(big.NewInt(int64(totalSize/RetrievalSizePerEPK)), builtin.TokenPrecision)
+	return expend, nil
+}
+
+// LockedState locked state for address
+func (st *State) LockedState(store adt.Store, fromAddr addr.Address) (*LockedState, error) {
+	lockedMap, err := adt.AsMap(store, st.LockedTable)
+	if err != nil {
+		return nil, err
+	}
+	var out LockedState
+	_, err = lockedMap.Get(abi.AddrKey(fromAddr), &out)
+	return &out, nil
 }

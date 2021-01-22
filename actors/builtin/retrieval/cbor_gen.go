@@ -234,17 +234,10 @@ func (t *RetrievalDataParams) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.PieceID ([]uint8) (slice)
-	if len(t.PieceID) > cbg.ByteArrayMaxLen {
-		return xerrors.Errorf("Byte array in field t.PieceID was too long")
-	}
+	// t.PieceID (cid.Cid) (struct)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.PieceID))); err != nil {
-		return err
-	}
-
-	if _, err := w.Write(t.PieceID[:]); err != nil {
-		return err
+	if err := cbg.WriteCidBuf(scratch, w, t.PieceID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
 	}
 
 	// t.Size (uint64) (uint64)
@@ -278,26 +271,17 @@ func (t *RetrievalDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.PieceID ([]uint8) (slice)
+	// t.PieceID (cid.Cid) (struct)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
+	{
 
-	if extra > cbg.ByteArrayMaxLen {
-		return fmt.Errorf("t.PieceID: byte array too large (%d)", extra)
-	}
-	if maj != cbg.MajByteString {
-		return fmt.Errorf("expected byte array")
-	}
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.PieceID: %w", err)
+		}
 
-	if extra > 0 {
-		t.PieceID = make([]uint8, extra)
-	}
+		t.PieceID = c
 
-	if _, err := io.ReadFull(br, t.PieceID[:]); err != nil {
-		return err
 	}
 	// t.Size (uint64) (uint64)
 
