@@ -37,7 +37,9 @@ type State struct {
 
 	// PendingProposals tracks dealProposals that have not yet reached their deal start date.
 	// We track them here to ensure that miners can't publish the same deal proposal twice
-	PendingProposals cid.Cid // HAMT[DealCid]DealProposal
+	PendingProposals cid.Cid // HAMT[DealCid]ProposalDataIndex
+
+	DataIndexesByEpoch cid.Cid // IndexMultimap, HAMT[epoch]HAMT[provider]AMT[DataIndex]
 
 	// Total amount held in escrow, indexed by actor address (including both locked and unlocked amounts).
 	EscrowTable cid.Cid // BalanceTable
@@ -64,16 +66,17 @@ type State struct {
 
 func ConstructState(emptyArrayCid, emptyMapCid, emptyMSetCid cid.Cid) *State {
 	return &State{
-		Proposals:        emptyArrayCid,
-		States:           emptyArrayCid,
-		Quotas:           emptyMapCid,
-		PendingProposals: emptyMapCid,
-		EscrowTable:      emptyMapCid,
-		LockedTable:      emptyMapCid,
-		NextID:           abi.DealID(0),
-		DealOpsByEpoch:   emptyMSetCid,
-		LastCron:         abi.ChainEpoch(-1),
-		InitialQuota:     DefaultInitialQuota,
+		Proposals:          emptyArrayCid,
+		States:             emptyArrayCid,
+		Quotas:             emptyMapCid,
+		PendingProposals:   emptyMapCid,
+		DataIndexesByEpoch: emptyMapCid,
+		EscrowTable:        emptyMapCid,
+		LockedTable:        emptyMapCid,
+		NextID:             abi.DealID(0),
+		DealOpsByEpoch:     emptyMSetCid,
+		LastCron:           abi.ChainEpoch(-1),
+		InitialQuota:       DefaultInitialQuota,
 
 		/* TotalClientLockedCollateral:   abi.NewTokenAmount(0),
 		TotalProviderLockedCollateral: abi.NewTokenAmount(0),
@@ -265,6 +268,9 @@ type marketStateMutation struct {
 	pendingPermit MarketStateMutationPermission
 	pendingDeals  *adt.Map
 
+	indexPermit MarketStateMutationPermission
+	index       *IndexMultimap
+
 	dpePermit    MarketStateMutationPermission
 	dealsByEpoch *SetMultimap
 
@@ -328,6 +334,14 @@ func (m *marketStateMutation) build() (*marketStateMutation, error) {
 		m.pendingDeals = pending
 	}
 
+	if m.indexPermit != Invalid {
+		index, err := AsIndexMultimap(m.store, m.st.DataIndexesByEpoch)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to load index: %w", err)
+		}
+		m.index = index
+	}
+
 	if m.dpePermit != Invalid {
 		dbe, err := AsSetMultimap(m.store, m.st.DealOpsByEpoch)
 		if err != nil {
@@ -374,6 +388,11 @@ func (m *marketStateMutation) withPendingProposals(permit MarketStateMutationPer
 	return m
 }
 
+func (m *marketStateMutation) withDataIndex(permit MarketStateMutationPermission) *marketStateMutation {
+	m.indexPermit = permit
+	return m
+}
+
 func (m *marketStateMutation) withDealsByEpoch(permit MarketStateMutationPermission) *marketStateMutation {
 	m.dpePermit = permit
 	return m
@@ -416,6 +435,12 @@ func (m *marketStateMutation) commitState() error {
 	if m.pendingPermit == WritePermission {
 		if m.st.PendingProposals, err = m.pendingDeals.Root(); err != nil {
 			return xerrors.Errorf("failed to flush pending deals: %w", err)
+		}
+	}
+
+	if m.indexPermit == WritePermission {
+		if m.st.DataIndexesByEpoch, err = m.index.Root(); err != nil {
+			return xerrors.Errorf("failed to flush index: %w", err)
 		}
 	}
 

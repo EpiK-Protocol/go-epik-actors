@@ -77,3 +77,13 @@ func (p *DealProposal) Cid() (cid.Cid, error) {
 	}
 	return abi.CidBuilder.Sum(buf.Bytes())
 }
+
+type ProposalDataIndex struct {
+	Provider addr.Address
+	Index    DataIndex
+}
+
+type DataIndex struct {
+	RootCID  cid.Cid `checked:"true"`
+	PieceCID cid.Cid `checked:"true"`
+}

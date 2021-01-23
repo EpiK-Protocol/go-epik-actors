@@ -14,7 +14,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{138}
+var lengthBufState = []byte{139}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -49,6 +49,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	if err := cbg.WriteCidBuf(scratch, w, t.PendingProposals); err != nil {
 		return xerrors.Errorf("failed to write cid field t.PendingProposals: %w", err)
+	}
+
+	// t.DataIndexesByEpoch (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.DataIndexesByEpoch); err != nil {
+		return xerrors.Errorf("failed to write cid field t.DataIndexesByEpoch: %w", err)
 	}
 
 	// t.EscrowTable (cid.Cid) (struct)
@@ -113,7 +119,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 10 {
+	if extra != 11 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -163,6 +169,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.PendingProposals = c
+
+	}
+	// t.DataIndexesByEpoch (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.DataIndexesByEpoch: %w", err)
+		}
+
+		t.DataIndexesByEpoch = c
 
 	}
 	// t.EscrowTable (cid.Cid) (struct)
@@ -1786,6 +1804,141 @@ func (t *DealState) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.SlashEpoch = abi.ChainEpoch(extraI)
+	}
+	return nil
+}
+
+var lengthBufDataIndex = []byte{130}
+
+func (t *DataIndex) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufDataIndex); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.RootCID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.RootCID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.RootCID: %w", err)
+	}
+
+	// t.PieceCID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.PieceCID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.PieceCID: %w", err)
+	}
+
+	return nil
+}
+
+func (t *DataIndex) UnmarshalCBOR(r io.Reader) error {
+	*t = DataIndex{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.RootCID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.RootCID: %w", err)
+		}
+
+		t.RootCID = c
+
+	}
+	// t.PieceCID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.PieceCID: %w", err)
+		}
+
+		t.PieceCID = c
+
+	}
+	return nil
+}
+
+var lengthBufProposalDataIndex = []byte{130}
+
+func (t *ProposalDataIndex) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufProposalDataIndex); err != nil {
+		return err
+	}
+
+	// t.Provider (address.Address) (struct)
+	if err := t.Provider.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Index (market.DataIndex) (struct)
+	if err := t.Index.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *ProposalDataIndex) UnmarshalCBOR(r io.Reader) error {
+	*t = ProposalDataIndex{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Provider (address.Address) (struct)
+
+	{
+
+		if err := t.Provider.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Provider: %w", err)
+		}
+
+	}
+	// t.Index (market.DataIndex) (struct)
+
+	{
+
+		if err := t.Index.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Index: %w", err)
+		}
+
 	}
 	return nil
 }

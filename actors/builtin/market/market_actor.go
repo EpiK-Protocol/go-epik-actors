@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
+	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -233,13 +234,19 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			pcid, err := deal.Proposal.Cid()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to take cid of proposal %d", di)
 
-			has, err := msm.pendingDeals.Get(abi.CidKey(pcid), nil)
+			has, err := msm.pendingDeals.Has(abi.CidKey(pcid))
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check for existence of deal proposal")
 			if has {
 				rt.Abortf(exitcode.ErrIllegalArgument, "cannot publish duplicate deals")
 			}
 
-			err = msm.pendingDeals.Put(abi.CidKey(pcid), &deal.Proposal)
+			err = msm.pendingDeals.Put(abi.CidKey(pcid), &ProposalDataIndex{
+				Provider: provider,
+				Index: DataIndex{
+					RootCID:  params.DataRef.RootCID,
+					PieceCID: deal.Proposal.PieceCID,
+				},
+			})
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set pending deal")
 
 			err = msm.dealProposals.Set(id, &deal.Proposal)
@@ -350,9 +357,10 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to validate dealProposals for activation")
 
 		msm, err := st.mutator(adt.AsStore(rt)).withDealStates(WritePermission).withQuotas(WritePermission).
-			withPendingProposals(ReadOnlyPermission).withDealProposals(ReadOnlyPermission).build()
+			withPendingProposals(ReadOnlyPermission).withDealProposals(ReadOnlyPermission).withDataIndex(WritePermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
+		dataIndexes := make(map[address.Address][]DataIndex)
 		for i, dealID := range params.DealIDs {
 			// This construction could be replaced with a single "update deal state" state method, possibly batched
 			// over all deal ids at once.
@@ -370,12 +378,13 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 			propc, err := proposal.Cid()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate proposal CID")
 
-			has, err := msm.pendingDeals.Get(abi.CidKey(propc), nil)
+			var dataIndex ProposalDataIndex
+			has, err := msm.pendingDeals.Get(abi.CidKey(propc), &dataIndex)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get pending proposal %v", propc)
-
 			if !has {
 				rt.Abortf(exitcode.ErrIllegalState, "tried to activate deal that was not in the pending set (%s)", propc)
 			}
+			dataIndexes[dataIndex.Provider] = append(dataIndexes[dataIndex.Provider], dataIndex.Index)
 
 			err = msm.dealStates.Set(dealID, &DealState{
 				SectorStartEpoch: currEpoch,
@@ -398,6 +407,9 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set quota %d", dealID)
 			}
 		}
+
+		err = msm.index.Put(currEpoch, dataIndexes)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put data index")
 
 		err = msm.commitState()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
@@ -629,29 +641,6 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		err = msm.commitState()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
 	})
-
-	/* for _, d := range timedOutVerifiedDeals {
-		code := rt.Send(
-			builtin.VerifiedRegistryActorAddr,
-			builtin.MethodsVerifiedRegistry.RestoreBytes,
-			&verifreg.RestoreBytesParams{
-				Address:  d.Client,
-				DealSize: big.NewIntUnsigned(uint64(d.PieceSize)),
-			},
-			abi.NewTokenAmount(0),
-			&builtin.Discard{},
-		)
-
-		if !code.IsSuccess() {
-			rt.Log(rtt.ERROR, "failed to send RestoreBytes call to the VerifReg actor for timed-out verified deal, client: %s, dealSize: %v, "+
-				"provider: %v, got code %v", d.Client, d.PieceSize, d.Provider, code)
-		}
-	}
-
-	if !amountSlashed.IsZero() {
-		e := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, amountSlashed, &builtin.Discard{})
-		builtin.RequireSuccess(rt, e, "expected send to burnt funds actor to succeed")
-	} */
 
 	return nil
 }

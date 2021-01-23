@@ -217,6 +217,8 @@ func main() {
 		market.DealProposal{},
 		market.ClientDealProposal{},
 		market.DealState{},
+		market.DataIndex{},
+		market.ProposalDataIndex{},
 	); err != nil {
 		panic(err)
 	}
