@@ -59,7 +59,7 @@ type Voter struct {
 	// CumEarningsPerVote in epoch just previous to LastSettleEpoch.
 	SettleCumEarningsPerVote abi.TokenAmount
 
-	// Withdrawable funds, including rewards and unlocked votes, since last withdrawal.
+	// Withdrawable rewards since last withdrawal.
 	Withdrawable abi.TokenAmount
 
 	// Tally for each candidate.
@@ -86,7 +86,7 @@ func ConstructState(emptyMapCid cid.Cid, fallback address.Address) *State {
 	}
 }
 
-func (st *State) blockCandidates(candidates *adt.Map, candAddrs map[addr.Address]struct{}, cur abi.ChainEpoch) (int, error) {
+func (st *State) BlockCandidates(candidates *adt.Map, candAddrs map[addr.Address]struct{}, cur abi.ChainEpoch) (int, error) {
 	blocked := 0
 	for candAddr := range candAddrs {
 		cand, found, err := getCandidate(candidates, candAddr)
@@ -94,7 +94,7 @@ func (st *State) blockCandidates(candidates *adt.Map, candAddrs map[addr.Address
 			return 0, err
 		}
 		if !found {
-			return 0, errors.Errorf("candidate %s not found", candAddr)
+			return 0, errors.Errorf("candidate not found: %s", candAddr)
 		}
 
 		if cand.IsBlocked() {
@@ -239,6 +239,55 @@ func (st *State) addToTally(s adt.Store, voter *Voter, candAddr addr.Address, vo
 	return nil
 }
 
+// NOTE this method is only for test!
+func (st *State) EstimateSettleAll(s adt.Store, cur abi.ChainEpoch) (map[addr.Address]abi.TokenAmount, error) {
+	candidates, err := adt.AsMap(s, st.Candidates)
+	if err != nil {
+		return nil, err
+	}
+
+	voters, err := adt.AsMap(s, st.Voters)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make(map[addr.Address]abi.TokenAmount)
+
+	var voter Voter
+	err = voters.ForEach(&voter, func(k string) error {
+		vid, err := addr.NewFromBytes([]byte(k))
+		if err != nil {
+			return err
+		}
+
+		err = st.settle(s, &voter, candidates, cur)
+		if err != nil {
+			return err
+		}
+
+		ret[vid] = voter.Withdrawable
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
+func (st *State) EstimateSettle(s adt.Store, voter *Voter, cur abi.ChainEpoch) error {
+	candidates, err := adt.AsMap(s, st.Candidates)
+	if err != nil {
+		return err
+	}
+
+	err = st.settle(s, voter, candidates, cur)
+	if err != nil {
+		return err
+	}
+
+	return err
+}
+
 func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.ChainEpoch) error {
 
 	tally, err := adt.AsMap(s, voter.Tally)
@@ -372,7 +421,7 @@ func (st *State) withdrawUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainE
 
 	voter.Tally, err = tally.Root()
 	if err != nil {
-		return abi.NewTokenAmount(0), false, errors.Wrapf(err, "failed to flush tally: %w")
+		return abi.NewTokenAmount(0), false, errors.Wrap(err, "failed to flush tally")
 	}
 	return totalUnlocked, false, nil
 }

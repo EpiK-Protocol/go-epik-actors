@@ -458,7 +458,6 @@ func GetNetworkStats(t *testing.T, vm *VM) NetworkStats {
 		TotalVoteReward:         rewardState.TotalVoteReward,
 		TotalKnowledgeReward:    rewardState.TotalKnowledgeReward,
 		TotalRetrievalReward:    rewardState.TotalRetrievalReward,
-		TotalSendFailed:         rewardState.TotalSendFailed,
 		/* TotalClientLockedCollateral:   marketState.TotalClientLockedCollateral,
 		TotalProviderLockedCollateral: marketState.TotalProviderLockedCollateral,
 		TotalClientStorageFee:         marketState.TotalClientStorageFee, */

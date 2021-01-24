@@ -196,12 +196,6 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 			retrievalReward = big.Zero() // clear
 		}
 	}
-	if !sendFailed.IsZero() {
-		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, sendFailed, &builtin.Discard{})
-		if !code.IsSuccess() {
-			rt.Log(rtt.ERROR, "failed to send unsent reward to the burnt funds actor: %v, code: %v", sendFailed, code)
-		}
-	}
 
 	// update totals
 	rt.StateTransaction(&st, func() {
@@ -210,7 +204,6 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 		st.TotalKnowledgeReward = big.Add(st.TotalKnowledgeReward, knowledgeReward)
 		st.TotalRetrievalReward = big.Add(st.TotalRetrievalReward, retrievalReward)
 		st.TotalStoragePowerReward = big.Add(st.TotalStoragePowerReward, powerReward)
-		st.TotalSendFailed = big.Add(st.TotalSendFailed, sendFailed)
 	})
 
 	ret := &AwardBlockRewardReturn{
@@ -233,7 +226,6 @@ type ThisEpochRewardReturn struct {
 	TotalVoteReward         abi.TokenAmount
 	TotalKnowledgeReward    abi.TokenAmount
 	TotalRetrievalReward    abi.TokenAmount
-	TotalSendFailed         abi.TokenAmount
 }
 
 // The award value used for the current epoch, updated at the end of an epoch
@@ -252,7 +244,6 @@ func (a Actor) ThisEpochReward(rt runtime.Runtime, _ *abi.EmptyValue) *ThisEpoch
 		TotalVoteReward:         st.TotalVoteReward,
 		TotalKnowledgeReward:    st.TotalKnowledgeReward,
 		TotalRetrievalReward:    st.TotalRetrievalReward,
-		TotalSendFailed:         st.TotalSendFailed,
 	}
 }
 

@@ -168,15 +168,17 @@ func TestApplyRewards(t *testing.T) {
 		rt.SetReceived(big.NewInt(-1))
 		rt.SetBalance(big.Zero())
 		rt.ExpectValidateCallerAddr(builtin.RewardActorAddr)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "negative funds to apply", func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "non positive funds to apply", func() {
 			actor.applyRewards(rt, big.NewInt(-1), false, false)
 		})
 
-		// success if zero
+		// failed if zero
 		rt.SetReceived(big.Zero())
 		rt.SetBalance(big.Zero())
 		rt.ExpectValidateCallerAddr(builtin.RewardActorAddr)
-		actor.applyRewards(rt, big.Zero(), false, false)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "non positive funds to apply", func() {
+			actor.applyRewards(rt, big.Zero(), false, false)
+		})
 	})
 
 	t.Run("positive funds", func(t *testing.T) {
@@ -246,7 +248,7 @@ func (h *actorHarness) applyRewards(rt *mock.Runtime, rewards abi.TokenAmount, e
 	old, found := getPayeeTotal(h.t, rt)
 	require.True(h.t, expectedFoundBefore == found && old.GreaterThanEqual(big.Zero()))
 
-	if rewards.GreaterThanEqual(big.Zero()) {
+	if rewards.GreaterThan(big.Zero()) {
 		require.Equal(h.t, rewards, rt.Balance())
 	} else {
 		require.Equal(h.t, big.Zero(), rt.Balance())

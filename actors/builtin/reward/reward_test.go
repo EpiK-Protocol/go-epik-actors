@@ -264,7 +264,7 @@ func TestAwardBlockReward(t *testing.T) {
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, big.NewInt(90), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, 0)
 
-		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, expectedReward, nil, exitcode.Ok)
+		// rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, expectedReward, nil, exitcode.Ok)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
 			Miner:            miner,
@@ -274,10 +274,9 @@ func TestAwardBlockReward(t *testing.T) {
 			ShareCount:       1,
 			RetrievalPledged: big.Zero(),
 		})
-		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(2500)), rt.Balance())
+		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(3250)), rt.Balance())
 
 		st = getState(rt)
-		assert.True(t, st.TotalSendFailed.Equals(expectedReward))
 		assert.True(t, st.TotalStoragePowerReward.Equals(big.Zero()))
 		assert.True(t, st.TotalVoteReward.Equals(big.NewInt(10)))
 		assert.True(t, st.TotalExpertReward.Equals(big.NewInt(90)))
@@ -307,7 +306,7 @@ func TestAwardBlockReward(t *testing.T) {
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, big.NewInt(90), &builtin.Discard{}, exitcode.ErrForbidden)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, exitcode.ErrForbidden)
 
-		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.Ok)
+		// rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.Ok)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
 			Miner:            miner,
@@ -317,10 +316,9 @@ func TestAwardBlockReward(t *testing.T) {
 			ShareCount:       1,
 			RetrievalPledged: big.Zero(),
 		})
-		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(2500)), rt.Balance())
+		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(3500)), rt.Balance())
 
 		st = getState(rt)
-		assert.True(t, st.TotalSendFailed.Equals(st.ThisEpochReward))
 		assert.True(t, st.TotalStoragePowerReward.Equals(big.Zero()))
 		assert.True(t, st.TotalVoteReward.Equals(big.Zero()))
 		assert.True(t, st.TotalExpertReward.Equals(big.Zero()))
@@ -351,7 +349,7 @@ func TestAwardBlockReward(t *testing.T) {
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, big.NewInt(90), &builtin.Discard{}, exitcode.ErrForbidden)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, exitcode.ErrForbidden)
 
-		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.ErrForbidden)
+		// rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.ErrForbidden)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
 			Miner:            miner,
@@ -364,7 +362,6 @@ func TestAwardBlockReward(t *testing.T) {
 		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(3500)), rt.Balance())
 
 		st = getState(rt)
-		assert.True(t, st.TotalSendFailed.Equals(st.ThisEpochReward))
 		assert.True(t, st.TotalStoragePowerReward.Equals(big.Zero()))
 		assert.True(t, st.TotalVoteReward.Equals(big.Zero()))
 		assert.True(t, st.TotalExpertReward.Equals(big.Zero()))

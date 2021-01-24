@@ -81,7 +81,7 @@ func (a Actor) BlockCandidates(rt Runtime, params *builtin.BlockCandidatesParams
 		candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
 
-		n, err := st.blockCandidates(candidates, candAddrs, rt.CurrEpoch())
+		n, err := st.BlockCandidates(candidates, candAddrs, rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to block candidates")
 
 		if n == 0 {
@@ -268,10 +268,7 @@ func (a Actor) Withdraw(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
-	builtin.RequireParam(rt, rt.ValueReceived().GreaterThanEqual(big.Zero()), "cannot add a negative amount of funds")
-	if rt.ValueReceived().Sign() == 0 {
-		return nil
-	}
+	builtin.RequireParam(rt, rt.ValueReceived().GreaterThan(big.Zero()), "non positive amount of funds")
 
 	var st State
 	rt.StateTransaction(&st, func() {

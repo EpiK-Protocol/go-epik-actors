@@ -59,8 +59,6 @@ type State struct {
 	TotalVoteReward         abi.TokenAmount // to vote fund actor
 	TotalKnowledgeReward    abi.TokenAmount // to knowledge fund actor
 	TotalRetrievalReward    abi.TokenAmount // to retrieval fund actor
-	// TotalSendFailed tracks the total EPK failed to send
-	TotalSendFailed abi.TokenAmount
 
 	// Simple and Baseline totals are constants used for computing rewards.
 	// They are on chain because of a historical fix resetting baseline value
@@ -92,7 +90,6 @@ func ConstructState() *State {
 		TotalVoteReward:         big.Zero(),
 		TotalKnowledgeReward:    big.Zero(),
 		TotalRetrievalReward:    big.Zero(),
-		TotalSendFailed:         big.Zero(),
 	}
 
 	return st

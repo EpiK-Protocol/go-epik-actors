@@ -13,7 +13,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{136}
+var lengthBufState = []byte{135}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -66,11 +66,6 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 	if err := t.TotalRetrievalReward.MarshalCBOR(w); err != nil {
 		return err
 	}
-
-	// t.TotalSendFailed (big.Int) (struct)
-	if err := t.TotalSendFailed.MarshalCBOR(w); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -88,7 +83,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 8 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -168,15 +163,6 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.TotalRetrievalReward.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.TotalRetrievalReward: %w", err)
-		}
-
-	}
-	// t.TotalSendFailed (big.Int) (struct)
-
-	{
-
-		if err := t.TotalSendFailed.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.TotalSendFailed: %w", err)
 		}
 
 	}
@@ -479,7 +465,7 @@ func (t *AwardBlockRewardReturn) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufThisEpochRewardReturn = []byte{136}
+var lengthBufThisEpochRewardReturn = []byte{135}
 
 func (t *ThisEpochRewardReturn) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -532,11 +518,6 @@ func (t *ThisEpochRewardReturn) MarshalCBOR(w io.Writer) error {
 	if err := t.TotalRetrievalReward.MarshalCBOR(w); err != nil {
 		return err
 	}
-
-	// t.TotalSendFailed (big.Int) (struct)
-	if err := t.TotalSendFailed.MarshalCBOR(w); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -554,7 +535,7 @@ func (t *ThisEpochRewardReturn) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 8 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -634,15 +615,6 @@ func (t *ThisEpochRewardReturn) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.TotalRetrievalReward.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.TotalRetrievalReward: %w", err)
-		}
-
-	}
-	// t.TotalSendFailed (big.Int) (struct)
-
-	{
-
-		if err := t.TotalSendFailed.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.TotalSendFailed: %w", err)
 		}
 
 	}

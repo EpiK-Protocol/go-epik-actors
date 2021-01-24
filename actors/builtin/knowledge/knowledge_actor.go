@@ -81,11 +81,7 @@ func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
 
 	amount := rt.ValueReceived()
-	builtin.RequireParam(rt, amount.GreaterThanEqual(big.Zero()), "negative funds to apply")
-
-	if amount.IsZero() {
-		return nil
-	}
+	builtin.RequireParam(rt, amount.GreaterThan(big.Zero()), "non positive funds to apply")
 
 	var st State
 	rt.StateTransaction(&st, func() {
