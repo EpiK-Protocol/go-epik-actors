@@ -221,7 +221,7 @@ func (t *WithdrawBalanceParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufRetrievalDataParams = []byte{131}
+var lengthBufRetrievalDataParams = []byte{132}
 
 func (t *RetrievalDataParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -246,6 +246,11 @@ func (t *RetrievalDataParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.Client (address.Address) (struct)
+	if err := t.Client.MarshalCBOR(w); err != nil {
+		return err
+	}
+
 	// t.Provider (address.Address) (struct)
 	if err := t.Provider.MarshalCBOR(w); err != nil {
 		return err
@@ -267,7 +272,7 @@ func (t *RetrievalDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -297,6 +302,15 @@ func (t *RetrievalDataParams) UnmarshalCBOR(r io.Reader) error {
 		t.Size = uint64(extra)
 
 	}
+	// t.Client (address.Address) (struct)
+
+	{
+
+		if err := t.Client.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Client: %w", err)
+		}
+
+	}
 	// t.Provider (address.Address) (struct)
 
 	{
@@ -309,7 +323,7 @@ func (t *RetrievalDataParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufRetrievalState = []byte{132}
+var lengthBufRetrievalState = []byte{133}
 
 func (t *RetrievalState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -337,6 +351,11 @@ func (t *RetrievalState) MarshalCBOR(w io.Writer) error {
 	// t.PieceSize (abi.PaddedPieceSize) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.PieceSize)); err != nil {
+		return err
+	}
+
+	// t.Client (address.Address) (struct)
+	if err := t.Client.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -372,7 +391,7 @@ func (t *RetrievalState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 5 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -398,6 +417,15 @@ func (t *RetrievalState) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
 		t.PieceSize = abi.PaddedPieceSize(extra)
+
+	}
+	// t.Client (address.Address) (struct)
+
+	{
+
+		if err := t.Client.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Client: %w", err)
+		}
 
 	}
 	// t.Provider (address.Address) (struct)

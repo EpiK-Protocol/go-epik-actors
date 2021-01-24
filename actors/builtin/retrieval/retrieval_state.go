@@ -40,6 +40,7 @@ type State struct {
 type RetrievalState struct {
 	PieceID   string
 	PieceSize abi.PaddedPieceSize
+	Client    addr.Address
 	Provider  addr.Address
 	Epoch     abi.ChainEpoch
 }
@@ -238,27 +239,7 @@ func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr
 	if index < 0 {
 		return abi.NewTokenAmount(0), xerrors.Errorf("confirm data not found for addr %s", fromAddr)
 	}
-	if err = mmap.Set(abi.AddrKey(fromAddr), uint64(index), state); err != nil {
-		return abi.NewTokenAmount(0), err
-	}
 
-	escrow, err := adt.AsBalanceTable(store, st.EscrowTable)
-	if err != nil {
-		return abi.NewTokenAmount(0), err
-	}
-	balance, err := escrow.Get(fromAddr)
-	if err != nil {
-		return abi.NewTokenAmount(0), err
-	}
-
-	required := big.Mul(big.NewInt(int64(totalSize/RetrievalSizePerEPK)), builtin.TokenPrecision)
-	if big.Sub(balance, required).LessThan(big.Zero()) {
-		return abi.NewTokenAmount(0), xerrors.Errorf("not enough balance to statistics for addr %s: escrow balance %s < required %s", fromAddr, balance, required)
-	}
-	// mmap.Add(abi.AddrKey(fromAddr), state)
-	if st.RetrievalBatch, err = mmap.Root(); err != nil {
-		return abi.NewTokenAmount(0), err
-	}
 	amount := big.Mul(big.NewInt(int64(state.PieceSize)), RetrievalRewardPerByte)
 	if st.PendingReward.GreaterThanEqual(amount) {
 		st.PendingReward = big.Sub(st.PendingReward, amount)

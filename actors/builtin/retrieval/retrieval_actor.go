@@ -153,12 +153,13 @@ func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, reci
 type RetrievalDataParams struct {
 	PieceID  cid.Cid
 	Size     uint64
+	Client   addr.Address
 	Provider addr.Address
 }
 
 // RetrievalData retrieval data statistics
 func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, approvedCallers := escrowAddress(rt, params.Provider)
+	nominal, _, approvedCallers := escrowAddress(rt, params.Client)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerIs(approvedCallers...)
@@ -168,6 +169,7 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 		statistics := &RetrievalState{
 			PieceID:   params.Provider.String(),
 			PieceSize: abi.PaddedPieceSize(params.Size),
+			Client:    params.Client,
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
@@ -179,7 +181,9 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 
 // ConfirmData retrieval data statistics
 func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, approvedCallers := escrowAddress(rt, params.Provider)
+	nominal, _, approvedCallers := escrowAddress(rt, params.Client)
+	_, _, providerCallers := escrowAddress(rt, params.Provider)
+	approvedCallers = append(approvedCallers, providerCallers...)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerIs(approvedCallers...)
@@ -190,6 +194,7 @@ func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyVa
 		statistics := &RetrievalState{
 			PieceID:   params.Provider.String(),
 			PieceSize: abi.PaddedPieceSize(params.Size),
+			Client:    params.Client,
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
