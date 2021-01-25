@@ -101,10 +101,10 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 	votes := rt.ValueReceived()
 	builtin.RequireParam(rt, votes.GreaterThan(big.Zero()), "non positive votes to vote")
 
-	resovled, ok := rt.ResolveAddress(*candidate)
+	candAddr, ok := rt.ResolveAddress(*candidate)
 	builtin.RequireParam(rt, ok, "unable to resolve address %v", candidate)
 
-	candAddr := builtin.RequestExpertControlAddr(rt, resovled)
+	builtin.RequestExpertControlAddr(rt, candAddr)
 
 	var st State
 	var afterVote *Candidate
