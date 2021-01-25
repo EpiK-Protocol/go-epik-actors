@@ -436,14 +436,14 @@ func (t *ClaimFundParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufNotifyUpdateParams = []byte{131}
+var lengthBufNotifyImportParams = []byte{130}
 
-func (t *NotifyUpdateParams) MarshalCBOR(w io.Writer) error {
+func (t *NotifyImportParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufNotifyUpdateParams); err != nil {
+	if _, err := w.Write(lengthBufNotifyImportParams); err != nil {
 		return err
 	}
 
@@ -460,15 +460,11 @@ func (t *NotifyUpdateParams) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
 	}
 
-	// t.IsImport (bool) (bool)
-	if err := cbg.WriteBool(w, t.IsImport); err != nil {
-		return err
-	}
 	return nil
 }
 
-func (t *NotifyUpdateParams) UnmarshalCBOR(r io.Reader) error {
-	*t = NotifyUpdateParams{}
+func (t *NotifyImportParams) UnmarshalCBOR(r io.Reader) error {
+	*t = NotifyImportParams{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -481,7 +477,7 @@ func (t *NotifyUpdateParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -506,22 +502,53 @@ func (t *NotifyUpdateParams) UnmarshalCBOR(r io.Reader) error {
 		t.PieceID = c
 
 	}
-	// t.IsImport (bool) (bool)
+	return nil
+}
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+var lengthBufNotifyUpdateParams = []byte{129}
+
+func (t *NotifyUpdateParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufNotifyUpdateParams); err != nil {
+		return err
+	}
+
+	// t.Expert (address.Address) (struct)
+	if err := t.Expert.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *NotifyUpdateParams) UnmarshalCBOR(r io.Reader) error {
+	*t = NotifyUpdateParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
 		return err
 	}
-	if maj != cbg.MajOther {
-		return fmt.Errorf("booleans must be major type 7")
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
 	}
-	switch extra {
-	case 20:
-		t.IsImport = false
-	case 21:
-		t.IsImport = true
-	default:
-		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Expert (address.Address) (struct)
+
+	{
+
+		if err := t.Expert.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Expert: %w", err)
+		}
+
 	}
 	return nil
 }

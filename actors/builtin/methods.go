@@ -135,11 +135,12 @@ var MethodsExpertFunds = struct {
 	Constructor      abi.MethodNum
 	ApplyRewards     abi.MethodNum
 	Claim            abi.MethodNum
+	NotifyImport     abi.MethodNum
 	NotifyUpdate     abi.MethodNum
 	FoundationChange abi.MethodNum
 	BatchCheckData   abi.MethodNum
 	BatchStoreData   abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
 
 var MethodsVote = struct {
 	Constructor     abi.MethodNum

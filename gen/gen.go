@@ -41,7 +41,8 @@ func main() {
 		builtin.ExpertAddr{},
 		builtin.ConfirmSectorProofsParams{},
 		builtin.ApplyRewardParams{},
-		builtin.NotifyUpdate{},
+		builtin.NotifyExpertImportParams{},
+		builtin.NotifyExpertUpdateParams{},
 		builtin.BlockCandidatesParams{},
 		builtin.BoolValue{},
 		builtin.ValidateGrantedParams{},
@@ -98,6 +99,7 @@ func main() {
 		// method params
 		expertfund.ExpertInfo{},
 		expertfund.ClaimFundParams{},
+		expertfund.NotifyImportParams{},
 		expertfund.NotifyUpdateParams{},
 		expertfund.VestingFunds{},
 		expertfund.VestingFund{},

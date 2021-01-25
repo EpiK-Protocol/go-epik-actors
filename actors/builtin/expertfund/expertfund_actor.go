@@ -23,10 +23,11 @@ func (a Actor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.ApplyRewards,
 		3:                         a.Claim,
-		4:                         a.NotifyUpdate,
-		5:                         a.FoundationChange,
-		6:                         a.BatchCheckData,
-		7:                         a.BatchStoreData,
+		4:                         a.NotifyImport,
+		5:                         a.NotifyUpdate,
+		6:                         a.FoundationChange,
+		7:                         a.BatchCheckData,
+		8:                         a.BatchStoreData,
 	}
 }
 
@@ -101,47 +102,39 @@ func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.EmptyValue {
 	return nil
 }
 
-// NotifyUpdateParams expert params
-type NotifyUpdateParams struct {
-	Expert   address.Address
-	PieceID  cid.Cid
-	IsImport bool
+// NotifyImportParams import
+type NotifyImportParams struct {
+	Expert  address.Address
+	PieceID cid.Cid
 }
 
 // NotifyUpdate notify vote
-func (a Actor) NotifyUpdate(rt Runtime, params *NotifyUpdateParams) *abi.EmptyValue {
-
-	validateCode := exitcode.Ok
-	var out expert.DataOnChainInfo
-	if params.IsImport == false {
-		validateCode = rt.Send(params.Expert, builtin.MethodsExpert.Validate, nil, abi.NewTokenAmount(0), &builtin.Discard{})
-		dataParams := &expert.ExpertDataParams{
-			PieceID: params.PieceID,
-		}
-		code := rt.Send(params.Expert, builtin.MethodsExpert.GetData, dataParams, abi.NewTokenAmount(0), &out)
-		builtin.RequireSuccess(rt, code, "failed to get data")
-	}
-
+func (a Actor) NotifyImport(rt Runtime, params *NotifyImportParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
-		if params.IsImport {
-			found, err := st.HasDataID(adt.AsStore(rt), params.PieceID.String())
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
-			if found {
-				builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "duplicate import by other expert")
-			}
-			st.PutData(adt.AsStore(rt), params.PieceID.String(), params.Expert)
-		} else {
-			if validateCode != exitcode.Ok {
-				st.Reset(rt, params.Expert)
-			}
-
-			if out.Redundancy >= st.DataStoreThreshold {
-				st.Deposit(rt, params.Expert, out.PieceSize)
-			}
+		found, err := st.HasDataID(adt.AsStore(rt), params.PieceID.String())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
+		if found {
+			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "duplicate import by other expert")
 		}
+		st.PutData(adt.AsStore(rt), params.PieceID.String(), params.Expert)
+	})
+	return nil
+}
+
+// NotifyUpdateParams expert params
+type NotifyUpdateParams struct {
+	Expert address.Address
+}
+
+// NotifyUpdate notify vote
+func (a Actor) NotifyUpdate(rt Runtime, params *NotifyUpdateParams) *abi.EmptyValue {
+	var st State
+	rt.StateTransaction(&st, func() {
+		rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
+		st.Reset(rt, params.Expert)
 	})
 	return nil
 }
@@ -184,23 +177,35 @@ func (a Actor) BatchCheckData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.StorageMarketActorAddr)
 
-	experts := make([]address.Address, 0, len(params.PieceCIDs))
+	var experts []address.Address
+	var rst State
+	rt.StateReadonly(&rst)
+	store := adt.AsStore(rt)
+	for _, checked := range params.PieceCIDs {
+		expert, found, err := rst.GetData(store, checked.CID.String())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
+		if !found {
+			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to find data in expertfund record")
+		}
+		experts = append(experts, expert)
+	}
+
+	var datas []*expert.DataOnChainInfo
+	for i, checked := range params.PieceCIDs {
+		var out expert.DataOnChainInfo
+		code := rt.Send(experts[i], builtin.MethodsExpert.StoreData, &expert.ExpertDataParams{PieceID: checked.CID}, abi.NewTokenAmount(0), &out)
+		builtin.RequireSuccess(rt, code, "failed to send claim amount")
+		datas = append(datas, &out)
+	}
+
 	var st State
 	rt.StateTransaction(&st, func() {
-		store := adt.AsStore(rt)
-
-		for _, checked := range params.PieceCIDs {
-			expert, found, err := st.GetData(store, checked.CID.String())
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
-			if !found {
-				builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to find data in expertfund record")
+		for i, data := range datas {
+			if data.Redundancy >= st.DataStoreThreshold {
+				st.Deposit(rt, experts[i], data.PieceSize)
 			}
-			experts = append(experts, expert)
 		}
 	})
-	for i, checked := range params.PieceCIDs {
-		code := rt.Send(experts[i], builtin.MethodsExpert.StoreData, &expert.ExpertDataParams{PieceID: checked.CID}, abi.NewTokenAmount(0), &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send claim amount")
-	}
+
 	return nil
 }

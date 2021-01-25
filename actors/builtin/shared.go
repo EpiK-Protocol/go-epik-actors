@@ -92,18 +92,28 @@ func ValidateCallerGranted(rt runtime.Runtime, caller addr.Address, method abi.M
 	RequireSuccess(rt, code, errMsg)
 }
 
-// NotifyUpdate expert params
-type NotifyUpdate struct {
-	Expert   address.Address
-	PieceID  cid.Cid
-	IsImport bool
+type NotifyExpertImportParams struct {
+	Expert  address.Address
+	PieceID cid.Cid
 }
 
-func NotifyExpertUpdate(rt runtime.Runtime, expertAddr addr.Address, pieceID cid.Cid, isImport bool) {
-	params := &NotifyUpdate{
-		Expert:   expertAddr,
-		PieceID:  pieceID,
-		IsImport: isImport,
+func NotifyExpertImport(rt runtime.Runtime, expertAddr addr.Address, pieceID cid.Cid) {
+	params := &NotifyExpertImportParams{
+		Expert:  expertAddr,
+		PieceID: pieceID,
+	}
+	code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.NotifyImport, params, abi.NewTokenAmount(0), &Discard{})
+	RequireSuccess(rt, code, "failed to notify expert import")
+}
+
+// NotifyExpertUpdateParams expert params
+type NotifyExpertUpdateParams struct {
+	Expert address.Address
+}
+
+func NotifyExpertUpdate(rt runtime.Runtime, expertAddr addr.Address) {
+	params := &NotifyExpertUpdateParams{
+		Expert: expertAddr,
 	}
 	code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.NotifyUpdate, params, abi.NewTokenAmount(0), &Discard{})
 	RequireSuccess(rt, code, "failed to notify expert update")

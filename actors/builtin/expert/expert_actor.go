@@ -161,7 +161,7 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 		err = st.PutData(store, newDataInfo)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to import data")
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), params.PieceID, true)
+	builtin.NotifyExpertImport(rt, rt.Receiver(), params.PieceID)
 	return nil
 }
 
@@ -178,21 +178,27 @@ func (a Actor) GetData(rt Runtime, params *ExpertDataParams) *DataOnChainInfo {
 	return data
 }
 
-func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue {
+func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) *DataOnChainInfo {
 	rt.ValidateImmediateCallerType(builtin.ExpertFundActorCodeID)
 
+	var out *DataOnChainInfo
 	var st State
 	rt.StateTransaction(&st, func() {
 		store := adt.AsStore(rt)
+
+		err := st.Validate(store, rt.CurrEpoch())
+		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
+
 		data, found, err := st.GetData(store, params.PieceID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data %v", params.PieceID)
 		builtin.RequireParam(rt, found, "data %v has not imported", params.PieceID)
 		data.Redundancy++
 		err = st.PutData(store, data)
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to store data")
+
+		out = data
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), params.PieceID, false)
-	return nil
+	return out
 }
 
 func (a Actor) Validate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
@@ -238,7 +244,6 @@ func (a Actor) NominateUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 		st.Status = ExpertStateNormal
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
 	return nil
 }
 
@@ -260,13 +265,14 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	code := rt.Send(info.Proposer, builtin.MethodsExpert.BlockUpdate, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to nominate expert")
 
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
+	builtin.NotifyExpertUpdate(rt, rt.Receiver())
 	return nil
 }
 
 func (a Actor) BlockUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
+	validate := true
 	var st State
 	rt.StateTransaction(&st, func() {
 		info := getExpertInfo(rt, &st)
@@ -277,8 +283,13 @@ func (a Actor) BlockUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 				st.LostEpoch = rt.CurrEpoch()
 			}
 		}
+		if err := st.Validate(adt.AsStore(rt), rt.CurrEpoch()); err != nil {
+			validate = false
+		}
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
+	if !validate {
+		builtin.NotifyExpertUpdate(rt, rt.Receiver())
+	}
 	return nil
 }
 
@@ -304,10 +315,20 @@ type ExpertVoteParams struct {
 func (a Actor) Vote(rt Runtime, params *ExpertVoteParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.VoteFundActorCodeID)
 
+	validate := true
 	var st State
 	rt.StateTransaction(&st, func() {
+		if st.Status == ExpertStateBlocked || st.Status == ExpertStateRegistered {
+			rt.Abortf(exitcode.ErrForbidden, "expert cannot be vote")
+		}
 		st.VoteAmount = params.Amount
+
+		if err := st.Validate(adt.AsStore(rt), rt.CurrEpoch()); err != nil {
+			validate = false
+		}
 	})
-	builtin.NotifyExpertUpdate(rt, rt.Receiver(), cid.Undef, false)
+	if !validate {
+		builtin.NotifyExpertUpdate(rt, rt.Receiver())
+	}
 	return nil
 }
