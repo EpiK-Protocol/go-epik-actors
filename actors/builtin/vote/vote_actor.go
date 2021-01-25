@@ -1,6 +1,8 @@
 package vote
 
 import (
+	"fmt"
+
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -268,11 +270,16 @@ func (a Actor) Withdraw(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
-	builtin.RequireParam(rt, rt.ValueReceived().GreaterThan(big.Zero()), "non positive amount of funds")
+	builtin.RequireParam(rt, rt.ValueReceived().GreaterThanEqual(big.Zero()), "negative amount to apply")
+
+	if rt.ValueReceived().Sign() == 0 {
+		return nil
+	}
 
 	var st State
 	rt.StateTransaction(&st, func() {
 		st.UnownedFunds = big.Add(st.UnownedFunds, rt.ValueReceived())
+		fmt.Printf("received vote rewards at %d: %s - %s\n", rt.CurrEpoch(), st.UnownedFunds, rt.ValueReceived())
 	})
 	return nil
 }
@@ -295,11 +302,16 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 			return
 		}
 
+		before := st.UnownedFunds
 		st.CumEarningsPerVote = big.Add(st.CumEarningsPerVote, big.Div(st.UnownedFunds, st.TotalVotes))
 		st.UnownedFunds = big.Mod(st.UnownedFunds, st.TotalVotes)
+
+		fmt.Printf("send to voters at %d: %s - %s\n", rt.CurrEpoch(), before, st.UnownedFunds)
 	})
 
 	if !toFallback.IsZero() {
+		fmt.Printf("send to fallback at %d: %s\n", rt.CurrEpoch(), toFallback)
+
 		code := rt.Send(st.FallbackReceiver, builtin.MethodSend, nil, toFallback, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds to fallback")
 	}
