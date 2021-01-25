@@ -9,10 +9,11 @@ import (
 // Governed methods of each actor code
 var GovernedActors = map[cid.Cid]map[abi.MethodNum]struct{}{
 	builtin.ExpertActorCodeID: {
-		// TODO:
+		builtin.MethodsExpert.FoundationChange: struct{}{},
+		builtin.MethodsExpert.Block:            struct{}{},
 	},
 	builtin.ExpertFundActorCodeID: {
-		// TODO:
+		builtin.MethodsExpertFunds.FoundationChange: struct{}{},
 	},
 	builtin.KnowledgeFundActorCodeID: {
 		builtin.MethodsKnowledge.ChangePayee: struct{}{},
