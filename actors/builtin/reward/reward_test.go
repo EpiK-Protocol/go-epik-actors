@@ -175,12 +175,13 @@ func TestAwardBlockReward(t *testing.T) {
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(46), &builtin.Discard{}, 0)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
-			Miner:            winner,
-			Penalty:          penalty,
-			GasReward:        big.Zero(),
-			WinCount:         1,
-			ShareCount:       1,
-			RetrievalPledged: big.Zero(),
+			Miner:                 winner,
+			Penalty:               penalty,
+			GasReward:             big.Zero(),
+			WinCount:              1,
+			ShareCount:            1,
+			ParentRetrievalPledge: big.Zero(),
+			ParentCircSupply:      big.Zero(),
 		})
 		rt.Verify()
 	})
@@ -194,7 +195,8 @@ func TestAwardBlockReward(t *testing.T) {
 		penalty := abi.NewTokenAmount(100)
 		rt.SetBalance(smallReward)
 		rt.ExpectValidateCallerAddr(builtin.SystemActorAddr)
-		rt.SetCirculatingSupply(big.NewInt(1000))
+		circ := big.NewInt(1000)
+		rt.SetCirculatingSupply(circ)
 
 		minerPenalty := big.Mul(big.NewInt(reward.PenaltyMultiplier), penalty)
 		expectedParams := builtin.ApplyRewardParams{Reward: big.NewInt(235), Penalty: minerPenalty}
@@ -206,12 +208,13 @@ func TestAwardBlockReward(t *testing.T) {
 		rt.ExpectSend(builtin.RetrievalFundActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, big.NewInt(7), &builtin.Discard{}, 0)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
-			Miner:            winner,
-			Penalty:          penalty,
-			GasReward:        big.Zero(),
-			WinCount:         1,
-			ShareCount:       1,
-			RetrievalPledged: big.NewInt(113),
+			Miner:                 winner,
+			Penalty:               penalty,
+			GasReward:             big.Zero(),
+			WinCount:              1,
+			ShareCount:            1,
+			ParentRetrievalPledge: big.NewInt(113),
+			ParentCircSupply:      circ,
 		})
 		rt.Verify()
 	})
@@ -267,12 +270,13 @@ func TestAwardBlockReward(t *testing.T) {
 		// rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, expectedReward, nil, exitcode.Ok)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
-			Miner:            miner,
-			Penalty:          big.Zero(),
-			GasReward:        big.Zero(),
-			WinCount:         1,
-			ShareCount:       1,
-			RetrievalPledged: big.Zero(),
+			Miner:                 miner,
+			Penalty:               big.Zero(),
+			GasReward:             big.Zero(),
+			WinCount:              1,
+			ShareCount:            1,
+			ParentRetrievalPledge: big.Zero(),
+			ParentCircSupply:      big.Zero(),
 		})
 		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(3250)), rt.Balance())
 
@@ -309,12 +313,13 @@ func TestAwardBlockReward(t *testing.T) {
 		// rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.Ok)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
-			Miner:            miner,
-			Penalty:          big.Zero(),
-			GasReward:        big.Zero(),
-			WinCount:         1,
-			ShareCount:       1,
-			RetrievalPledged: big.Zero(),
+			Miner:                 miner,
+			Penalty:               big.Zero(),
+			GasReward:             big.Zero(),
+			WinCount:              1,
+			ShareCount:            1,
+			ParentRetrievalPledge: big.Zero(),
+			ParentCircSupply:      big.Zero(),
 		})
 		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(3500)), rt.Balance())
 
@@ -352,12 +357,13 @@ func TestAwardBlockReward(t *testing.T) {
 		// rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, st.ThisEpochReward, nil, exitcode.ErrForbidden)
 
 		rt.Call(actor.AwardBlockReward, &reward.AwardBlockRewardParams{
-			Miner:            miner,
-			Penalty:          big.Zero(),
-			GasReward:        big.Zero(),
-			WinCount:         1,
-			ShareCount:       1,
-			RetrievalPledged: big.Zero(),
+			Miner:                 miner,
+			Penalty:               big.Zero(),
+			GasReward:             big.Zero(),
+			WinCount:              1,
+			ShareCount:            1,
+			ParentRetrievalPledge: big.Zero(),
+			ParentCircSupply:      big.Zero(),
 		})
 		assert.True(t, rt.Balance().Equals(abi.NewTokenAmount(3500)), rt.Balance())
 
@@ -474,12 +480,13 @@ func (h *rewardHarness) awardBlockReward(
 	}
 
 	rt.Call(h.AwardBlockReward, &reward.AwardBlockRewardParams{
-		Miner:            miner,
-		Penalty:          penalty,
-		GasReward:        gasReward,
-		WinCount:         1, //
-		ShareCount:       shareCount,
-		RetrievalPledged: retrievalPledge,
+		Miner:                 miner,
+		Penalty:               penalty,
+		GasReward:             gasReward,
+		WinCount:              1, //
+		ShareCount:            shareCount,
+		ParentRetrievalPledge: retrievalPledge,
+		ParentCircSupply:      big.Zero(),
 	})
 	rt.Verify()
 }

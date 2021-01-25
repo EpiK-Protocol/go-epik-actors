@@ -54,11 +54,12 @@ type AwardBlockRewardParams struct {
 	Miner     address.Address
 	Penalty   abi.TokenAmount // penalty for including bad messages in a block, >= 0
 	GasReward abi.TokenAmount // gas reward from all gas fees in a block, >= 0
-	WinCount  int64           // number of reward units won, > 0
 
+	WinCount   int64 // number of reward units won, > 0
 	ShareCount int64 // number of blocks in current tipset, sharing ThisEpochReward
 
-	RetrievalPledged abi.TokenAmount // total retrieval pledged epik
+	ParentRetrievalPledge abi.TokenAmount
+	ParentCircSupply      abi.TokenAmount
 }
 
 type AwardBlockRewardReturn struct {
@@ -123,27 +124,7 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	AssertMsg(totalReward.LessThanEqual(priorBalance), "total reward %v exceeds balance %v", totalReward, priorBalance)
 
 	voteReward, expertReward, knowledgeReward, retrievalReward, powerReward :=
-		distributeBlockRewards(blockReward, params.RetrievalPledged, rt.TotalFilCircSupply())
-
-	/* rt.StateTransaction(&st, func() {
-		// blockReward := big.Mul(st.ThisEpochReward, big.NewInt(params.WinCount))
-		// blockReward = big.Div(blockReward, big.NewInt(builtin.ExpectedLeadersPerEpoch))
-		blockReward := big.Div(st.ThisEpochReward, big.NewInt(params.ShareCount))
-		totalReward := big.Add(blockReward, gasReward)
-		currBalance := rt.CurrentBalance()
-		if totalReward.GreaterThan(currBalance) {
-			rt.Log(rtt.WARN, "reward actor balance %d below totalReward expected %d, paying out rest of balance", currBalance, totalReward)
-			totalReward = currBalance
-
-			blockReward = big.Sub(totalReward, gasReward)
-			// // Since we have already asserted the balance is greater than gas reward blockReward is >= 0
-			// AssertMsg(blockReward.GreaterThanEqual(big.Zero()), "programming error, block reward is %v below zero", blockReward)
-		}
-		AssertMsg(totalReward.LessThanEqual(priorBalance), "total reward %v exceeds balance %v", totalReward, priorBalance)
-
-		voteReward, expertReward, knowledgeReward, retrievalReward, powerReward =
-			distributeBlockRewards(blockReward, params.RetrievalPledged, rt.TotalFilCircSupply())
-	}) */
+		distributeBlockRewards(blockReward, params.ParentRetrievalPledge, params.ParentCircSupply)
 
 	sendFailed := big.Zero()
 

@@ -169,7 +169,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufAwardBlockRewardParams = []byte{134}
+var lengthBufAwardBlockRewardParams = []byte{135}
 
 func (t *AwardBlockRewardParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -219,8 +219,13 @@ func (t *AwardBlockRewardParams) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
-	// t.RetrievalPledged (big.Int) (struct)
-	if err := t.RetrievalPledged.MarshalCBOR(w); err != nil {
+	// t.ParentRetrievalPledge (big.Int) (struct)
+	if err := t.ParentRetrievalPledge.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.ParentCircSupply (big.Int) (struct)
+	if err := t.ParentCircSupply.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
@@ -240,7 +245,7 @@ func (t *AwardBlockRewardParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -321,12 +326,21 @@ func (t *AwardBlockRewardParams) UnmarshalCBOR(r io.Reader) error {
 
 		t.ShareCount = int64(extraI)
 	}
-	// t.RetrievalPledged (big.Int) (struct)
+	// t.ParentRetrievalPledge (big.Int) (struct)
 
 	{
 
-		if err := t.RetrievalPledged.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.RetrievalPledged: %w", err)
+		if err := t.ParentRetrievalPledge.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.ParentRetrievalPledge: %w", err)
+		}
+
+	}
+	// t.ParentCircSupply (big.Int) (struct)
+
+	{
+
+		if err := t.ParentCircSupply.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.ParentCircSupply: %w", err)
 		}
 
 	}
