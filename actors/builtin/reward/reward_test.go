@@ -475,8 +475,8 @@ func (h *rewardHarness) awardBlockReward(
 	if !detail.knowledgeReward.IsZero() {
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, detail.knowledgeReward, &builtin.Discard{}, 0)
 	}
-	if !detail.bandwidthReward.IsZero() {
-		rt.ExpectSend(builtin.RetrievalFundActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, detail.bandwidthReward, &builtin.Discard{}, 0)
+	if !detail.retrievalReward.IsZero() {
+		rt.ExpectSend(builtin.RetrievalFundActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, detail.retrievalReward, &builtin.Discard{}, 0)
 	}
 
 	rt.Call(h.AwardBlockReward, &reward.AwardBlockRewardParams{
@@ -512,7 +512,7 @@ type rewardDetail struct {
 	voteReward      abi.TokenAmount
 	expertReward    abi.TokenAmount
 	knowledgeReward abi.TokenAmount
-	bandwidthReward abi.TokenAmount
+	retrievalReward abi.TokenAmount
 	powerReward     abi.TokenAmount
 	gasReward       abi.TokenAmount
 }
@@ -522,7 +522,7 @@ func newEmptyDetail() *rewardDetail {
 		voteReward:      big.Zero(),
 		expertReward:    big.Zero(),
 		knowledgeReward: big.Zero(),
-		bandwidthReward: big.Zero(),
+		retrievalReward: big.Zero(),
 		powerReward:     big.Zero(),
 		gasReward:       big.Zero(),
 	}
@@ -533,18 +533,18 @@ func (r *rewardDetail) Total() big.Int {
 		r.voteReward, big.Add(
 			r.expertReward, big.Add(
 				r.knowledgeReward, big.Add(
-					r.bandwidthReward, big.Add(r.powerReward, r.gasReward)))))
+					r.retrievalReward, big.Add(r.powerReward, r.gasReward)))))
 }
 
 func (r *rewardDetail) String() string {
 	return fmt.Sprintf("vote: %s, expert: %s, knowledge: %s, bandwidth: %s, power: %s, gas: %s, total: %s\n",
-		r.voteReward, r.expertReward, r.knowledgeReward, r.bandwidthReward, r.powerReward, r.gasReward, r.Total())
+		r.voteReward, r.expertReward, r.knowledgeReward, r.retrievalReward, r.powerReward, r.gasReward, r.Total())
 }
 
 func getMinerRewardDetail(block, retrievalPledged, circulating abi.TokenAmount, shareCount int64) *rewardDetail {
 
 	detail := &rewardDetail{
-		bandwidthReward: big.Zero(),
+		retrievalReward: big.Zero(),
 		gasReward:       big.Zero(),
 	}
 	detail.voteReward = big.Div(block, big.NewInt(100))                           // 1% to vote
@@ -557,8 +557,8 @@ func getMinerRewardDetail(block, retrievalPledged, circulating abi.TokenAmount, 
 	b := big.Mul(circulating, big.NewInt(75))
 	c := big.Mul(circulating, big.NewInt(500))
 	if !c.IsZero() {
-		detail.bandwidthReward = big.Div(big.Mul(big.Min(a, b), block), c) // min(pledge/circulating/5, 15%) to bandwidth
+		detail.retrievalReward = big.Div(big.Mul(big.Min(a, b), block), c) // min(pledge/circulating/5, 15%) to bandwidth
 	}
-	detail.knowledgeReward = big.Sub(kb, detail.bandwidthReward) // 15% - min(pledge/circulating/5, 15%) to knowledge
+	detail.knowledgeReward = big.Sub(kb, detail.retrievalReward) // 15% - min(pledge/circulating/5, 15%) to knowledge
 	return detail
 }

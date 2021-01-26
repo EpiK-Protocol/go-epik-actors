@@ -1,6 +1,8 @@
 package reward
 
 import (
+	"fmt"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -180,6 +182,9 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 
 	// update totals
 	rt.StateTransaction(&st, func() {
+		fmt.Printf("@%d reward-actor: pledge %s, circ %s, kn-before %s, kn-delta %s, rt-delta %s\n", rt.CurrEpoch(),
+			params.ParentRetrievalPledge, params.ParentCircSupply, st.TotalKnowledgeReward, knowledgeReward, retrievalReward)
+
 		st.TotalVoteReward = big.Add(st.TotalVoteReward, voteReward)
 		st.TotalExpertReward = big.Add(st.TotalExpertReward, expertReward)
 		st.TotalKnowledgeReward = big.Add(st.TotalKnowledgeReward, knowledgeReward)
