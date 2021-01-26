@@ -1,8 +1,6 @@
 package vote
 
 import (
-	"fmt"
-
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -285,7 +283,6 @@ func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		st.UnownedFunds = big.Add(st.UnownedFunds, rt.ValueReceived())
-		fmt.Printf("received vote rewards at %d: %s - %s\n", rt.CurrEpoch(), st.UnownedFunds, rt.ValueReceived())
 	})
 	return nil
 }
@@ -308,11 +305,8 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 			return
 		}
 
-		before := st.UnownedFunds
 		st.CumEarningsPerVote = big.Add(st.CumEarningsPerVote, big.Div(st.UnownedFunds, st.TotalVotes))
 		st.UnownedFunds = big.Mod(st.UnownedFunds, st.TotalVotes)
-
-		fmt.Printf("send to voters at %d: %s - %s\n", rt.CurrEpoch(), before, st.UnownedFunds)
 	})
 
 	if !toFallback.IsZero() {
