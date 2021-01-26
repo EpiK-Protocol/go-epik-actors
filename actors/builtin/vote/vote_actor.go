@@ -121,8 +121,14 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 		voter, found, err := getVoter(voters, rt.Caller())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
 		if !found {
-			voter, err = newEmptyVoter(store)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to new voter")
+			tally, err := adt.MakeEmptyMap(store).Root()
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to make tally for voter")
+			voter = &Voter{
+				SettleEpoch:              rt.CurrEpoch(),
+				SettleCumEarningsPerVote: st.CumEarningsPerVote,
+				Withdrawable:             abi.NewTokenAmount(0),
+				Tally:                    tally,
+			}
 		} else {
 			// settle
 			err = st.settle(store, voter, candidates, rt.CurrEpoch())
@@ -310,8 +316,6 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	})
 
 	if !toFallback.IsZero() {
-		fmt.Printf("send to fallback at %d: %s\n", rt.CurrEpoch(), toFallback)
-
 		code := rt.Send(st.FallbackReceiver, builtin.MethodSend, nil, toFallback, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds to fallback")
 	}

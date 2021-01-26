@@ -345,6 +345,7 @@ func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.
 		totalVotes = big.Sub(totalVotes, blockedVotes[sameEpoch[0].BlockEpoch])
 		Assert(totalVotes.GreaterThanEqual(big.Zero()))
 	}
+	// st.CumEarningsPerVote is the value in parent epoch if invoked by Vote/Rescind/Withdraw, otherwise that in 'cur'
 	deltaEarningsPerVote := big.Sub(st.CumEarningsPerVote, voter.SettleCumEarningsPerVote)
 	AssertMsg(deltaEarningsPerVote.GreaterThanEqual(big.Zero()), "negative delta earnigs")
 
@@ -446,19 +447,6 @@ func getCandidate(candidates *adt.Map, candAddr addr.Address) (*Candidate, bool,
 		return nil, false, nil
 	}
 	return &out, true, nil
-}
-
-func newEmptyVoter(s adt.Store) (*Voter, error) {
-	tally, err := adt.MakeEmptyMap(s).Root()
-	if err != nil {
-		return nil, err
-	}
-	return &Voter{
-		SettleEpoch:              abi.ChainEpoch(0),
-		SettleCumEarningsPerVote: abi.NewTokenAmount(0),
-		Withdrawable:             abi.NewTokenAmount(0),
-		Tally:                    tally,
-	}, nil
 }
 
 func setVoter(voters *adt.Map, voterAddr addr.Address, voter *Voter) error {
