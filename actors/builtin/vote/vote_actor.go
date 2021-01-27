@@ -222,9 +222,19 @@ func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount ab
 	builtin.RequireSuccess(rt, code, "failed to notify expert vote")
 }
 
-// Withdraws unlocked rescinding votes and rewards.
-func (a Actor) Withdraw(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+// Withdraws unlocked rescinding votes and rewards, returns actual sent amount
+func (a Actor) Withdraw(rt Runtime, to *addr.Address) *abi.TokenAmount {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+
+	recipient, ok := rt.ResolveAddress(*to)
+	builtin.RequireParam(rt, ok, "failed to resolve address %v", to)
+
+	codeID, ok := rt.GetActorCodeCID(recipient)
+	builtin.RequireParam(rt, ok, "no code for address %v", recipient)
+
+	if codeID.Equals(builtin.StorageMinerActorCodeID) {
+		recipient, _, _ = builtin.RequestMinerControlAddrs(rt, recipient)
+	}
 
 	total := abi.NewTokenAmount(0)
 	var st State
@@ -265,11 +275,11 @@ func (a Actor) Withdraw(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	Assert(total.LessThanEqual(rt.CurrentBalance()))
 
 	if total.GreaterThan(big.Zero()) {
-		code := rt.Send(rt.Caller(), builtin.MethodSend, nil, total, &builtin.Discard{})
+		code := rt.Send(recipient, builtin.MethodSend, nil, total, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds")
 	}
 
-	return nil
+	return &total
 }
 
 func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
