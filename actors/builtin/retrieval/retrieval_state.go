@@ -97,10 +97,16 @@ func (st *State) ApplyForWithdraw(rt Runtime, fromAddr addr.Address, amount abi.
 		return exitcode.ErrIllegalState, err
 	}
 	var out LockedState
-	_, err = lockedMap.Get(abi.AddrKey(fromAddr), &out)
+	found, err := lockedMap.Get(abi.AddrKey(fromAddr), &out)
 
 	if err != nil {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to get locked: %w", err)
+	}
+
+	if !found {
+		out = LockedState{
+			Amount: abi.NewTokenAmount(0),
+		}
 	}
 
 	escrowBalance, err := escrowTable.Get(fromAddr)
@@ -133,7 +139,13 @@ func (st *State) Withdraw(rt Runtime, fromAddr addr.Address, amount abi.TokenAmo
 		return exitcode.ErrIllegalState, err
 	}
 	var out LockedState
-	_, err = lockedMap.Get(abi.AddrKey(fromAddr), &out)
+	found, err := lockedMap.Get(abi.AddrKey(fromAddr), &out)
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	if !found {
+		return exitcode.ErrIllegalState, xerrors.Errorf("withdraw not applied")
+	}
 	if rt.CurrEpoch()-out.ApplyEpoch < RetrievalLockPeriod || big.Sub(out.Amount, amount).LessThan(big.Zero()) {
 		return exitcode.ErrForbidden, xerrors.Errorf("failed to withdraw at %d: %s", out.ApplyEpoch, amount)
 	}

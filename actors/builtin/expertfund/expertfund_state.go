@@ -178,7 +178,9 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 	if !found {
 		emptyVestingFunds := ConstructVestingFunds()
 		emptyVestingFundsCid := rt.StorePut(emptyVestingFunds)
-		out.VestingFunds = emptyVestingFundsCid
+		out = ExpertInfo{
+			VestingFunds: emptyVestingFundsCid,
+		}
 	}
 	if out.DataSize > 0 {
 		pending := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
@@ -222,10 +224,14 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 		return err
 	}
 	var out ExpertInfo
-	_, err = experts.Get(abi.AddrKey(fromAddr), &out)
+	found, err := experts.Get(abi.AddrKey(fromAddr), &out)
 	if err != nil {
 		return err
 	}
+	if !found {
+		return xerrors.Errorf("expert not found")
+	}
+
 	if out.DataSize > 0 {
 		pending := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
 		pending = big.Div(pending, AccumulatedMultiplier)
@@ -265,9 +271,13 @@ func (st *State) Reset(rt Runtime, expert addr.Address) error {
 		return err
 	}
 	var out ExpertInfo
-	_, err = experts.Get(abi.AddrKey(expert), &out)
+	found, err := experts.Get(abi.AddrKey(expert), &out)
 	if err != nil {
 		return err
+	}
+
+	if !found {
+		return xerrors.Errorf("expert not found")
 	}
 
 	st.TotalExpertDataSize = st.TotalExpertDataSize - out.DataSize
