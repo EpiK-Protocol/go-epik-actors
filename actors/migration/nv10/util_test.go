@@ -1,6 +1,6 @@
 package nv10_test
 
-import (
+/*import (
 	"testing"
 
 	"github.com/filecoin-project/specs-actors/v3/actors/migration/nv10"
