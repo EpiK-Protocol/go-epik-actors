@@ -1821,10 +1821,16 @@ func (t *DataIndex) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.RootCID (cid.Cid) (struct)
+	// t.RootCID (string) (string)
+	if len(t.RootCID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.RootCID was too long")
+	}
 
-	if err := cbg.WriteCidBuf(scratch, w, t.RootCID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.RootCID: %w", err)
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.RootCID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.RootCID)); err != nil {
+		return err
 	}
 
 	// t.PieceCID (cid.Cid) (struct)
@@ -1854,17 +1860,15 @@ func (t *DataIndex) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.RootCID (cid.Cid) (struct)
+	// t.RootCID (string) (string)
 
 	{
-
-		c, err := cbg.ReadCid(br)
+		sval, err := cbg.ReadStringBuf(br, scratch)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.RootCID: %w", err)
+			return err
 		}
 
-		t.RootCID = c
-
+		t.RootCID = string(sval)
 	}
 	// t.PieceCID (cid.Cid) (struct)
 

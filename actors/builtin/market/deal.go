@@ -84,6 +84,6 @@ type ProposalDataIndex struct {
 }
 
 type DataIndex struct {
-	RootCID  cid.Cid `checked:"true"`
+	RootCID  string
 	PieceCID cid.Cid `checked:"true"`
 }

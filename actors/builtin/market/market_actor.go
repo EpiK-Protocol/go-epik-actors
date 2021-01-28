@@ -243,7 +243,7 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			err = msm.pendingDeals.Put(abi.CidKey(pcid), &ProposalDataIndex{
 				Provider: provider,
 				Index: DataIndex{
-					RootCID:  params.DataRef.RootCID,
+					RootCID:  params.DataRef.RootCID.String(),
 					PieceCID: deal.Proposal.PieceCID,
 				},
 			})

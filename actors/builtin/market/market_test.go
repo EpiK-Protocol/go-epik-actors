@@ -3589,7 +3589,7 @@ func (h *marketActorTestHarness) checkState(rt *mock.Runtime) *market.StateSumma
 	var st market.State
 	rt.GetState(&st)
 	sum, msgs, err := market.CheckStateInvariants(&st, rt.AdtStore(), rt.Balance(), rt.Epoch())
-	assert.NoError(h.t, err)
+	assert.NoError(h.t, err, msgs)
 	assert.True(h.t, msgs.IsEmpty(), strings.Join(msgs.Messages(), "\n"))
 	return sum
 }
