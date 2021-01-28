@@ -127,6 +127,10 @@ func migrateHAMTAMTRaw(ctx context.Context, store cbor.IpldStore, root cid.Cid, 
 	}); err != nil {
 		return cid.Undef, err
 	}
+
+	if err := outRootNodeOuter.Flush(ctx); err != nil {
+		return cid.Undef, err
+	}
 	return store.Put(ctx, outRootNodeOuter)
 }
 
