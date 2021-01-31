@@ -119,6 +119,9 @@ func (st *State) MinerNominalPowerMeetsConsensusMinimum(s adt.Store, miner addr.
 	}
 
 	minerNominalPower := claim.RawBytePower
+	if claim.TotalMiningPledge.LessThan(ConsensusMinerMinPledge) {
+		minerNominalPower = big.Zero()
+	}
 	minerMinPower, err := builtin.ConsensusMinerMinPower(claim.SealProofType)
 	if err != nil {
 		return false, errors.Wrap(err, "could not get miner min power from proof type")
