@@ -167,7 +167,7 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 	var st State
 	rt.StateTransaction(&st, func() {
 		statistics := &RetrievalState{
-			PieceID:   params.Provider.String(),
+			PieceID:   params.PieceID.String(),
 			PieceSize: abi.PaddedPieceSize(params.Size),
 			Client:    params.Client,
 			Provider:  params.Provider,
@@ -192,7 +192,7 @@ func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyVa
 	var st State
 	rt.StateTransaction(&st, func() {
 		statistics := &RetrievalState{
-			PieceID:   params.Provider.String(),
+			PieceID:   params.PieceID.String(),
 			PieceSize: abi.PaddedPieceSize(params.Size),
 			Client:    params.Client,
 			Provider:  params.Provider,
