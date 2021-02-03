@@ -216,7 +216,8 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 		return exitcode.ErrIllegalState, err
 	}
 
-	required := big.Mul(big.NewInt(int64((totalSize+state.PieceSize)/RetrievalSizePerEPK)), builtin.TokenPrecision)
+	required := big.Mul(big.NewInt(int64(totalSize+state.PieceSize)), builtin.TokenPrecision)
+	required = big.Div(required, big.NewInt(RetrievalSizePerEPK))
 	if big.Sub(balance, required).LessThan(big.Zero()) {
 		return exitcode.ErrInsufficientFunds, xerrors.Errorf("not enough balance to statistics for addr %s: escrow balance %s < required %s", fromAddr, balance, required)
 	}
@@ -296,7 +297,8 @@ func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, fromAddr addr.
 	if err != nil {
 		return abi.NewTokenAmount(0), err
 	}
-	expend := big.Mul(big.NewInt(int64(totalSize/RetrievalSizePerEPK)), builtin.TokenPrecision)
+	expend := big.Mul(big.NewInt(int64(totalSize)), builtin.TokenPrecision)
+	expend = big.Div(expend, big.NewInt(RetrievalSizePerEPK))
 	return expend, nil
 }
 
