@@ -462,7 +462,7 @@ func (t *ChangeAddressParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufExpertDataParams = []byte{130}
+var lengthBufExpertDataParams = []byte{131}
 
 func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -474,6 +474,12 @@ func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
+
+	// t.RootID (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.RootID); err != nil {
+		return xerrors.Errorf("failed to write cid field t.RootID: %w", err)
+	}
 
 	// t.PieceID (cid.Cid) (struct)
 
@@ -504,10 +510,22 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
+	// t.RootID (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.RootID: %w", err)
+		}
+
+		t.RootID = c
+
+	}
 	// t.PieceID (cid.Cid) (struct)
 
 	{
@@ -537,7 +555,7 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufDataOnChainInfo = []byte{131}
+var lengthBufDataOnChainInfo = []byte{132}
 
 func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -549,6 +567,18 @@ func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 	}
 
 	scratch := make([]byte, 9)
+
+	// t.RootID (string) (string)
+	if len(t.RootID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.RootID was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.RootID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.RootID)); err != nil {
+		return err
+	}
 
 	// t.PieceID (string) (string)
 	if len(t.PieceID) > cbg.MaxLength {
@@ -591,10 +621,20 @@ func (t *DataOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 3 {
+	if extra != 4 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
+	// t.RootID (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.RootID = string(sval)
+	}
 	// t.PieceID (string) (string)
 
 	{

@@ -133,6 +133,7 @@ func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *abi.Empty
 }
 
 type ExpertDataParams struct {
+	RootID    cid.Cid `checked:"true"`
 	PieceID   cid.Cid `checked:"true"`
 	PieceSize abi.PaddedPieceSize
 }
@@ -154,6 +155,7 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 		}
 
 		newDataInfo := &DataOnChainInfo{
+			RootID:    params.RootID.String(),
 			PieceID:   params.PieceID.String(),
 			PieceSize: params.PieceSize,
 		}

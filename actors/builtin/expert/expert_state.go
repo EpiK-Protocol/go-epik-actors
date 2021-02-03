@@ -55,6 +55,7 @@ type ExpertInfo struct {
 }
 
 type DataOnChainInfo struct {
+	RootID     string
 	PieceID    string
 	PieceSize  abi.PaddedPieceSize
 	Redundancy uint64
@@ -162,7 +163,6 @@ func (st *State) ForEachData(store adt.Store, f func(*DataOnChainInfo)) error {
 		f(&info)
 		return nil
 	})
-	return nil
 }
 
 func (st *State) GetOwnerChange(store adt.Store) (*PendingOwnerChange, error) {

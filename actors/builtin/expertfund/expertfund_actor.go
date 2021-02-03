@@ -28,6 +28,7 @@ func (a Actor) Exports() []interface{} {
 		6:                         a.FoundationChange,
 		7:                         a.BatchCheckData,
 		8:                         a.BatchStoreData,
+		9:                         a.GetData,
 	}
 }
 
@@ -117,7 +118,7 @@ func (a Actor) NotifyImport(rt Runtime, params *NotifyImportParams) *abi.EmptyVa
 		found, err := st.HasDataID(adt.AsStore(rt), params.PieceID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
 		if found {
-			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "duplicate import by other expert")
+			rt.Abortf(exitcode.ErrForbidden, "duplicate import by other expert")
 		}
 		st.PutData(adt.AsStore(rt), params.PieceID.String(), params.Expert)
 	})
@@ -167,7 +168,7 @@ func (a Actor) BatchCheckData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 		found, err := st.HasDataID(store, checked.CID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
 		if !found {
-			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to find data in expertfund record")
+			rt.Abortf(exitcode.ErrForbidden, "failed to find data in expertfund record")
 		}
 	}
 	return nil
@@ -185,7 +186,7 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 		expert, found, err := rst.GetData(store, checked.CID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
 		if !found {
-			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to find data in expertfund record")
+			rt.Abortf(exitcode.ErrForbidden, "failed to find data in expertfund record")
 		}
 		experts = append(experts, expert)
 	}
@@ -208,4 +209,37 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	})
 
 	return nil
+}
+
+type GetDataParams struct {
+	PieceID cid.Cid `checked:"true"`
+}
+
+type DataInfo struct {
+	Expert address.Address
+	Data   *expert.DataOnChainInfo
+}
+
+// GetData returns store data info
+func (a Actor) GetData(rt Runtime, params *GetDataParams) *DataInfo {
+	rt.ValidateImmediateCallerAcceptAny()
+
+	var st State
+	rt.StateReadonly(&st)
+	store := adt.AsStore(rt)
+
+	expertAddr, found, err := st.GetData(store, params.PieceID.String())
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
+	if !found {
+		rt.Abortf(exitcode.ErrForbidden, "data not found.")
+	}
+
+	var out expert.DataOnChainInfo
+	code := rt.Send(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{PieceID: params.PieceID}, abi.NewTokenAmount(0), &out)
+	builtin.RequireSuccess(rt, code, "failed to get data in expert record")
+
+	return &DataInfo{
+		Expert: expertAddr,
+		Data:   &out,
+	}
 }

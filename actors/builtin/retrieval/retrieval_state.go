@@ -230,20 +230,20 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 }
 
 // ConfirmData record the retrieval data
-func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr addr.Address, state *RetrievalState) (abi.TokenAmount, error) {
+func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr addr.Address, pieceID string) (abi.TokenAmount, error) {
 	mmap, err := adt.AsMultimap(store, st.RetrievalBatch)
 	if err != nil {
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
 
 	index := int64(-1)
-	var totalSize abi.PaddedPieceSize
+	var outs []RetrievalState
 	var out RetrievalState
 	err = mmap.ForEach(abi.AddrKey(fromAddr), &out, func(i int64) error {
-		if out.PieceID == state.PieceID {
+		if out.PieceID == pieceID {
 			index = i
 		}
-		totalSize += state.PieceSize
+		outs = append(outs, out)
 		return nil
 	})
 	if err != nil {
@@ -253,7 +253,7 @@ func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr
 		return abi.NewTokenAmount(0), xerrors.Errorf("confirm data not found for addr %s", fromAddr)
 	}
 
-	amount := big.Mul(big.NewInt(int64(state.PieceSize)), RetrievalRewardPerByte)
+	amount := big.Mul(big.NewInt(int64(outs[index].PieceSize)), RetrievalRewardPerByte)
 	if st.PendingReward.GreaterThanEqual(amount) {
 		st.PendingReward = big.Sub(st.PendingReward, amount)
 	} else {

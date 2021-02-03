@@ -9,6 +9,7 @@ import (
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -164,11 +165,17 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerIs(approvedCallers...)
 
+	var out expertfund.DataInfo
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.GetData, &expertfund.GetDataParams{
+		PieceID: params.PieceID,
+	}, abi.NewTokenAmount(0), &out)
+	builtin.RequireSuccess(rt, code, "failed to load expert data.")
+
 	var st State
 	rt.StateTransaction(&st, func() {
 		statistics := &RetrievalState{
 			PieceID:   params.PieceID.String(),
-			PieceSize: abi.PaddedPieceSize(params.Size),
+			PieceSize: out.Data.PieceSize,
 			Client:    params.Client,
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
@@ -191,14 +198,7 @@ func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyVa
 	var reward abi.TokenAmount
 	var st State
 	rt.StateTransaction(&st, func() {
-		statistics := &RetrievalState{
-			PieceID:   params.PieceID.String(),
-			PieceSize: abi.PaddedPieceSize(params.Size),
-			Client:    params.Client,
-			Provider:  params.Provider,
-			Epoch:     rt.CurrEpoch(),
-		}
-		amount, err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, statistics)
+		amount, err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, params.PieceID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to confirm data")
 		reward = amount
 	})

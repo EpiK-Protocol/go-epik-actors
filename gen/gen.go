@@ -103,6 +103,8 @@ func main() {
 		expertfund.NotifyUpdateParams{},
 		expertfund.VestingFunds{},
 		expertfund.VestingFund{},
+		expertfund.GetDataParams{},
+		expertfund.DataInfo{},
 		// other types
 	); err != nil {
 		panic(err)
