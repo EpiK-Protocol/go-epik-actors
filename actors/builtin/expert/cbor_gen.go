@@ -475,10 +475,16 @@ func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.RootID (cid.Cid) (struct)
+	// t.RootID (string) (string)
+	if len(t.RootID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.RootID was too long")
+	}
 
-	if err := cbg.WriteCidBuf(scratch, w, t.RootID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.RootID: %w", err)
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.RootID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.RootID)); err != nil {
+		return err
 	}
 
 	// t.PieceID (cid.Cid) (struct)
@@ -514,17 +520,15 @@ func (t *ExpertDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.RootID (cid.Cid) (struct)
+	// t.RootID (string) (string)
 
 	{
-
-		c, err := cbg.ReadCid(br)
+		sval, err := cbg.ReadStringBuf(br, scratch)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.RootID: %w", err)
+			return err
 		}
 
-		t.RootID = c
-
+		t.RootID = string(sval)
 	}
 	// t.PieceID (cid.Cid) (struct)
 
