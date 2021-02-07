@@ -78,7 +78,7 @@ func loadPartitionsSectorsMax(partitionSectorCount uint64) uint64 {
 
 // Epochs after which chain state is final with overwhelming probability (hence the likelihood of two fork of this size is negligible)
 // This is a conservative value that is chosen via simulations of all known attacks.
-const ChainFinality = abi.ChainEpoch(900) // PARAM_SPEC
+const ChainFinality = abi.ChainEpoch(10) // PARAM_SPEC
 
 // Prefix for sealed sector CIDs (CommR).
 var SealedCIDPrefix = cid.Prefix{
