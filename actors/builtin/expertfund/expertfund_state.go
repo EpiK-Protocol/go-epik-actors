@@ -157,6 +157,7 @@ func (st *State) AddLockedFunds(rt Runtime, expert *ExpertInfo, vestingSum abi.T
 
 // Deposit deposit expert data to fund.
 func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPieceSize) error {
+	st.TotalExpertDataSize += size
 	if err := st.UpdatePool(rt); err != nil {
 		return err
 	}
@@ -192,7 +193,6 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 		}
 		out.UnlockedFunds = big.Add(out.UnlockedFunds, unlocked)
 	}
-	st.TotalExpertDataSize = st.TotalExpertDataSize + size
 
 	out.DataSize += size
 	debt := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
@@ -204,7 +204,6 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 	if st.Experts, err = experts.Root(); err != nil {
 		return err
 	}
-	st.TotalExpertDataSize += size
 	return nil
 }
 
@@ -262,10 +261,6 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 
 // UpdateExpert update expert.
 func (st *State) Reset(rt Runtime, expert addr.Address) error {
-	if err := st.UpdatePool(rt); err != nil {
-		return err
-	}
-
 	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts)
 	if err != nil {
 		return err
@@ -281,6 +276,10 @@ func (st *State) Reset(rt Runtime, expert addr.Address) error {
 	}
 
 	st.TotalExpertDataSize = st.TotalExpertDataSize - out.DataSize
+
+	if err := st.UpdatePool(rt); err != nil {
+		return err
+	}
 
 	out.DataSize = 0
 	out.RewardDebt = abi.NewTokenAmount(0)
@@ -325,13 +324,21 @@ func (st *State) UpdatePool(rt Runtime) error {
 		return err
 	}
 
-	pool.LastRewardBlock = rt.CurrEpoch()
+	if st.TotalExpertDataSize == 0 {
+		pool.LastRewardBlock = rt.CurrEpoch()
+		if err = st.SavePoolInfo(rt, pool); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	reward := big.Sub(rt.CurrentBalance(), st.LastFundBalance)
 	if reward.LessThan(big.Zero()) {
 		return xerrors.Errorf("failed to settlement with balance error.")
 	}
 	accPerShare := big.Div(big.Mul(reward, AccumulatedMultiplier), abi.NewTokenAmount(int64(st.TotalExpertDataSize)))
 	pool.AccPerShare = big.Add(pool.AccPerShare, accPerShare)
+	pool.LastRewardBlock = rt.CurrEpoch()
 	if err = st.SavePoolInfo(rt, pool); err != nil {
 		return err
 	}
