@@ -202,7 +202,7 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	var st State
 	rt.StateTransaction(&st, func() {
 		for i, data := range datas {
-			if data.Redundancy >= st.DataStoreThreshold {
+			if data.Redundancy == st.DataStoreThreshold {
 				st.Deposit(rt, experts[i], data.PieceSize)
 			}
 		}

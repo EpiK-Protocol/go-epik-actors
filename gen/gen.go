@@ -101,8 +101,6 @@ func main() {
 		expertfund.ClaimFundParams{},
 		expertfund.NotifyImportParams{},
 		expertfund.NotifyUpdateParams{},
-		expertfund.VestingFunds{},
-		expertfund.VestingFund{},
 		expertfund.GetDataParams{},
 		expertfund.DataInfo{},
 		// other types
