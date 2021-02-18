@@ -1,6 +1,8 @@
 package expertfund
 
 import (
+	"strconv"
+
 	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -118,56 +120,6 @@ func (st *State) GetData(store adt.Store, pieceID string) (addr.Address, bool, e
 	return expert, found, nil
 }
 
-// LoadVestingFunds loads the vesting funds table from the store
-func (st *State) LoadVestingFunds(store adt.Store, expert *ExpertInfo) (*VestingFunds, error) {
-	var funds VestingFunds
-	if err := store.Get(store.Context(), expert.VestingFunds, &funds); err != nil {
-		return nil, xerrors.Errorf("failed to load vesting funds (%s): %w", expert.VestingFunds, err)
-	}
-
-	return &funds, nil
-}
-
-// SaveVestingFunds saves the vesting table to the store
-func (st *State) SaveVestingFunds(store adt.Store, expert *ExpertInfo, funds *VestingFunds) error {
-	c, err := store.Put(store.Context(), funds)
-	if err != nil {
-		return err
-	}
-	expert.VestingFunds = c
-	return nil
-}
-
-// AddLockedFunds first vests and unlocks the vested funds AND then locks the given funds in the vesting table.
-func (st *State) AddLockedFunds(rt Runtime, expert *ExpertInfo, vestingSum abi.TokenAmount) (vested abi.TokenAmount, err error) {
-	if vestingSum.LessThan(big.Zero()) {
-		return big.Zero(), xerrors.Errorf("negative vesting sum %s", vestingSum)
-	}
-
-	vestingFunds, err := st.LoadVestingFunds(adt.AsStore(rt), expert)
-	if err != nil {
-		return big.Zero(), xerrors.Errorf("failed to load vesting funds: %w", err)
-	}
-
-	// unlock vested funds first
-	amountUnlocked := vestingFunds.unlockVestedFunds(rt.CurrEpoch())
-	expert.LockedFunds = big.Sub(expert.LockedFunds, amountUnlocked)
-	if expert.LockedFunds.LessThan(big.Zero()) {
-		return big.Zero(), xerrors.Errorf("negative locked funds %v after subtracting %v", expert.LockedFunds, amountUnlocked)
-	}
-
-	// add locked funds now
-	vestingFunds.addLockedFunds(rt.CurrEpoch(), vestingSum, rt.CurrEpoch(), &RewardVestingSpec)
-	expert.LockedFunds = big.Add(expert.LockedFunds, vestingSum)
-
-	// save the updated vesting table state
-	if err := st.SaveVestingFunds(adt.AsStore(rt), expert, vestingFunds); err != nil {
-		return big.Zero(), xerrors.Errorf("failed to save vesting funds: %w", err)
-	}
-
-	return amountUnlocked, nil
-}
-
 // Deposit deposit expert data to fund.
 func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPieceSize) error {
 	st.TotalExpertDataSize += size
@@ -190,17 +142,11 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 		return err
 	}
 	if !found {
-		return xerrors.Errorf("expert not found")
+		return xerrors.Errorf("expert not found: %s", fromAddr)
 	}
-	if out.DataSize > 0 {
-		pending := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
-		pending = big.Div(pending, AccumulatedMultiplier)
-		pending = big.Sub(pending, out.RewardDebt)
-		unlocked, err := st.AddLockedFunds(rt, &out, pending)
-		if err != nil {
-			return err
-		}
-		out.UnlockedFunds = big.Add(out.UnlockedFunds, unlocked)
+
+	if err := st.updateVestingFunds(rt, pool, &out); err != nil {
+		return err
 	}
 
 	out.DataSize += size
@@ -236,20 +182,15 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 	if err != nil {
 		return big.Zero(), err
 	}
+
 	if !found {
-		return big.Zero(), xerrors.Errorf("expert not found")
+		return big.Zero(), xerrors.Errorf("expert not found: %s", fromAddr)
 	}
 
-	if out.DataSize > 0 {
-		pending := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
-		pending = big.Div(pending, AccumulatedMultiplier)
-		pending = big.Sub(pending, out.RewardDebt)
-		unlocked, err := st.AddLockedFunds(rt, &out, pending)
-		if err != nil {
-			return big.Zero(), err
-		}
-		out.UnlockedFunds = big.Add(out.UnlockedFunds, unlocked)
+	if err := st.updateVestingFunds(rt, pool, &out); err != nil {
+		return big.Zero(), err
 	}
+
 	debt := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
 	out.RewardDebt = big.Div(debt, AccumulatedMultiplier)
 
@@ -263,11 +204,17 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 	if st.Experts, err = experts.Root(); err != nil {
 		return big.Zero(), err
 	}
+	st.LastFundBalance = big.Sub(st.LastFundBalance, actual)
 	return actual, nil
 }
 
 // UpdateExpert update expert.
 func (st *State) Reset(rt Runtime, expert addr.Address) error {
+	pool, err := st.GetPoolInfo(rt)
+	if err != nil {
+		return err
+	}
+
 	k := abi.AddrKey(expert)
 	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -280,7 +227,7 @@ func (st *State) Reset(rt Runtime, expert addr.Address) error {
 	}
 
 	if !found {
-		return xerrors.Errorf("expert not found")
+		return xerrors.Errorf("expert not found: %s", expert)
 	}
 
 	st.TotalExpertDataSize = st.TotalExpertDataSize - out.DataSize
@@ -291,7 +238,15 @@ func (st *State) Reset(rt Runtime, expert addr.Address) error {
 
 	out.DataSize = 0
 	out.RewardDebt = abi.NewTokenAmount(0)
+	if err := st.updateVestingFunds(rt, pool, &out); err != nil {
+		return err
+	}
 	out.LockedFunds = abi.NewTokenAmount(0)
+	emptyMapCid, err := adt.StoreEmptyMap(adt.AsStore(rt), builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return err
+	}
+	out.VestingFunds = emptyMapCid
 
 	err = experts.Put(k, &out)
 	if err != nil {
@@ -299,6 +254,51 @@ func (st *State) Reset(rt Runtime, expert addr.Address) error {
 	}
 	if st.Experts, err = experts.Root(); err != nil {
 		return err
+	}
+	return nil
+}
+
+// updateVestingFunds update vest
+func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo) error {
+	if out.DataSize > 0 {
+		pending := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
+		pending = big.Div(pending, AccumulatedMultiplier)
+		pending = big.Sub(pending, out.RewardDebt)
+		out.LockedFunds = big.Add(out.LockedFunds, pending)
+
+		vestingFund, err := adt.AsMap(adt.AsStore(rt), out.VestingFunds, builtin.DefaultHamtBitwidth)
+		if err != nil {
+			return err
+		}
+		if err := vestingFund.Put(abi.IntKey(int64(rt.CurrEpoch())), &pending); err != nil {
+			return err
+		}
+
+		keys, err := vestingFund.CollectKeys()
+		if err != nil {
+			return err
+		}
+		unlocked := abi.NewTokenAmount(0)
+		for _, key := range keys {
+			epoch, err := strconv.ParseInt(key, 10, 64)
+			if err != nil {
+				return err
+			}
+
+			var amount abi.TokenAmount
+			if _, err := vestingFund.Get(abi.IntKey(epoch), &amount); err != nil {
+				return err
+			}
+			if epoch+int64(RewardVestingSpec.VestPeriod) < int64(rt.CurrEpoch()) {
+				unlocked = big.Add(unlocked, amount)
+				if err := vestingFund.Delete(abi.IntKey(epoch)); err != nil {
+					return err
+				}
+			}
+		}
+
+		out.LockedFunds = big.Sub(out.LockedFunds, unlocked)
+		out.UnlockedFunds = big.Add(out.UnlockedFunds, unlocked)
 	}
 	return nil
 }

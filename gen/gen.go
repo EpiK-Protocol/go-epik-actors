@@ -95,8 +95,6 @@ func main() {
 		// method params
 		expertfund.ExpertInfo{},
 		expertfund.ClaimFundParams{},
-		expertfund.VestingFunds{},
-		expertfund.VestingFund{},
 		expertfund.GetDataParams{},
 		expertfund.DataInfo{},
 		expertfund.ChangeThresholdParams{},

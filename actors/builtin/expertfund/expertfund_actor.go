@@ -198,7 +198,7 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	var st State
 	rt.StateTransaction(&st, func() {
 		for i, data := range datas {
-			if data.Redundancy >= st.DataStoreThreshold {
+			if data.Redundancy == st.DataStoreThreshold {
 				st.Deposit(rt, experts[i], data.PieceSize)
 			}
 		}
@@ -286,11 +286,13 @@ func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyFo
 	builtin.RequireSuccess(rt, code, "failed to init new expert actor")
 
 	rt.StateTransaction(&st, func() {
+		emptyMapCid, err := adt.StoreEmptyMap(adt.AsStore(rt), builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty vestingFunds")
 		ei := ExpertInfo{
 			RewardDebt:    abi.NewTokenAmount(0),
 			LockedFunds:   abi.NewTokenAmount(0),
 			UnlockedFunds: abi.NewTokenAmount(0),
-			VestingFunds:  rt.StorePut(ConstructVestingFunds()),
+			VestingFunds:  emptyMapCid,
 		}
 		err = st.setExpert(adt.AsStore(rt), addresses.IDAddress, &ei)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set new expert: %v", err)
