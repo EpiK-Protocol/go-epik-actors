@@ -788,6 +788,67 @@ func TestCommitments(t *testing.T) {
 		actor.checkState(rt)
 	})
 
+	for _, test := range []struct {
+		name               string
+		version            network.Version
+		vestingPledgeDelta abi.TokenAmount
+		sealProofType      abi.RegisteredSealProof
+	}{{
+		name:               "verify proof does not vest at version 8",
+		version:            network.Version8,
+		vestingPledgeDelta: abi.NewTokenAmount(0),
+		sealProofType:      abi.RegisteredSealProof_StackedDrg8MiBV1_1,
+	}} {
+		t.Run(test.name, func(t *testing.T) {
+			actor := newHarness(t, periodOffset)
+			actor.setProofType(test.sealProofType)
+			rt := builderForHarness(actor).
+				WithNetworkVersion(test.version).
+				WithBalance(bigBalance, big.Zero()).
+				Build(t)
+			precommitEpoch := periodOffset + 1
+			rt.SetEpoch(precommitEpoch)
+			actor.constructAndVerify(rt)
+			// deadline := actor.deadline(rt)
+
+			// Make a good commitment for the proof to target.
+			sectorNo := abi.SectorNumber(100)
+			params := actor.makePreCommit(sectorNo, precommitEpoch-1 /* deadline.PeriodEnd()+defaultSectorExpiration*miner.WPoStProvingPeriod, */, []abi.DealID{1})
+			precommit := actor.preCommitSector(rt, params, preCommitConf{
+				verifiedDealInfos: []market.SectorDealInfos{
+					{
+						PieceCIDs:  []cid.Cid{tutil.MakeCID("rand", &market.PieceCIDPrefix)},
+						PieceSizes: []abi.PaddedPieceSize{abi.PaddedPieceSize(1<<10 + 1)},
+					},
+				},
+			})
+
+			// add 1000 tokens that vest immediately
+			st := getState(rt)
+			_, err := st.AddLockedFunds(rt.AdtStore(), rt.Epoch(), abi.NewTokenAmount(1000), &miner.VestSpec{
+				InitialDelay: 0,
+				VestPeriod:   1,
+				StepDuration: 1,
+				Quantization: 1,
+			})
+			require.NoError(t, err)
+			rt.ReplaceState(st)
+
+			// Set the right epoch for all following tests
+			rt.SetEpoch(precommitEpoch + miner.PreCommitChallengeDelay + 1)
+			rt.SetBalance(big.Mul(big.NewInt(1000), big.NewInt(1e18)))
+
+			// Too big at version 4
+			proveCommit := makeProveCommit(sectorNo)
+			proveCommit.Proof = make([]byte, 192)
+			actor.proveCommitSectorAndConfirm(rt, precommit, proveCommit, proveCommitConf{
+				// vestingPledgeDelta: &test.vestingPledgeDelta,
+				activateDealWin: map[abi.DealID]bool{abi.DealID(1): true},
+			})
+		})
+
+	}
+
 	/* t.Run("sector with non-positive lifetime is skipped in confirmation", func(t *testing.T) {
 		actor := newHarness(t, periodOffset)
 		rt := builderForHarness(actor).
@@ -6513,7 +6574,7 @@ func makeDeadlineCronEventParams(t testing.TB, epoch abi.ChainEpoch) *power.Enro
 func makeProveCommit(sectorNo abi.SectorNumber) *miner.ProveCommitSectorParams {
 	return &miner.ProveCommitSectorParams{
 		SectorNumber: sectorNo,
-		Proof:        []byte("proof"),
+		Proof:        make([]byte, 192),
 	}
 }
 
