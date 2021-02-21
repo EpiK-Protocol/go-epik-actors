@@ -44,3 +44,4 @@ func (m multisigMigrator) migrateState(ctx context.Context, store cbor.IpldStore
 func (m multisigMigrator) migratedCodeCID() cid.Cid {
 	return builtin3.MultisigActorCodeID
 }
+*/

@@ -43,3 +43,4 @@ func (m paychMigrator) migrateState(ctx context.Context, store cbor.IpldStore, i
 func (m paychMigrator) migratedCodeCID() cid.Cid {
 	return builtin3.PaymentChannelActorCodeID
 }
+*/

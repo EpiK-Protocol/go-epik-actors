@@ -45,3 +45,4 @@ func (m verifregMigrator) migrateState(ctx context.Context, store cbor.IpldStore
 func (m verifregMigrator) migratedCodeCID() cid.Cid {
 	return builtin3.VerifiedRegistryActorCodeID
 }
+*/

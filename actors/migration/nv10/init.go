@@ -40,3 +40,4 @@ func (m initMigrator) migrateState(ctx context.Context, store cbor.IpldStore, in
 func (m initMigrator) migratedCodeCID() cid.Cid {
 	return builtin3.InitActorCodeID
 }
+*/

@@ -1,7 +1,13 @@
 package nv10
 
-/*
 import (
+	"sync"
+
+	"github.com/ipfs/go-cid"
+	"golang.org/x/xerrors"
+)
+
+/* import (
 	"bytes"
 	"context"
 	"sync"
@@ -132,7 +138,7 @@ func migrateHAMTAMTRaw(ctx context.Context, store cbor.IpldStore, root cid.Cid, 
 		return cid.Undef, err
 	}
 	return store.Put(ctx, outRootNodeOuter)
-}
+} */
 
 type MemMigrationCache struct {
 	MigrationMap sync.Map
