@@ -355,9 +355,7 @@ func (rt *Runtime) Send(toAddr addr.Address, methodNum abi.MethodNum, params cbo
 	// pop the expectedMessage from the queue and modify the mockrt balance to reflect the send.
 	defer func() {
 		rt.expectSends = rt.expectSends[1:]
-		if exp.exitCode == exitcode.Ok {
-			rt.balance = big.Sub(rt.balance, value)
-		}
+		rt.balance = big.Sub(rt.balance, value)
 	}()
 
 	// populate the output argument
@@ -1001,6 +999,34 @@ func (rt *Runtime) ExpectAbortContainsMessage(expected exitcode.ExitCode, substr
 			if !strings.Contains(a.msg, substr) {
 				rt.failTest("abort expected message\n'%s'\nto contain\n'%s'\n", a.msg, substr)
 			}
+		}
+		// Roll back state change.
+		rt.state = prevState
+	}()
+	f()
+}
+
+func (rt *Runtime) ExpectAssertionFailure(expected string, f func()) {
+	rt.t.Helper()
+	prevState := rt.state
+
+	defer func() {
+		r := recover()
+		if r == nil {
+			rt.failTest("expected panic with message %v but call succeeded", expected)
+			return
+		}
+		a, ok := r.(abort)
+		if ok {
+			rt.failTest("expected panic with message %v but got abort %v", expected, a)
+			return
+		}
+		p, ok := r.(string)
+		if !ok {
+			panic(r)
+		}
+		if p != expected {
+			rt.failTest("expected panic with message \"%v\" but got message \"%v\"", expected, p)
 		}
 		// Roll back state change.
 		rt.state = prevState
