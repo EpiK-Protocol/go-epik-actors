@@ -22,6 +22,8 @@ import (
 // This value has been empirically chosen, but the optimal value for maps with different mutation profiles may differ.
 const DefaultHamtBitwidth = 5
 
+const DefaultAmtBitwidth = 5 // PARAM_TODO
+
 type BigFrac struct {
 	Numerator   big.Int
 	Denominator big.Int
