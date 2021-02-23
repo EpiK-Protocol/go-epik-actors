@@ -210,10 +210,12 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			withDealProposals(WritePermission).withDealsByEpoch(WritePermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
-		pendingPieces := make(map[cid.Cid]struct{})
+		providerPendings := make(map[cid.Cid]struct{})
 		var dataIndex ProposalDataIndex
 		err = msm.pendingDeals.ForEach(&dataIndex, func(k string) error {
-			pendingPieces[dataIndex.Index.PieceCID] = struct{}{}
+			if dataIndex.Provider == provider {
+				providerPendings[dataIndex.Index.PieceCID] = struct{}{}
+			}
 			return nil
 		})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load pending data index")
@@ -222,10 +224,10 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 		for di, deal := range params.Deals {
 			validateDeal(rt, deal /* networkRawPower, networkQAPower , baselinePower */)
 
-			if _, ok := pendingPieces[deal.Proposal.PieceCID]; ok {
+			if _, ok := providerPendings[deal.Proposal.PieceCID]; ok {
 				rt.Abortf(exitcode.ErrIllegalArgument, "file already published %s", deal.Proposal.PieceCID.String())
 			}
-			pendingPieces[deal.Proposal.PieceCID] = struct{}{} // dont forget to add new piece
+			providerPendings[deal.Proposal.PieceCID] = struct{}{} // dont forget to add new piece
 
 			if deal.Proposal.Provider != provider && deal.Proposal.Provider != providerRaw {
 				rt.Abortf(exitcode.ErrIllegalArgument, "cannot publish deals from different providers at the same time")
