@@ -60,6 +60,11 @@ func NewVMWithSingletons(ctx context.Context, t testing.TB, bs ipldcbor.IpldBloc
 
 	initializeActor(ctx, t, vm, &system.State{}, builtin.SystemActorCodeID, builtin.SystemActorAddr, big.Zero())
 
+	initState, err := initactor.ConstructState(store, "scenarios")
+	require.NoError(t, err)
+	initializeActor(ctx, t, vm, initState, builtin.InitActorCodeID, builtin.InitActorAddr, big.Zero())
+
+	rewardState := reward.ConstructState()
 	initializeActor(ctx, t, vm, rewardState, builtin.RewardActorCodeID, builtin.RewardActorAddr, reward.StorageMiningAllocationCheck)
 	cronState := cron.ConstructState(cron.BuiltInEntries())
 	initializeActor(ctx, t, vm, cronState, builtin.CronActorCodeID, builtin.CronActorAddr, big.Zero())
@@ -72,9 +77,9 @@ func NewVMWithSingletons(ctx context.Context, t testing.TB, bs ipldcbor.IpldBloc
 	require.NoError(t, err)
 	initializeActor(ctx, t, vm, marketState, builtin.StorageMarketActorCodeID, builtin.StorageMarketActorAddr, big.Zero())
 
-	// this will need to be replaced with the address of a multisig actor for the verified registry to be tested accurately
+	/* // this will need to be replaced with the address of a multisig actor for the verified registry to be tested accurately
 	initializeActor(ctx, t, vm, &account.State{Address: VerifregRoot}, builtin.AccountActorCodeID, VerifregRoot, big.Zero())
-	/* vrState, err := verifreg.ConstructState(store, VerifregRoot)
+	vrState, err := verifreg.ConstructState(store, VerifregRoot)
 	require.NoError(t, err)
 	initializeActor(ctx, t, vm, vrState, builtin.VerifiedRegistryActorCodeID, builtin.VerifiedRegistryActorAddr, big.Zero()) */
 
@@ -343,8 +348,7 @@ func SectorDeadline(t *testing.T, v *VM, minerIDAddress address.Address, sectorN
 type MinerBalances struct {
 	AvailableBalance abi.TokenAmount
 	VestingBalance   abi.TokenAmount
-	InitialPledge    abi.TokenAmount
-	/* PreCommitDeposit abi.TokenAmount */
+	TotalPledge      abi.TokenAmount
 }
 
 func GetMinerBalances(t *testing.T, vm *VM, minerIdAddr address.Address) MinerBalances {
@@ -357,10 +361,9 @@ func GetMinerBalances(t *testing.T, vm *VM, minerIdAddr address.Address) MinerBa
 	require.NoError(t, err)
 
 	return MinerBalances{
-		AvailableBalance: big.Subtract(a.Balance /* state.PreCommitDeposits, */, state.TotalPledge, state.LockedFunds, state.FeeDebt),
-		/* PreCommitDeposit: state.PreCommitDeposits, */
-		VestingBalance: state.LockedFunds,
-		InitialPledge:  state.TotalPledge,
+		AvailableBalance: big.Subtract(a.Balance, state.TotalPledge, state.LockedFunds, state.FeeDebt),
+		VestingBalance:   state.LockedFunds,
+		TotalPledge:      state.TotalPledge,
 	}
 }
 
@@ -403,17 +406,11 @@ type NetworkStats struct {
 	MinerCount                int64
 	MinerAboveMinPowerCount   int64
 	ThisEpochReward           abi.TokenAmount
-	/* ThisEpochRewardSmoothed       smoothing.FilterEstimate
-	ThisEpochBaselinePower        abi.StoragePower */
-	TotalStoragePowerReward abi.TokenAmount
-	TotalExpertReward       abi.TokenAmount
-	TotalVoteReward         abi.TokenAmount
-	TotalKnowledgeReward    abi.TokenAmount
-	TotalRetrievalReward    abi.TokenAmount
-	TotalSendFailed         abi.TokenAmount
-	/* TotalClientLockedCollateral   abi.TokenAmount
-	TotalProviderLockedCollateral abi.TokenAmount
-	TotalClientStorageFee         abi.TokenAmount */
+	TotalStoragePowerReward   abi.TokenAmount
+	TotalExpertReward         abi.TokenAmount
+	TotalVoteReward           abi.TokenAmount
+	TotalKnowledgeReward      abi.TokenAmount
+	TotalRetrievalReward      abi.TokenAmount
 }
 
 func GetNetworkStats(t *testing.T, vm *VM) NetworkStats {
@@ -441,16 +438,11 @@ func GetNetworkStats(t *testing.T, vm *VM) NetworkStats {
 		MinerCount:                powerState.MinerCount,
 		MinerAboveMinPowerCount:   powerState.MinerAboveMinPowerCount,
 		ThisEpochReward:           rewardState.ThisEpochReward,
-		/* ThisEpochRewardSmoothed:       rewardState.ThisEpochRewardSmoothed,
-		ThisEpochBaselinePower:        rewardState.ThisEpochBaselinePower, */
-		TotalStoragePowerReward: rewardState.TotalStoragePowerReward,
-		TotalExpertReward:       rewardState.TotalExpertReward,
-		TotalVoteReward:         rewardState.TotalVoteReward,
-		TotalKnowledgeReward:    rewardState.TotalKnowledgeReward,
-		TotalRetrievalReward:    rewardState.TotalRetrievalReward,
-		/* TotalClientLockedCollateral:   marketState.TotalClientLockedCollateral,
-		TotalProviderLockedCollateral: marketState.TotalProviderLockedCollateral,
-		TotalClientStorageFee:         marketState.TotalClientStorageFee, */
+		TotalStoragePowerReward:   rewardState.TotalStoragePowerReward,
+		TotalExpertReward:         rewardState.TotalExpertReward,
+		TotalVoteReward:           rewardState.TotalExpertReward,
+		TotalKnowledgeReward:      rewardState.TotalKnowledgeReward,
+		TotalRetrievalReward:      rewardState.TotalRetrievalReward,
 	}
 }
 
