@@ -205,7 +205,7 @@ func main() {
 		market.State{},
 		// method params and returns
 		market.WithdrawBalanceParams{},
-		market.PublishStorageDataRef{},
+		market.StorageDataRef{},
 		market.PublishStorageDealsParams{},
 		market.PublishStorageDealsReturn{},
 		market.ActivateDealsParams{},

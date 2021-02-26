@@ -349,14 +349,14 @@ func (t *WithdrawBalanceParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufPublishStorageDataRef = []byte{130}
+var lengthBufStorageDataRef = []byte{130}
 
-func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
+func (t *StorageDataRef) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufPublishStorageDataRef); err != nil {
+	if _, err := w.Write(lengthBufStorageDataRef); err != nil {
 		return err
 	}
 
@@ -382,8 +382,8 @@ func (t *PublishStorageDataRef) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *PublishStorageDataRef) UnmarshalCBOR(r io.Reader) error {
-	*t = PublishStorageDataRef{}
+func (t *StorageDataRef) UnmarshalCBOR(r io.Reader) error {
+	*t = StorageDataRef{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -425,7 +425,7 @@ func (t *PublishStorageDataRef) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufPublishStorageDealsParams = []byte{130}
+var lengthBufPublishStorageDealsParams = []byte{129}
 
 func (t *PublishStorageDealsParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -451,11 +451,6 @@ func (t *PublishStorageDealsParams) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
-
-	// t.DataRef (market.PublishStorageDataRef) (struct)
-	if err := t.DataRef.MarshalCBOR(w); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -473,7 +468,7 @@ func (t *PublishStorageDealsParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 1 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -506,15 +501,6 @@ func (t *PublishStorageDealsParams) UnmarshalCBOR(r io.Reader) error {
 		t.Deals[i] = v
 	}
 
-	// t.DataRef (market.PublishStorageDataRef) (struct)
-
-	{
-
-		if err := t.DataRef.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.DataRef: %w", err)
-		}
-
-	}
 	return nil
 }
 
@@ -1696,7 +1682,7 @@ func (t *DealProposal) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufClientDealProposal = []byte{130}
+var lengthBufClientDealProposal = []byte{131}
 
 func (t *ClientDealProposal) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -1716,6 +1702,11 @@ func (t *ClientDealProposal) MarshalCBOR(w io.Writer) error {
 	if err := t.ClientSignature.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.DataRef (market.StorageDataRef) (struct)
+	if err := t.DataRef.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1733,7 +1724,7 @@ func (t *ClientDealProposal) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -1752,6 +1743,15 @@ func (t *ClientDealProposal) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.ClientSignature.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.ClientSignature: %w", err)
+		}
+
+	}
+	// t.DataRef (market.StorageDataRef) (struct)
+
+	{
+
+		if err := t.DataRef.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.DataRef: %w", err)
 		}
 
 	}

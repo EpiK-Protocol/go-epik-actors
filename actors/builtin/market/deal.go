@@ -52,6 +52,7 @@ type DealProposal struct {
 type ClientDealProposal struct {
 	Proposal        DealProposal
 	ClientSignature crypto.Signature
+	DataRef         StorageDataRef
 }
 
 /* func (p *DealProposal) Duration() abi.ChainEpoch {

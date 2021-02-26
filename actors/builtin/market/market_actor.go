@@ -137,14 +137,13 @@ func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *ab
 	return nil
 }
 
-type PublishStorageDataRef struct {
+type StorageDataRef struct {
 	RootCID cid.Cid `checked:"true"`
 	Expert  string
 }
 
 type PublishStorageDealsParams struct {
-	Deals   []ClientDealProposal
-	DataRef PublishStorageDataRef
+	Deals []ClientDealProposal
 }
 
 type PublishStorageDealsReturn struct {
@@ -259,7 +258,7 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			err = msm.pendingDeals.Put(abi.CidKey(pcid), &ProposalDataIndex{
 				Provider: provider,
 				Index: DataIndex{
-					RootCID:  params.DataRef.RootCID.String(),
+					RootCID:  deal.DataRef.RootCID.String(),
 					PieceCID: deal.Proposal.PieceCID,
 				},
 			})

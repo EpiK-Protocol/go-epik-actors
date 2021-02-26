@@ -500,15 +500,11 @@ func TestPublishStorageDeals(t *testing.T) {
 		rt.ExpectSend(providerResolved, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		// expectQueryNetworkInfo(rt, actor)
 		//  create a client proposal with a valid signature
-		params := market.PublishStorageDealsParams{
-			DataRef: market.PublishStorageDataRef{
-				Expert: expertAddr.String(),
-			},
-		}
+		params := market.PublishStorageDealsParams{}
 		buf := bytes.Buffer{}
 		require.NoError(t, deal.MarshalCBOR(&buf), "failed to marshal deal proposal")
 		sig := crypto.Signature{Type: crypto.SigTypeBLS, Data: []byte("does not matter")}
-		clientProposal := market.ClientDealProposal{Proposal: deal, ClientSignature: sig}
+		clientProposal := market.ClientDealProposal{Proposal: deal, ClientSignature: sig, DataRef: market.StorageDataRef{Expert: expertAddr.String()}}
 		params.Deals = append(params.Deals, clientProposal)
 		// expect a call to verify the above signature
 		rt.ExpectVerifySignature(sig, deal.Client, buf.Bytes(), nil)
@@ -2356,7 +2352,8 @@ func TestMarketActorDeals(t *testing.T) {
 	actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20000000))
 
 	dealProposal := generateDealProposal(client, provider, abi.ChainEpoch(1) /* , abi.ChainEpoch(200*builtin.EpochsInDay) */)
-	params := &market.PublishStorageDealsParams{Deals: []market.ClientDealProposal{{Proposal: dealProposal}}, DataRef: market.PublishStorageDataRef{Expert: expertAddr.String()}}
+	dealProposal
+	params := &market.PublishStorageDealsParams{Deals: []market.ClientDealProposal{{Proposal: dealProposal, DataRef: market.StorageDataRef{Expert: expertAddr.String()}}}}
 
 	// First attempt at publishing the deal should work
 	{
@@ -2423,7 +2420,7 @@ func TestMaxDealLabelSize(t *testing.T) {
 
 	dealProposal := generateDealProposal(client, provider, abi.ChainEpoch(1) /* , abi.ChainEpoch(200*builtin.EpochsInDay) */)
 	dealProposal.Label = string(make([]byte, market.DealMaxLabelSize))
-	params := &market.PublishStorageDealsParams{Deals: []market.ClientDealProposal{{Proposal: dealProposal}}, DataRef: market.PublishStorageDataRef{Expert: expertAddr.String()}}
+	params := &market.PublishStorageDealsParams{Deals: []market.ClientDealProposal{{Proposal: dealProposal, DataRef: market.StorageDataRef{Expert: expertAddr.String()}}}}
 
 	// Label at max size should work.
 	{
@@ -3107,18 +3104,16 @@ func (h *marketActorTestHarness) publishDeals(rt *mock.Runtime, minerAddrs *mine
 	rt.ExpectSend(minerAddrs.provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 	/* expectQueryNetworkInfo(rt, h) */
 
-	params := market.PublishStorageDealsParams{
-		DataRef: market.PublishStorageDataRef{
-			Expert: minerAddrs.expert.String(),
-		},
-	}
+	params := market.PublishStorageDealsParams{}
 
 	for _, pdr := range publishDealReqs {
 		//  create a client proposal with a valid signature
 		buf := bytes.Buffer{}
 		require.NoError(h.t, pdr.deal.MarshalCBOR(&buf), "failed to marshal deal proposal")
 		sig := crypto.Signature{Type: crypto.SigTypeBLS, Data: []byte("does not matter")}
-		clientProposal := market.ClientDealProposal{Proposal: pdr.deal, ClientSignature: sig}
+		clientProposal := market.ClientDealProposal{Proposal: pdr.deal, ClientSignature: sig, DataRef: market.StorageDataRef{
+			Expert: minerAddrs.expert.String(),
+		}}
 		params.Deals = append(params.Deals, clientProposal)
 
 		// expect a call to verify the above signature
