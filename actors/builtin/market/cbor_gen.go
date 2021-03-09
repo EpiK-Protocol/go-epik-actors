@@ -15,7 +15,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{139}
+var lengthBufState = []byte{140}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -50,6 +50,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	if err := cbg.WriteCidBuf(scratch, w, t.PendingProposals); err != nil {
 		return xerrors.Errorf("failed to write cid field t.PendingProposals: %w", err)
+	}
+
+	// t.ProviderPendings (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.ProviderPendings); err != nil {
+		return xerrors.Errorf("failed to write cid field t.ProviderPendings: %w", err)
 	}
 
 	// t.DataIndexesByEpoch (cid.Cid) (struct)
@@ -120,7 +126,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 11 {
+	if extra != 12 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -170,6 +176,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.PendingProposals = c
+
+	}
+	// t.ProviderPendings (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.ProviderPendings: %w", err)
+		}
+
+		t.ProviderPendings = c
 
 	}
 	// t.DataIndexesByEpoch (cid.Cid) (struct)
@@ -1979,31 +1997,35 @@ func (t *DataIndex) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufProposalDataIndex = []byte{130}
+var lengthBufPendingProposal = []byte{129}
 
-func (t *ProposalDataIndex) MarshalCBOR(w io.Writer) error {
+func (t *PendingProposal) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufProposalDataIndex); err != nil {
+	if _, err := w.Write(lengthBufPendingProposal); err != nil {
 		return err
 	}
 
-	// t.Provider (address.Address) (struct)
-	if err := t.Provider.MarshalCBOR(w); err != nil {
-		return err
+	scratch := make([]byte, 9)
+
+	// t.RootCID (string) (string)
+	if len(t.RootCID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.RootCID was too long")
 	}
 
-	// t.Index (market.DataIndex) (struct)
-	if err := t.Index.MarshalCBOR(w); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.RootCID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.RootCID)); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *ProposalDataIndex) UnmarshalCBOR(r io.Reader) error {
-	*t = ProposalDataIndex{}
+func (t *PendingProposal) UnmarshalCBOR(r io.Reader) error {
+	*t = PendingProposal{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -2016,27 +2038,19 @@ func (t *ProposalDataIndex) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 1 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Provider (address.Address) (struct)
+	// t.RootCID (string) (string)
 
 	{
-
-		if err := t.Provider.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Provider: %w", err)
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
 		}
 
-	}
-	// t.Index (market.DataIndex) (struct)
-
-	{
-
-		if err := t.Index.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Index: %w", err)
-		}
-
+		t.RootCID = string(sval)
 	}
 	return nil
 }

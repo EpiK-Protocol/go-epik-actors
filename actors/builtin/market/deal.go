@@ -79,9 +79,8 @@ func (p *DealProposal) Cid() (cid.Cid, error) {
 	return abi.CidBuilder.Sum(buf.Bytes())
 }
 
-type ProposalDataIndex struct {
-	Provider addr.Address
-	Index    DataIndex
+type PendingProposal struct {
+	RootCID string
 }
 
 type DataIndex struct {

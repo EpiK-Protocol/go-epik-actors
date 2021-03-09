@@ -182,8 +182,7 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 	if pendingProposals, err := adt.AsMap(store, st.PendingProposals, builtin.DefaultHamtBitwidth); err != nil {
 		acc.Addf("error loading pending proposals: %v", err)
 	} else {
-		var pendingProposal ProposalDataIndex
-		err = pendingProposals.ForEach(&pendingProposal, func(key string) error {
+		err = pendingProposals.ForEach(nil, func(key string) error {
 			/* proposalCID, err := cid.Parse([]byte(key))
 			if err != nil {
 				return err

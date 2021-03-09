@@ -206,27 +206,14 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	var st State
 	rt.StateTransaction(&st, func() {
 		msm, err := st.mutator(adt.AsStore(rt)).withPendingProposals(WritePermission).
-			withDealProposals(WritePermission).withDealsByEpoch(WritePermission).build()
+			withProviderPendings(WritePermission).withDealProposals(WritePermission).
+			withDealsByEpoch(WritePermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
 		providerPendings := make(map[cid.Cid]struct{})
-		var dataIndex ProposalDataIndex
-		err = msm.pendingDeals.ForEach(&dataIndex, func(k string) error {
-			if dataIndex.Provider == provider {
-				providerPendings[dataIndex.Index.PieceCID] = struct{}{}
-			}
-			return nil
-		})
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load pending data index")
-
 		// All storage dealProposals will be added in an atomic transaction; this operation will be unrolled if any of them fails.
 		for di, deal := range params.Deals {
-			validateDeal(rt, deal /* networkRawPower, networkQAPower , baselinePower */)
-
-			if _, ok := providerPendings[deal.Proposal.PieceCID]; ok {
-				rt.Abortf(exitcode.ErrIllegalArgument, "file already published %s", deal.Proposal.PieceCID.String())
-			}
-			providerPendings[deal.Proposal.PieceCID] = struct{}{} // dont forget to add new piece
+			validateDeal(rt, deal)
 
 			if deal.Proposal.Provider != provider && deal.Proposal.Provider != providerRaw {
 				rt.Abortf(exitcode.ErrIllegalArgument, "cannot publish deals from different providers at the same time")
@@ -236,33 +223,35 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 			if !ok {
 				rt.Abortf(exitcode.ErrNotFound, "failed to resolve client address %v", deal.Proposal.Client)
 			}
+
+			// check duplicate
+			_, ok = providerPendings[deal.Proposal.PieceCID]
+			builtin.RequireParam(rt, !ok, "params contain duplicate pieces")
+			// check existence
+			has, err := msm.providerPendings.Has(provider, deal.Proposal.PieceCID)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check provider pendings")
+			builtin.RequireParam(rt, !has, "cannot publish duplicate pieces %s", deal.Proposal.PieceCID)
+
 			// Normalise provider and client addresses in the proposal stored on chain (after signature verification).
 			deal.Proposal.Provider = provider
-			/* resolvedAddrs[deal.Proposal.Client] = client */
 			deal.Proposal.Client = client
-
-			/* err := msm.lockClientAndProviderBalances(&deal.Proposal)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to lock balance") */
 
 			id := msm.generateStorageDealID()
 
 			pcid, err := deal.Proposal.Cid()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to take cid of proposal %d", di)
 
-			has, err := msm.pendingDeals.Has(abi.CidKey(pcid))
+			has, err = msm.pendingDeals.Has(abi.CidKey(pcid))
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check for existence of deal proposal")
 			if has {
 				rt.Abortf(exitcode.ErrIllegalArgument, "cannot publish duplicate deals")
 			}
 
-			err = msm.pendingDeals.Put(abi.CidKey(pcid), &ProposalDataIndex{
-				Provider: provider,
-				Index: DataIndex{
-					RootCID:  deal.DataRef.RootCID.String(),
-					PieceCID: deal.Proposal.PieceCID,
-				},
+			err = msm.pendingDeals.Put(abi.CidKey(pcid), &PendingProposal{
+				RootCID: deal.DataRef.RootCID.String(),
 			})
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set pending deal")
+			providerPendings[deal.Proposal.PieceCID] = struct{}{}
 
 			err = msm.dealProposals.Set(id, &deal.Proposal)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set deal")
@@ -277,6 +266,9 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 
 			newDealIds = append(newDealIds, id)
 		}
+
+		err = msm.providerPendings.PutMany(provider, providerPendings)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put provider pendings %s", provider)
 
 		err = msm.commitState()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
@@ -407,13 +399,16 @@ func (a Actor) ActivateDeals(rt Runtime, params *ActivateDealsParams) *ActivateD
 			propc, err := proposal.Cid()
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate proposal CID")
 
-			var dataIndex ProposalDataIndex
-			has, err := msm.pendingDeals.Get(abi.CidKey(propc), &dataIndex)
+			var pp PendingProposal
+			has, err := msm.pendingDeals.Get(abi.CidKey(propc), &pp)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get pending proposal %v", propc)
 			if !has {
 				rt.Abortf(exitcode.ErrIllegalState, "tried to activate deal that was not in the pending set (%s)", propc)
 			}
-			dataIndexes[dataIndex.Provider] = append(dataIndexes[dataIndex.Provider], dataIndex.Index)
+			dataIndexes[proposal.Provider] = append(dataIndexes[proposal.Provider], DataIndex{
+				RootCID:  pp.RootCID,
+				PieceCID: proposal.PieceCID,
+			})
 
 			err = msm.dealStates.Set(dealID, &DealState{
 				SectorStartEpoch: currEpoch,
@@ -559,7 +554,7 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		/* updatesNeeded := make(map[abi.ChainEpoch][]abi.DealID) */
 
 		msm, err := st.mutator(adt.AsStore(rt)).withDealStates(WritePermission).withDealsByEpoch(WritePermission).
-			withDealProposals(WritePermission).withPendingProposals(WritePermission).build()
+			withProviderPendings(WritePermission).withDealProposals(WritePermission).withPendingProposals(WritePermission).build()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
 		for i := st.LastCron + 1; i <= rt.CurrEpoch(); i++ {
@@ -597,8 +592,11 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 					err := deleteDealProposalAndState(dealID, msm.dealStates, msm.dealProposals, true, false)
 					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete deal %d", dealID)
 
-					pdErr := msm.pendingDeals.Delete(abi.CidKey(dcid))
-					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal %v", dcid)
+					err = msm.pendingDeals.Delete(abi.CidKey(dcid))
+					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete pending proposal %v", dcid)
+					err = msm.providerPendings.Remove(deal.Provider, deal.PieceCID)
+					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete provider pending %s", deal.PieceCID)
+
 					return nil
 				}
 
@@ -606,6 +604,8 @@ func (a Actor) CronTick(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 				if state.LastUpdatedEpoch == epochUndefined {
 					pdErr := msm.pendingDeals.Delete(abi.CidKey(dcid))
 					builtin.RequireNoErr(rt, pdErr, exitcode.ErrIllegalState, "failed to delete pending proposal %v", dcid)
+					err = msm.providerPendings.Remove(deal.Provider, deal.PieceCID)
+					builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete provider pending %s", deal.PieceCID)
 				} else {
 					builtin.RequireState(rt, rt.CurrEpoch() >= state.LastUpdatedEpoch, "current epoch less than last update epoch")
 				}

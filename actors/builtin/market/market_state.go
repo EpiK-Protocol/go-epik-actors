@@ -42,7 +42,9 @@ type State struct {
 
 	// PendingProposals tracks dealProposals that have not yet reached their deal start date.
 	// We track them here to ensure that miners can't publish the same deal proposal twice
-	PendingProposals cid.Cid // HAMT[DealCid]ProposalDataIndex
+	PendingProposals cid.Cid // HAMT[ProposalCid]PendingProposal
+
+	ProviderPendings cid.Cid // HAMT[provider]Set
 
 	DataIndexesByEpoch cid.Cid // IndexMultimap, HAMT[epoch]HAMT[provider]AMT[DataIndex]
 
@@ -100,6 +102,10 @@ func ConstructState(store adt.Store) (*State, error) {
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty index map: %w", err)
 	}
+	emptyProviderPendingsCid, err := StoreEmptyProviderPieceSetMultimap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty provider pending set: %w", err)
+	}
 
 	return &State{
 		Proposals:        emptyProposalsArrayCid,
@@ -118,6 +124,7 @@ func ConstructState(store adt.Store) (*State, error) {
 		Quotas:             emptyQuotasMapCid,
 		DataIndexesByEpoch: emptyIndexByEpochHamtCid,
 		InitialQuota:       DefaultInitialQuota,
+		ProviderPendings:   emptyProviderPendingsCid,
 	}, nil
 }
 
@@ -315,12 +322,12 @@ type marketStateMutation struct {
 
 	lockedPermit MarketStateMutationPermission
 	lockedTable  *adt.BalanceTable
-	/* totalClientLockedCollateral   abi.TokenAmount
-	totalProviderLockedCollateral abi.TokenAmount
-	totalClientStorageFee         abi.TokenAmount */
 
 	quotaPermit MarketStateMutationPermission
 	quotas      *adt.Map
+
+	providerPendingsPermit MarketStateMutationPermission
+	providerPendings       *ProviderPieceSetMultimap
 
 	nextDealId abi.DealID
 }
@@ -397,6 +404,14 @@ func (m *marketStateMutation) build() (*marketStateMutation, error) {
 		m.quotas = quotas
 	}
 
+	if m.providerPendingsPermit != Invalid {
+		pps, err := AsProviderPieceSetMultimap(m.store, m.st.ProviderPendings, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to load provider pending pieces: %w", err)
+		}
+		m.providerPendings = pps
+	}
+
 	m.nextDealId = m.st.NextID
 
 	return m, nil
@@ -439,6 +454,11 @@ func (m *marketStateMutation) withDealsByEpoch(permit MarketStateMutationPermiss
 
 func (m *marketStateMutation) withQuotas(permit MarketStateMutationPermission) *marketStateMutation {
 	m.quotaPermit = permit
+	return m
+}
+
+func (m *marketStateMutation) withProviderPendings(permit MarketStateMutationPermission) *marketStateMutation {
+	m.providerPendingsPermit = permit
 	return m
 }
 
@@ -492,6 +512,12 @@ func (m *marketStateMutation) commitState() error {
 	if m.quotaPermit == WritePermission {
 		if m.st.Quotas, err = m.quotas.Root(); err != nil {
 			return xerrors.Errorf("failed to flush quotas: %w", err)
+		}
+	}
+
+	if m.providerPendingsPermit == WritePermission {
+		if m.st.ProviderPendings, err = m.providerPendings.Root(); err != nil {
+			return xerrors.Errorf("failed to flush provider pendings: %w", err)
 		}
 	}
 

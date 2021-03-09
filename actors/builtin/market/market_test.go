@@ -865,8 +865,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 				dealProposal := generateDealProposal(client, provider, startEpoch /* , endEpoch */)
 				rt.SetEpoch(currentEpoch)
 				tc.setup(rt, actor, &dealProposal)
-				params := mkPublishStorageParams(dealProposal)
-				params.DataRef.Expert = expertAddr.String()
+				params := mkPublishStorageParams(expertAddr, dealProposal)
 
 				rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 				rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
@@ -943,8 +942,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 
 			deal2 := actor.generateDealAndAddFunds(rt, client, m2, abi.ChainEpoch(1) /* , endEpoch */)
 
-			params := mkPublishStorageParams(deal1, deal2)
-			params.DataRef.Expert = expertAddr.String()
+			params := mkPublishStorageParams(expertAddr, deal1, deal2)
 
 			rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 			rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
@@ -973,7 +971,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 		//  failures because of incorrect call params
 		t.Run("fail when caller is not of signable type", func(t *testing.T) {
 			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			params := mkPublishStorageParams(generateDealProposal(client, provider, startEpoch /* , endEpoch */))
+			params := mkPublishStorageParams(expertAddr, generateDealProposal(client, provider, startEpoch /* , endEpoch */))
 			w := tutil.NewIDAddr(t, 1000)
 			rt.SetCaller(w, builtin.StorageMinerActorCodeID)
 			rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
@@ -985,7 +983,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 
 		t.Run("fail when no deals in params", func(t *testing.T) {
 			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			params := mkPublishStorageParams()
+			params := mkPublishStorageParams(expertAddr)
 			rt.SetCaller(worker, builtin.AccountActorCodeID)
 			rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 			rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
@@ -999,7 +997,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 			deal := generateDealProposal(client, provider, startEpoch /* , endEpoch */)
 			deal.Provider = tutil.NewBLSAddr(t, 100)
 
-			params := mkPublishStorageParams(deal)
+			params := mkPublishStorageParams(expertAddr, deal)
 			rt.SetCaller(worker, builtin.AccountActorCodeID)
 			rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 			rt.ExpectAbort(exitcode.ErrNotFound, func() {
@@ -1011,7 +1009,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 		t.Run("caller is not the same as the worker address for miner", func(t *testing.T) {
 			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
 			deal := generateDealProposal(client, provider, startEpoch /* , endEpoch */)
-			params := mkPublishStorageParams(deal)
+			params := mkPublishStorageParams(expertAddr, deal)
 			rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 			rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: tutil.NewIDAddr(t, 999), Owner: owner, Coinbase: coinbase}, 0)
 			rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -1032,7 +1030,7 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 		rt.SetAddressActorType(p2, builtin.StoragePowerActorCodeID)
 		deal := generateDealProposal(client, p2, abi.ChainEpoch(1) /* , abi.ChainEpoch(5) */)
 
-		params := mkPublishStorageParams(deal)
+		params := mkPublishStorageParams(expertAddr, deal)
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
 		rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
@@ -1636,8 +1634,7 @@ func TestCronTick(t *testing.T) {
 
 		// now try to publish it again and it should fail because it will still be in pending state
 		d2 := actor.generateDealAndAddFunds(rt, client, mAddrs, startEpoch /* , endEpoch */)
-		params := mkPublishStorageParams(d2)
-		params.DataRef.Expert = expertAddr.String()
+		params := mkPublishStorageParams(expertAddr, d2)
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: d2.PieceCID}}}
@@ -1941,8 +1938,7 @@ func TestCronTickTimedoutDeals(t *testing.T) {
 
 		// publishing will fail as it will be in pending
 		d2 := actor.generateDealAndAddFunds(rt, client, mAddrs, startEpoch /* , endEpoch */)
-		params := mkPublishStorageParams(d2)
-		params.DataRef.Expert = expertAddr.String()
+		params := mkPublishStorageParams(expertAddr, d2)
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: d2.PieceCID}}}
@@ -2352,7 +2348,6 @@ func TestMarketActorDeals(t *testing.T) {
 	actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20000000))
 
 	dealProposal := generateDealProposal(client, provider, abi.ChainEpoch(1) /* , abi.ChainEpoch(200*builtin.EpochsInDay) */)
-	dealProposal
 	params := &market.PublishStorageDealsParams{Deals: []market.ClientDealProposal{{Proposal: dealProposal, DataRef: market.StorageDataRef{Expert: expertAddr.String()}}}}
 
 	// First attempt at publishing the deal should work
@@ -2372,7 +2367,7 @@ func TestMarketActorDeals(t *testing.T) {
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "file already published", func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "cannot publish duplicate pieces", func() {
 			rt.Call(actor.PublishStorageDeals, params)
 		})
 
@@ -2390,7 +2385,7 @@ func TestMarketActorDeals(t *testing.T) {
 
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "file already published", func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "cannot publish duplicate pieces", func() {
 			rt.Call(actor.PublishStorageDeals, params)
 		})
 
@@ -3543,10 +3538,10 @@ func basicMarketSetup(t *testing.T, owner, provider, worker, client, coinbase ad
 	return rt, &actor
 }
 
-func mkPublishStorageParams(proposals ...market.DealProposal) *market.PublishStorageDealsParams {
+func mkPublishStorageParams(expert address.Address, proposals ...market.DealProposal) *market.PublishStorageDealsParams {
 	m := &market.PublishStorageDealsParams{}
 	for _, p := range proposals {
-		m.Deals = append(m.Deals, market.ClientDealProposal{Proposal: p})
+		m.Deals = append(m.Deals, market.ClientDealProposal{Proposal: p, DataRef: market.StorageDataRef{Expert: expert.String()}})
 	}
 	return m
 }
