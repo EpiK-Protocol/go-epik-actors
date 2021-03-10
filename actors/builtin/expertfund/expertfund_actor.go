@@ -1,7 +1,10 @@
 package expertfund
 
 import (
+	"bytes"
+
 	"github.com/filecoin-project/go-address"
+	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
+	initact "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -25,10 +29,11 @@ func (a Actor) Exports() []interface{} {
 		3:                         a.Claim,
 		4:                         a.NotifyImport,
 		5:                         a.NotifyUpdate,
-		6:                         a.FoundationChange,
+		6:                         a.ChangeThreshold,
 		7:                         a.BatchCheckData,
 		8:                         a.BatchStoreData,
 		9:                         a.GetData,
+		10:                        a.ApplyForExpert,
 	}
 }
 
@@ -105,7 +110,7 @@ func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.EmptyValue {
 // NotifyImportParams import
 type NotifyImportParams struct {
 	Expert  address.Address
-	PieceID cid.Cid
+	PieceID cid.Cid `checked:"true"`
 }
 
 // NotifyUpdate notify vote
@@ -139,14 +144,14 @@ func (a Actor) NotifyUpdate(rt Runtime, params *NotifyUpdateParams) *abi.EmptyVa
 	return nil
 }
 
-// FoundationChangeParams params
-type FoundationChangeParams struct {
+type ChangeThresholdParams struct {
 	DataStoreThreshold uint64
 }
 
-// FoundationChange update the fund config
-func (a Actor) FoundationChange(rt Runtime, params *FoundationChangeParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.GovernActorCodeID)
+// ChangeThreshold update the fund config
+func (a Actor) ChangeThreshold(rt Runtime, params *ChangeThresholdParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpertFunds.ChangeThreshold)
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -240,5 +245,70 @@ func (a Actor) GetData(rt Runtime, params *GetDataParams) *DataInfo {
 	return &DataInfo{
 		Expert: expertAddr,
 		Data:   &out,
+	}
+}
+
+type ApplyForExpertParams struct {
+	Owner addr.Address
+	// ApplicationHash expert application hash
+	ApplicationHash string
+}
+
+type ApplyForExpertReturn struct {
+	IDAddress     addr.Address // The canonical ID-based address for the actor.
+	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
+}
+
+func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyForExpertReturn {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+
+	var st State
+	rt.StateReadonly(&st)
+
+	expertType := builtin.ExpertFoundation
+	if st.ExpertsCount > 0 {
+		expertType = builtin.ExpertNormal
+	}
+
+	// We don't resolve owner here, expert constructor will do that.
+	ctorParams := expert.ConstructorParams{
+		Owner:           params.Owner,
+		ApplicationHash: params.ApplicationHash,
+		Proposer:        rt.Caller(),
+		Type:            expertType,
+	}
+	ctorParamBuf := new(bytes.Buffer)
+	err := ctorParams.MarshalCBOR(ctorParamBuf)
+	if err != nil {
+		rt.Abortf(exitcode.ErrSerialization, "failed to serialize expert constructor params %v: %v", ctorParams, err)
+	}
+	var addresses initact.ExecReturn
+	code := rt.Send(
+		builtin.InitActorAddr,
+		builtin.MethodsInit.Exec,
+		&initact.ExecParams{
+			CodeCID:           builtin.ExpertActorCodeID,
+			ConstructorParams: ctorParamBuf.Bytes(),
+		},
+		rt.ValueReceived(), // Pass on any value to the new actor.
+		&addresses,
+	)
+	builtin.RequireSuccess(rt, code, "failed to init new expert actor")
+
+	rt.StateTransaction(&st, func() {
+		ei := ExpertInfo{
+			RewardDebt:    abi.NewTokenAmount(0),
+			LockedFunds:   abi.NewTokenAmount(0),
+			UnlockedFunds: abi.NewTokenAmount(0),
+			VestingFunds:  rt.StorePut(ConstructVestingFunds()),
+		}
+		err = st.setExpert(adt.AsStore(rt), addresses.IDAddress, &ei)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set new expert: %v", err)
+
+		st.ExpertsCount++
+	})
+	return &ApplyForExpertReturn{
+		IDAddress:     addresses.IDAddress,
+		RobustAddress: addresses.RobustAddress,
 	}
 }

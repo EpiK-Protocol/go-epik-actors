@@ -79,13 +79,13 @@ func main() {
 		expert.ExpertInfo{},
 		expert.PendingOwnerChange{},
 		// method params
-		// expert.ConstructorParams{},
+		expert.ConstructorParams{},
 		expert.GetControlAddressReturn{},
 		expert.ChangeAddressParams{},
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},
 		expert.NominateExpertParams{},
-		expert.FoundationChangeParams{},
+		expert.ChangeOwnerParams{},
 		expert.ExpertVoteParams{},
 		// other types
 	); err != nil {
@@ -105,6 +105,9 @@ func main() {
 		expertfund.VestingFund{},
 		expertfund.GetDataParams{},
 		expertfund.DataInfo{},
+		expertfund.ChangeThresholdParams{},
+		expertfund.ApplyForExpertParams{},
+		expertfund.ApplyForExpertReturn{},
 		// other types
 	); err != nil {
 		panic(err)
@@ -190,12 +193,6 @@ func main() {
 		power.CurrentTotalPowerReturn{},
 		// other types
 		power.MinerConstructorParams{},
-		// expert
-		power.Expert{},
-		power.CreateExpertParams{},
-		power.ExpertConstructorParams{},
-		power.CreateExpertReturn{},
-		power.DeleteExpertParams{},
 	); err != nil {
 		panic(err)
 	}

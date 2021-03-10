@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -118,7 +119,7 @@ func TestValidate(t *testing.T) {
 		err = harness.s.Validate(harness.store, 1)
 		assert.NoError(t, err)
 
-		info.Type = expert.ExpertNormal
+		info.Type = builtin.ExpertNormal
 		err = harness.s.SaveInfo(harness.store, info)
 		assert.NoError(t, err)
 
@@ -191,7 +192,7 @@ func constructStateHarness(t *testing.T) *stateHarness {
 
 	info := &expert.ExpertInfo{
 		Owner:           owner,
-		Type:            expert.ExpertFoundation,
+		Type:            builtin.ExpertFoundation,
 		ApplicationHash: "aHash",
 		Proposer:        owner,
 	}
@@ -199,7 +200,7 @@ func constructStateHarness(t *testing.T) *stateHarness {
 	require.NoError(t, err)
 
 	eState := expert.ExpertStateRegistered
-	if info.Type == expert.ExpertFoundation {
+	if info.Type == builtin.ExpertFoundation {
 		eState = expert.ExpertStateNormal
 	}
 

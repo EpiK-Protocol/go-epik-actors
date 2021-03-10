@@ -49,16 +49,19 @@ func TestConstruction(t *testing.T) {
 	actor := expert.Actor{}
 
 	owner := tutil.NewIDAddr(t, 100)
+	applicant := tutil.NewIDAddr(t, 101)
 	receiver := tutil.NewIDAddr(t, 1000)
 	builder := mock.NewBuilder(context.Background(), receiver).
 		WithActorType(owner, builtin.AccountActorCodeID).
 		WithHasher(blake2b.Sum256).
 		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
 
-	t.Run("simple construction", func(t *testing.T) {
+	t.Run("construct foundation", func(t *testing.T) {
 		rt := builder.Build(t)
 		params := expert.ConstructorParams{
-			Owner: owner,
+			Owner:    owner,
+			Proposer: owner,
+			Type:     builtin.ExpertFoundation,
 		}
 
 		rt.ExpectValidateCallerAddr(builtin.InitActorAddr)
@@ -73,6 +76,67 @@ func TestConstruction(t *testing.T) {
 		info, err := st.GetInfo(adt.AsStore(rt))
 		require.NoError(t, err)
 		assert.Equal(t, params.Owner, info.Owner)
+	})
+
+	t.Run("construct normal with 99 EPK", func(t *testing.T) {
+		rt := builder.Build(t)
+		rt.SetBalance(expert.ExpertApplyCost)
+		rt.SetReceived(expert.ExpertApplyCost)
+		params := expert.ConstructorParams{
+			Owner:    owner,
+			Proposer: owner,
+			Type:     builtin.ExpertNormal,
+		}
+
+		rt.ExpectValidateCallerAddr(builtin.InitActorAddr)
+		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, expert.ExpertApplyCost, nil, exitcode.Ok)
+		rt.Call(actor.Constructor, &params)
+		rt.Verify()
+
+		require.True(t, rt.Balance().Sign() == 0)
+
+		var st expert.State
+		rt.GetState(&st)
+		info, err := st.GetInfo(adt.AsStore(rt))
+		require.NoError(t, err)
+		assert.Equal(t, params.Owner, info.Owner)
+	})
+
+	t.Run("should fail with not enough funds", func(t *testing.T) {
+		rt := builder.Build(t)
+		amt := big.Sub(expert.ExpertApplyCost, big.NewInt(1))
+		rt.SetBalance(expert.ExpertApplyCost)
+		rt.SetReceived(amt)
+		params := expert.ConstructorParams{
+			Owner:    owner,
+			Proposer: owner,
+			Type:     builtin.ExpertNormal,
+		}
+
+		rt.ExpectValidateCallerAddr(builtin.InitActorAddr)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "fund for expert proposal not enough", func() {
+			rt.Call(actor.Constructor, &params)
+		})
+	})
+
+	t.Run("should fail with more funds", func(t *testing.T) {
+		rt := builder.Build(t)
+		amt := big.Add(expert.ExpertApplyCost, big.NewInt(1))
+		rt.SetBalance(amt)
+		rt.SetReceived(amt)
+		params := expert.ConstructorParams{
+			Owner:    owner,
+			Proposer: applicant,
+			Type:     builtin.ExpertNormal,
+		}
+
+		rt.ExpectValidateCallerAddr(builtin.InitActorAddr)
+		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, expert.ExpertApplyCost, nil, exitcode.Ok)
+		rt.ExpectSend(applicant, builtin.MethodSend, nil, big.NewInt(1), nil, exitcode.Ok)
+		rt.Call(actor.Constructor, &params)
+		rt.Verify()
+
+		require.True(t, rt.Balance().Sign() == 0)
 	})
 }
 
@@ -176,11 +240,11 @@ func TestFoundationChange(t *testing.T) {
 		WithHasher(fixedHasher(0)).
 		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
 
-	t.Run("FoundationChange", func(t *testing.T) {
+	t.Run("ChangeOwner", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 
-		actor.FoundationChange(rt, &expert.FoundationChangeParams{
+		actor.ChangeOwner(rt, &expert.ChangeOwnerParams{
 			Owner: tutil.NewIDAddr(t, 101),
 		})
 	})
@@ -225,8 +289,8 @@ func newHarness(t testing.TB, receiver, owner addr.Address) *actorHarness {
 
 func (h *actorHarness) constructAndVerify(rt *mock.Runtime) {
 	params := expert.ConstructorParams{
-		Owner:  h.owner,
-		PeerId: testPid,
+		Owner:    h.owner,
+		Proposer: h.owner,
 	}
 
 	rt.ExpectValidateCallerAddr(builtin.InitActorAddr)
@@ -274,13 +338,13 @@ func (h *actorHarness) Nominate(rt *mock.Runtime, params *expert.NominateExpertP
 		rt.ExpectSend(params.Expert, builtin.MethodsExpert.NominateUpdate, &param, big.Zero(), nil, exitcode.Ok)
 	}
 
-	{
-		cdcParams := builtin.NotifyUpdate{
-			Expert:  params.Expert,
-			PieceID: cid.Undef,
-		}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
-	}
+	// {
+	// 	cdcParams := builtin.NotifyUpdate{
+	// 		Expert:  params.Expert,
+	// 		PieceID: cid.Undef,
+	// 	}
+	// 	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
+	// }
 
 	rt.ExpectValidateCallerAddr(h.owner)
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
@@ -296,9 +360,8 @@ func (h *actorHarness) Block(rt *mock.Runtime) {
 	}
 
 	{
-		cdcParams := builtin.NotifyUpdate{
-			Expert:  h.receiver,
-			PieceID: cid.Undef,
+		cdcParams := builtin.NotifyExpertUpdateParams{
+			Expert: h.receiver,
 		}
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
 	}
@@ -310,20 +373,19 @@ func (h *actorHarness) Block(rt *mock.Runtime) {
 	rt.Verify()
 }
 
-func (h *actorHarness) FoundationChange(rt *mock.Runtime, params *expert.FoundationChangeParams) {
+func (h *actorHarness) ChangeOwner(rt *mock.Runtime, params *expert.ChangeOwnerParams) {
 
 	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
 	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
-	rt.Call(h.a.FoundationChange, params)
+	rt.Call(h.a.ChangeOwner, params)
 	rt.Verify()
 }
 
 func (h *actorHarness) Vote(rt *mock.Runtime, params *expert.ExpertVoteParams) {
 
 	{
-		cdcParams := builtin.NotifyUpdate{
-			Expert:  h.receiver,
-			PieceID: cid.Undef,
+		cdcParams := builtin.NotifyExpertUpdateParams{
+			Expert: h.receiver,
 		}
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
 	}

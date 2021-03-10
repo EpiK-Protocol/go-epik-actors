@@ -45,7 +45,7 @@ type ExpertInfo struct {
 	Owner addr.Address // Must be an ID-address.
 
 	// Type expert type
-	Type ExpertType
+	Type builtin.ExpertType
 
 	// ApplicationHash expert application hash
 	ApplicationHash string
@@ -59,15 +59,6 @@ type DataOnChainInfo struct {
 	PieceID    string
 	PieceSize  abi.PaddedPieceSize
 	Redundancy uint64
-}
-
-func ConstructExpertInfo(owner addr.Address, eType ExpertType, aHash string) (*ExpertInfo, error) {
-	return &ExpertInfo{
-		Owner:           owner,
-		Type:            eType,
-		ApplicationHash: aHash,
-		Proposer:        owner,
-	}, nil
 }
 
 func ConstructState(store adt.Store, info cid.Cid, state ExpertState, emptyChange cid.Cid) (*State, error) {
@@ -220,7 +211,7 @@ func (st *State) Validate(strore adt.Store, currEpoch abi.ChainEpoch) error {
 		if err != nil {
 			return err
 		}
-		if info.Type != ExpertFoundation {
+		if info.Type != builtin.ExpertFoundation {
 			if st.VoteAmount.LessThan(ExpertVoteThreshold) {
 				if st.LostEpoch < 0 {
 					return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)

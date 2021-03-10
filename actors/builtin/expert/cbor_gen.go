@@ -7,6 +7,7 @@ import (
 	"io"
 
 	abi "github.com/filecoin-project/go-state-types/abi"
+	builtin "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
@@ -192,7 +193,7 @@ func (t *ExpertInfo) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Type (expert.ExpertType) (uint64)
+	// t.Type (builtin.ExpertType) (uint64)
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Type)); err != nil {
 		return err
@@ -244,7 +245,7 @@ func (t *ExpertInfo) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.Type (expert.ExpertType) (uint64)
+	// t.Type (builtin.ExpertType) (uint64)
 
 	{
 
@@ -255,7 +256,7 @@ func (t *ExpertInfo) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.Type = ExpertType(extra)
+		t.Type = builtin.ExpertType(extra)
 
 	}
 	// t.ApplicationHash (string) (string)
@@ -361,6 +362,113 @@ func (t *PendingOwnerChange) UnmarshalCBOR(r io.Reader) error {
 		if err := t.ApplyOwner.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.ApplyOwner: %w", err)
 		}
+
+	}
+	return nil
+}
+
+var lengthBufConstructorParams = []byte{132}
+
+func (t *ConstructorParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufConstructorParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Owner (address.Address) (struct)
+	if err := t.Owner.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.ApplicationHash (string) (string)
+	if len(t.ApplicationHash) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.ApplicationHash was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ApplicationHash))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.ApplicationHash)); err != nil {
+		return err
+	}
+
+	// t.Proposer (address.Address) (struct)
+	if err := t.Proposer.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Type (builtin.ExpertType) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Type)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *ConstructorParams) UnmarshalCBOR(r io.Reader) error {
+	*t = ConstructorParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 4 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Owner (address.Address) (struct)
+
+	{
+
+		if err := t.Owner.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Owner: %w", err)
+		}
+
+	}
+	// t.ApplicationHash (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.ApplicationHash = string(sval)
+	}
+	// t.Proposer (address.Address) (struct)
+
+	{
+
+		if err := t.Proposer.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Proposer: %w", err)
+		}
+
+	}
+	// t.Type (builtin.ExpertType) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Type = builtin.ExpertType(extra)
 
 	}
 	return nil
@@ -728,14 +836,14 @@ func (t *NominateExpertParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufFoundationChangeParams = []byte{129}
+var lengthBufChangeOwnerParams = []byte{129}
 
-func (t *FoundationChangeParams) MarshalCBOR(w io.Writer) error {
+func (t *ChangeOwnerParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufFoundationChangeParams); err != nil {
+	if _, err := w.Write(lengthBufChangeOwnerParams); err != nil {
 		return err
 	}
 
@@ -746,8 +854,8 @@ func (t *FoundationChangeParams) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *FoundationChangeParams) UnmarshalCBOR(r io.Reader) error {
-	*t = FoundationChangeParams{}
+func (t *ChangeOwnerParams) UnmarshalCBOR(r io.Reader) error {
+	*t = ChangeOwnerParams{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)

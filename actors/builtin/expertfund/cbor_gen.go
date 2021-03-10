@@ -14,7 +14,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{135}
+var lengthBufState = []byte{136}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -31,6 +31,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	if err := cbg.WriteCidBuf(scratch, w, t.Experts); err != nil {
 		return xerrors.Errorf("failed to write cid field t.Experts: %w", err)
+	}
+
+	// t.ExpertsCount (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ExpertsCount)); err != nil {
+		return err
 	}
 
 	// t.PoolInfo (cid.Cid) (struct)
@@ -84,7 +90,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 7 {
+	if extra != 8 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -98,6 +104,20 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Experts = c
+
+	}
+	// t.ExpertsCount (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.ExpertsCount = uint64(extra)
 
 	}
 	// t.PoolInfo (cid.Cid) (struct)
@@ -840,6 +860,197 @@ func (t *DataInfo) UnmarshalCBOR(r io.Reader) error {
 			if err := t.Data.UnmarshalCBOR(br); err != nil {
 				return xerrors.Errorf("unmarshaling t.Data pointer: %w", err)
 			}
+		}
+
+	}
+	return nil
+}
+
+var lengthBufChangeThresholdParams = []byte{129}
+
+func (t *ChangeThresholdParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufChangeThresholdParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.DataStoreThreshold (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DataStoreThreshold)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *ChangeThresholdParams) UnmarshalCBOR(r io.Reader) error {
+	*t = ChangeThresholdParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.DataStoreThreshold (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.DataStoreThreshold = uint64(extra)
+
+	}
+	return nil
+}
+
+var lengthBufApplyForExpertParams = []byte{130}
+
+func (t *ApplyForExpertParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufApplyForExpertParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Owner (address.Address) (struct)
+	if err := t.Owner.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.ApplicationHash (string) (string)
+	if len(t.ApplicationHash) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.ApplicationHash was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.ApplicationHash))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.ApplicationHash)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *ApplyForExpertParams) UnmarshalCBOR(r io.Reader) error {
+	*t = ApplyForExpertParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Owner (address.Address) (struct)
+
+	{
+
+		if err := t.Owner.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Owner: %w", err)
+		}
+
+	}
+	// t.ApplicationHash (string) (string)
+
+	{
+		sval, err := cbg.ReadStringBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+
+		t.ApplicationHash = string(sval)
+	}
+	return nil
+}
+
+var lengthBufApplyForExpertReturn = []byte{130}
+
+func (t *ApplyForExpertReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufApplyForExpertReturn); err != nil {
+		return err
+	}
+
+	// t.IDAddress (address.Address) (struct)
+	if err := t.IDAddress.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.RobustAddress (address.Address) (struct)
+	if err := t.RobustAddress.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *ApplyForExpertReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = ApplyForExpertReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.IDAddress (address.Address) (struct)
+
+	{
+
+		if err := t.IDAddress.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.IDAddress: %w", err)
+		}
+
+	}
+	// t.RobustAddress (address.Address) (struct)
+
+	{
+
+		if err := t.RobustAddress.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.RobustAddress: %w", err)
 		}
 
 	}

@@ -38,8 +38,6 @@ func (a Actor) Exports() []interface{} {
 		6:                         a.UpdatePledgeTotal,
 		7:                         a.SubmitPoRepForBulkVerify,
 		8:                         a.CurrentTotalPower,
-		9:                         a.CreateExpert,
-		10:                        a.DeleteExpert,
 	}
 }
 
@@ -504,104 +502,4 @@ func (a Actor) processDeferredCronEvents(rt Runtime) {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush claims")
 		})
 	}
-}
-
-type CreateExpertParams struct {
-	Owner      addr.Address
-	PeerId     abi.PeerID
-	Multiaddrs []abi.Multiaddrs
-	// ApplicationHash expert application hash
-	ApplicationHash string
-}
-
-type ExpertConstructorParams struct {
-	Owner addr.Address
-	// ApplicationHash expert application hash
-	ApplicationHash string
-
-	// Proposer of expert
-	Proposer addr.Address
-
-	// Type expert type
-	Type uint64
-}
-
-type CreateExpertReturn struct {
-	IDAddress     addr.Address // The canonical ID-based address for the actor.
-	RobustAddress addr.Address // A more expensive but re-org-safe address for the newly created actor.
-}
-
-func (a Actor) CreateExpert(rt Runtime, params *CreateExpertParams) *CreateExpertReturn {
-	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
-
-	var st State
-	rt.StateReadonly(&st)
-	caller, ok := rt.ResolveAddress(rt.Caller())
-	if !ok {
-		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", rt.Caller())
-	}
-
-	expertType := uint64(0)
-	if st.ExpertCount > 0 {
-		expertType = 1
-	}
-
-	ctorParams := ExpertConstructorParams{
-		Owner:           params.Owner,
-		ApplicationHash: params.ApplicationHash,
-		Proposer:        caller,
-		Type:            expertType,
-	}
-	ctorParamBuf := new(bytes.Buffer)
-	err := ctorParams.MarshalCBOR(ctorParamBuf)
-	if err != nil {
-		rt.Abortf(exitcode.ErrSerialization, "failed to serialize expert constructor params %v: %v", ctorParams, err)
-	}
-	var addresses initact.ExecReturn
-	code := rt.Send(
-		builtin.InitActorAddr,
-		builtin.MethodsInit.Exec,
-		&initact.ExecParams{
-			CodeCID:           builtin.ExpertActorCodeID,
-			ConstructorParams: ctorParamBuf.Bytes(),
-		},
-		rt.ValueReceived(), // Pass on any value to the new actor.
-		&addresses,
-	)
-	builtin.RequireSuccess(rt, code, "failed to init new actor")
-
-	rt.StateTransaction(&st, func() {
-		store := adt.AsStore(rt)
-		err = st.setExpert(store, addresses.IDAddress, &Expert{DataCount: 0})
-		if err != nil {
-			rt.Abortf(exitcode.ErrIllegalState, "failed to put expert in experts table while creating expert: %v", err)
-		}
-		st.ExpertCount++
-	})
-	return &CreateExpertReturn{
-		IDAddress:     addresses.IDAddress,
-		RobustAddress: addresses.RobustAddress,
-	}
-}
-
-type DeleteExpertParams struct {
-	Expert addr.Address
-}
-
-func (a Actor) DeleteExpert(rt Runtime, params *DeleteExpertParams) *abi.EmptyValue {
-
-	nominal, ok := rt.ResolveAddress(params.Expert)
-	if !ok {
-		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", params.Expert)
-	}
-	ownerAddr := builtin.RequestExpertControlAddr(rt, nominal)
-	rt.ValidateImmediateCallerIs(ownerAddr)
-
-	var st State
-	rt.StateTransaction(&st, func() {
-		err := st.deleteExpert(adt.AsStore(rt), nominal)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete %v from expert power table", nominal)
-		st.ExpertCount--
-	})
-	return nil
 }

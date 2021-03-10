@@ -3,11 +3,11 @@ package expert
 import (
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	_ "github.com/filecoin-project/specs-actors/v2/actors/util"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -31,7 +31,7 @@ func (a Actor) Exports() []interface{} {
 		8:                         a.NominateUpdate,
 		9:                         a.Block,
 		10:                        a.BlockUpdate,
-		11:                        a.FoundationChange,
+		11:                        a.ChangeOwner,
 		12:                        a.Vote,
 		13:                        a.Validate,
 	}
@@ -47,24 +47,44 @@ func (a Actor) State() cbor.Er {
 
 var _ runtime.VMActor = Actor{}
 
-type ConstructorParams = power.ExpertConstructorParams
+type ConstructorParams struct {
+	Owner addr.Address // ID address
+	// ApplicationHash expert application hash
+	ApplicationHash string
+
+	// owner itself or agent, diffs from ExpertInfo.Proposer
+	Proposer addr.Address // ID address
+
+	// Type expert type
+	Type builtin.ExpertType
+}
 
 func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.InitActorAddr)
 
-	if params.Type > 0 && rt.ValueReceived().GreaterThan(ExpertApplyCost) {
+	if params.Type != builtin.ExpertFoundation {
+		builtin.RequireParam(rt, rt.ValueReceived().GreaterThanEqual(ExpertApplyCost), "fund for expert proposal not enough")
 		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, ExpertApplyCost, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to burn funds")
+
+		change := big.Sub(rt.ValueReceived(), ExpertApplyCost)
+		if !change.IsZero() {
+			code := rt.Send(params.Proposer, builtin.MethodSend, nil, change, &builtin.Discard{})
+			builtin.RequireSuccess(rt, code, "failed to send change funds")
+		}
 	}
 
 	owner := resolveOwnerAddress(rt, params.Owner)
-
-	info, err := ConstructExpertInfo(owner, ExpertType(params.Type), params.ApplicationHash)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalArgument, "failed to construct initial expert info")
+	info := &ExpertInfo{
+		Owner:           owner,
+		Proposer:        owner, // same with owner means not nominated
+		Type:            params.Type,
+		ApplicationHash: params.ApplicationHash,
+	}
 	infoCid := rt.StorePut(info)
 
 	eState := ExpertStateRegistered
-	if info.Type == ExpertFoundation {
+	if info.Type == builtin.ExpertFoundation {
 		eState = ExpertStateNormal
 	}
 
@@ -105,7 +125,6 @@ func getExpertInfo(rt Runtime, st *State) *ExpertInfo {
 func resolveOwnerAddress(rt Runtime, raw addr.Address) addr.Address {
 	resolved, ok := rt.ResolveAddress(raw)
 	builtin.RequireParam(rt, ok, "unable to resolve address %v", raw)
-	builtin.RequireParam(rt, resolved.Protocol() == addr.ID, "illegal address protocol %d (expect %d)", resolved.Protocol(), addr.ID)
 
 	ownerCode, ok := rt.GetActorCodeCID(resolved)
 	builtin.RequireParam(rt, ok, "no code for address %v", resolved)
@@ -248,14 +267,15 @@ func (a Actor) NominateUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 }
 
 func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.GovernActorCodeID)
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.Block)
 
 	var st State
 	var info *ExpertInfo
 	rt.StateTransaction(&st, func() {
 		info = getExpertInfo(rt, &st)
 
-		if info.Type == ExpertFoundation {
+		if info.Type == builtin.ExpertFoundation {
 			rt.Abortf(exitcode.ErrIllegalArgument, "foundation expert cannot be blocked")
 		}
 
@@ -276,7 +296,7 @@ func (a Actor) BlockUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		info := getExpertInfo(rt, &st)
-		if info.Type != ExpertFoundation {
+		if info.Type != builtin.ExpertFoundation {
 			st.Status = ExpertStateImplicated
 			if st.VoteAmount.GreaterThanEqual(ExpertVoteThreshold) &&
 				st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
@@ -293,12 +313,13 @@ func (a Actor) BlockUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-type FoundationChangeParams struct {
+type ChangeOwnerParams struct {
 	Owner addr.Address
 }
 
-func (a Actor) FoundationChange(rt Runtime, params *FoundationChangeParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.GovernActorCodeID)
+func (a Actor) ChangeOwner(rt Runtime, params *ChangeOwnerParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.ChangeOwner)
 
 	var st State
 	rt.StateTransaction(&st, func() {

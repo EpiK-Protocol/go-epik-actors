@@ -14,7 +14,9 @@ import (
 // State state of expert fund.
 type State struct {
 	// Information for all submit rdf data experts.
-	Experts cid.Cid // Map, AMT[key]ExpertInfo
+	Experts cid.Cid // Map, HAMT[expert]ExpertInfo
+
+	ExpertsCount uint64
 
 	PoolInfo cid.Cid
 
@@ -185,11 +187,7 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 		return err
 	}
 	if !found {
-		emptyVestingFunds := ConstructVestingFunds()
-		emptyVestingFundsCid := rt.StorePut(emptyVestingFunds)
-		out = ExpertInfo{
-			VestingFunds: emptyVestingFundsCid,
-		}
+		return xerrors.Errorf("expert not found")
 	}
 	if out.DataSize > 0 {
 		pending := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
@@ -352,4 +350,76 @@ func (st *State) UpdatePool(rt Runtime) error {
 	}
 	st.LastFundBalance = rt.CurrentBalance()
 	return nil
+}
+
+func (st *State) getExpert(s adt.Store, a addr.Address) (*ExpertInfo, bool, error) {
+	experts, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, false, err
+	}
+
+	var out ExpertInfo
+	found, err := experts.Get(abi.AddrKey(a), &out)
+	if err != nil {
+		return nil, false, xerrors.Errorf("failed to get expert for address %v from store %s: %w", a, st.Experts, err)
+	}
+	if !found {
+		return nil, false, nil
+	}
+	return &out, true, nil
+}
+
+func (st *State) setExpert(store adt.Store, ida addr.Address, expert *ExpertInfo) error {
+	hm, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return err
+	}
+	k := abi.AddrKey(ida)
+	has, err := hm.Has(k)
+	if err != nil {
+		return err
+	}
+	if has {
+		// should never happen
+		return xerrors.Errorf("expert %s already exist", ida)
+	}
+
+	if err = hm.Put(k, expert); err != nil {
+		return xerrors.Errorf("failed to put expert with address %s expert %v in store %s: %w", ida, expert, st.Experts, err)
+	}
+
+	st.Experts, err = hm.Root()
+	return err
+}
+
+func (st *State) ForEachExpert(store adt.Store, f func(*ExpertInfo)) error {
+	experts, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return err
+	}
+	var info ExpertInfo
+	return experts.ForEach(&info, func(key string) error {
+		f(&info)
+		return nil
+	})
+}
+
+func (st *State) expertActors(store adt.Store) ([]addr.Address, error) {
+	experts, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, err
+	}
+	addrs, err := experts.CollectKeys()
+	if err != nil {
+		return nil, err
+	}
+	var actors []addr.Address
+	for _, a := range addrs {
+		addr, err := addr.NewFromBytes([]byte(a))
+		if err != nil {
+			return nil, err
+		}
+		actors = append(actors, addr)
+	}
+	return actors, nil
 }

@@ -6,17 +6,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
 
-// ExpertType is the expert type.
-type ExpertType uint64
-
-const (
-	// ExpertFoundation foundation expert
-	ExpertFoundation ExpertType = iota
-
-	// ExpertNormal normal expert
-	ExpertNormal
-)
-
 // ExpertState is the state of expert.
 type ExpertState uint64
 

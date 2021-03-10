@@ -64,11 +64,6 @@ type State struct {
 	Claims cid.Cid // Map, HAMT[address]Claim
 
 	ProofValidationBatch *cid.Cid // Multimap, (HAMT[Address]AMT[SealVerifyInfo])
-
-	ExpertCount int64
-
-	// Information for all submit rdf data experts.
-	Experts cid.Cid // Map, HAMT[key]Expert
 }
 
 type Claim struct {
@@ -99,11 +94,6 @@ func ConstructState(store adt.Store) (*State, error) {
 		return nil, xerrors.Errorf("failed to create empty multimap: %w", err)
 	}
 
-	emptyExpertsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to create empty expert map: %w", err)
-	}
-
 	return &State{
 		TotalRawBytePower:         abi.NewStoragePower(0),
 		TotalBytesCommitted:       abi.NewStoragePower(0),
@@ -118,8 +108,6 @@ func ConstructState(store adt.Store) (*State, error) {
 		Claims:                    emptyClaimsMapCid,
 		MinerCount:                0,
 		MinerAboveMinPowerCount:   0,
-		ExpertCount:               0,
-		Experts:                   emptyExpertsMapCid,
 	}, nil
 }
 
@@ -364,91 +352,4 @@ func init() {
 		panic("incorrect chain epoch encoding")
 	}
 
-}
-
-type Expert struct {
-	// Sum of rdf data count.
-	DataCount int64
-}
-
-func (st *State) getExpert(s adt.Store, a addr.Address) (*Expert, bool, error) {
-	hm, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, false, err
-	}
-
-	var out Expert
-	found, err := hm.Get(abi.AddrKey(a), &out)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get expert for address %v from store %s: %w", a, st.Experts, err)
-	}
-	if !found {
-		return nil, false, nil
-	}
-	return &out, true, nil
-}
-
-func (st *State) setExpert(s adt.Store, a addr.Address, expert *Expert) error {
-	hm, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return err
-	}
-
-	if err = hm.Put(abi.AddrKey(a), expert); err != nil {
-		return xerrors.Errorf("failed to put expert with address %s expert %v in store %s: %w", a, expert, st.Experts, err)
-	}
-
-	st.Experts, err = hm.Root()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (st *State) deleteExpert(s adt.Store, a addr.Address) error {
-	hm, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return err
-	}
-
-	if err = hm.Delete(abi.AddrKey(a)); err != nil {
-		return xerrors.Errorf("failed to delete expert at address %s from store %s: %w", a, st.Experts, err)
-	}
-	st.Experts, err = hm.Root()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (st *State) ForEachExpert(store adt.Store, f func(*Expert)) error {
-	datas, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return err
-	}
-	var info Expert
-	return datas.ForEach(&info, func(key string) error {
-		f(&info)
-		return nil
-	})
-}
-
-func (st *State) expertActors(store adt.Store) ([]addr.Address, error) {
-	datas, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, err
-	}
-	addrs, err := datas.CollectKeys()
-	if err != nil {
-		return nil, err
-	}
-	var actors []addr.Address
-	for _, a := range addrs {
-		addr, err := addr.NewFromBytes([]byte(a))
-		if err != nil {
-			return nil, err
-		}
-		actors = append(actors, addr)
-	}
-	return actors, nil
 }

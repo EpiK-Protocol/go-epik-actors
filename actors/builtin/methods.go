@@ -73,9 +73,7 @@ var MethodsPower = struct {
 	UpdatePledgeTotal        abi.MethodNum
 	SubmitPoRepForBulkVerify abi.MethodNum
 	CurrentTotalPower        abi.MethodNum
-	CreateExpert             abi.MethodNum
-	DeleteExpert             abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
 
 var MethodsMiner = struct {
 	Constructor              abi.MethodNum
@@ -117,32 +115,33 @@ var MethodsMiner = struct {
 // }{MethodConstructor, 2, 3, 4, 5, 6}
 
 var MethodsExpert = struct {
-	Constructor      abi.MethodNum
-	ControlAddress   abi.MethodNum
-	ChangeAddress    abi.MethodNum
-	ImportData       abi.MethodNum
-	GetData          abi.MethodNum
-	StoreData        abi.MethodNum
-	Nominate         abi.MethodNum
-	NominateUpdate   abi.MethodNum
-	Block            abi.MethodNum
-	BlockUpdate      abi.MethodNum
-	FoundationChange abi.MethodNum
-	Vote             abi.MethodNum
-	Validate         abi.MethodNum
+	Constructor    abi.MethodNum
+	ControlAddress abi.MethodNum
+	ChangeAddress  abi.MethodNum
+	ImportData     abi.MethodNum
+	GetData        abi.MethodNum
+	StoreData      abi.MethodNum
+	Nominate       abi.MethodNum
+	NominateUpdate abi.MethodNum
+	Block          abi.MethodNum
+	BlockUpdate    abi.MethodNum
+	ChangeOwner    abi.MethodNum
+	Vote           abi.MethodNum
+	Validate       abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
 
 var MethodsExpertFunds = struct {
-	Constructor      abi.MethodNum
-	ApplyRewards     abi.MethodNum
-	Claim            abi.MethodNum
-	NotifyImport     abi.MethodNum
-	NotifyUpdate     abi.MethodNum
-	FoundationChange abi.MethodNum
-	BatchCheckData   abi.MethodNum
-	BatchStoreData   abi.MethodNum
-	GetData          abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9}
+	Constructor     abi.MethodNum
+	ApplyRewards    abi.MethodNum
+	Claim           abi.MethodNum
+	NotifyImport    abi.MethodNum
+	NotifyUpdate    abi.MethodNum
+	ChangeThreshold abi.MethodNum
+	BatchCheckData  abi.MethodNum
+	BatchStoreData  abi.MethodNum
+	GetData         abi.MethodNum
+	ApplyForExpert  abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 var MethodsVote = struct {
 	Constructor     abi.MethodNum
