@@ -267,12 +267,13 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 
 // UpdateExpert update expert.
 func (st *State) Reset(rt Runtime, expert addr.Address) error {
+	k := abi.AddrKey(expert)
 	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 	var out ExpertInfo
-	found, err := experts.Get(abi.AddrKey(expert), &out)
+	found, err := experts.Get(k, &out)
 	if err != nil {
 		return err
 	}
@@ -291,7 +292,7 @@ func (st *State) Reset(rt Runtime, expert addr.Address) error {
 	out.RewardDebt = abi.NewTokenAmount(0)
 	out.LockedFunds = abi.NewTokenAmount(0)
 
-	err = experts.Put(abi.AddrKey(expert), &out)
+	err = experts.Put(k, &out)
 	if err != nil {
 		return err
 	}

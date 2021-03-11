@@ -28,7 +28,7 @@ func (a Actor) Exports() []interface{} {
 		2:                         a.ApplyRewards,
 		3:                         a.Claim,
 		4:                         a.NotifyImport,
-		5:                         a.NotifyUpdate,
+		5:                         a.ResetExpert,
 		6:                         a.ChangeThreshold,
 		7:                         a.BatchCheckData,
 		8:                         a.BatchStoreData,
@@ -113,7 +113,7 @@ type NotifyImportParams struct {
 	PieceID cid.Cid `checked:"true"`
 }
 
-// NotifyUpdate notify vote
+// NotifyImport
 func (a Actor) NotifyImport(rt Runtime, params *NotifyImportParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -129,17 +129,13 @@ func (a Actor) NotifyImport(rt Runtime, params *NotifyImportParams) *abi.EmptyVa
 	return nil
 }
 
-// NotifyUpdateParams expert params
-type NotifyUpdateParams struct {
-	Expert address.Address
-}
+// ResetExpert
+func (a Actor) ResetExpert(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
-// NotifyUpdate notify vote
-func (a Actor) NotifyUpdate(rt Runtime, params *NotifyUpdateParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
-		st.Reset(rt, params.Expert)
+		st.Reset(rt, rt.Caller())
 	})
 	return nil
 }

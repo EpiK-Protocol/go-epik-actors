@@ -30,7 +30,7 @@ func (a Actor) Exports() []interface{} {
 		7:                         a.Nominate,
 		8:                         a.NominateUpdate,
 		9:                         a.Block,
-		10:                        a.BlockUpdate,
+		10:                        a.OnImplicated,
 		11:                        a.ChangeOwner,
 		12:                        a.Vote,
 		13:                        a.Validate,
@@ -275,40 +275,44 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.StateTransaction(&st, func() {
 		info = getExpertInfo(rt, &st)
 
-		if info.Type == builtin.ExpertFoundation {
-			rt.Abortf(exitcode.ErrIllegalArgument, "foundation expert cannot be blocked")
-		}
+		builtin.RequireParam(rt, info.Type != builtin.ExpertFoundation, "foundation expert cannot be blocked")
+		builtin.RequireParam(rt, st.Status != ExpertStateBlocked, "expert already blocked")
+		builtin.RequireParam(rt, st.Status != ExpertStateRegistered, "non-nominated cannot be blocked")
 
 		st.Status = ExpertStateBlocked
 	})
 
-	code := rt.Send(info.Proposer, builtin.MethodsExpert.BlockUpdate, nil, abi.NewTokenAmount(0), &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to nominate expert")
+	code := rt.Send(info.Proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to punish proposer expert")
 
-	builtin.NotifyExpertUpdate(rt, rt.Receiver())
+	builtin.NotifyExpertFundReset(rt)
 	return nil
 }
 
-func (a Actor) BlockUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+func (a Actor) OnImplicated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
 	validate := true
 	var st State
 	rt.StateTransaction(&st, func() {
 		info := getExpertInfo(rt, &st)
-		if info.Type != builtin.ExpertFoundation {
-			st.Status = ExpertStateImplicated
-			if st.VoteAmount.GreaterThanEqual(ExpertVoteThreshold) &&
-				st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
-				st.LostEpoch = rt.CurrEpoch()
-			}
+		if info.Type == builtin.ExpertFoundation {
+			// foundation will not be punished forever
+			return
+		}
+
+		// TODO: repeatly punish?
+		st.Status = ExpertStateImplicated
+		if st.VoteAmount.GreaterThanEqual(ExpertVoteThreshold) &&
+			st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
+			st.LostEpoch = rt.CurrEpoch()
 		}
 		if err := st.Validate(adt.AsStore(rt), rt.CurrEpoch()); err != nil {
 			validate = false
 		}
 	})
 	if !validate {
-		builtin.NotifyExpertUpdate(rt, rt.Receiver())
+		builtin.NotifyExpertFundReset(rt)
 	}
 	return nil
 }
@@ -349,7 +353,7 @@ func (a Actor) Vote(rt Runtime, params *ExpertVoteParams) *abi.EmptyValue {
 		}
 	})
 	if !validate {
-		builtin.NotifyExpertUpdate(rt, rt.Receiver())
+		builtin.NotifyExpertFundReset(rt)
 	}
 	return nil
 }

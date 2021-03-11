@@ -124,7 +124,7 @@ var MethodsExpert = struct {
 	Nominate       abi.MethodNum
 	NominateUpdate abi.MethodNum
 	Block          abi.MethodNum
-	BlockUpdate    abi.MethodNum
+	OnImplicated   abi.MethodNum
 	ChangeOwner    abi.MethodNum
 	Vote           abi.MethodNum
 	Validate       abi.MethodNum
@@ -135,7 +135,7 @@ var MethodsExpertFunds = struct {
 	ApplyRewards    abi.MethodNum
 	Claim           abi.MethodNum
 	NotifyImport    abi.MethodNum
-	NotifyUpdate    abi.MethodNum
+	ResetExpert     abi.MethodNum
 	ChangeThreshold abi.MethodNum
 	BatchCheckData  abi.MethodNum
 	BatchStoreData  abi.MethodNum

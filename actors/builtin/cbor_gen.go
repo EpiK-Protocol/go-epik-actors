@@ -397,54 +397,6 @@ func (t *NotifyExpertImportParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufNotifyExpertUpdateParams = []byte{129}
-
-func (t *NotifyExpertUpdateParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufNotifyExpertUpdateParams); err != nil {
-		return err
-	}
-
-	// t.Expert (address.Address) (struct)
-	if err := t.Expert.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *NotifyExpertUpdateParams) UnmarshalCBOR(r io.Reader) error {
-	*t = NotifyExpertUpdateParams{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.Expert (address.Address) (struct)
-
-	{
-
-		if err := t.Expert.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Expert: %w", err)
-		}
-
-	}
-	return nil
-}
-
 var lengthBufBlockCandidatesParams = []byte{129}
 
 func (t *BlockCandidatesParams) MarshalCBOR(w io.Writer) error {

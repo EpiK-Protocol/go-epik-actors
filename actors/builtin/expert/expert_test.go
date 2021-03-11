@@ -339,11 +339,11 @@ func (h *actorHarness) Nominate(rt *mock.Runtime, params *expert.NominateExpertP
 	}
 
 	// {
-	// 	cdcParams := builtin.NotifyUpdate{
+	// 	cdcParams := builtin.ResetExpert{
 	// 		Expert:  params.Expert,
 	// 		PieceID: cid.Undef,
 	// 	}
-	// 	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
+	// 	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ResetExpert, &cdcParams, big.Zero(), nil, exitcode.Ok)
 	// }
 
 	rt.ExpectValidateCallerAddr(h.owner)
@@ -356,14 +356,11 @@ func (h *actorHarness) Block(rt *mock.Runtime) {
 
 	{
 		param := abi.EmptyValue{}
-		rt.ExpectSend(h.receiver, builtin.MethodsExpert.BlockUpdate, &param, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(h.receiver, builtin.MethodsExpert.OnImplicated, &param, big.Zero(), nil, exitcode.Ok)
 	}
 
 	{
-		cdcParams := builtin.NotifyExpertUpdateParams{
-			Expert: h.receiver,
-		}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ResetExpert, nil, big.Zero(), nil, exitcode.Ok)
 	}
 
 	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
@@ -384,10 +381,7 @@ func (h *actorHarness) ChangeOwner(rt *mock.Runtime, params *expert.ChangeOwnerP
 func (h *actorHarness) Vote(rt *mock.Runtime, params *expert.ExpertVoteParams) {
 
 	{
-		cdcParams := builtin.NotifyExpertUpdateParams{
-			Expert: h.receiver,
-		}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.NotifyUpdate, &cdcParams, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ResetExpert, nil, big.Zero(), nil, exitcode.Ok)
 	}
 
 	rt.ExpectValidateCallerAddr(builtin.VoteFundActorAddr)
