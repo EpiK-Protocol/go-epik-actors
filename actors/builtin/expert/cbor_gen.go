@@ -932,26 +932,31 @@ func (t *OnVotesChangedParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufVoteAllowedReturn = []byte{129}
+var lengthBufCheckStateReturn = []byte{130}
 
-func (t *VoteAllowedReturn) MarshalCBOR(w io.Writer) error {
+func (t *CheckStateReturn) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufVoteAllowedReturn); err != nil {
+	if _, err := w.Write(lengthBufCheckStateReturn); err != nil {
 		return err
 	}
 
-	// t.Allowed (bool) (bool)
-	if err := cbg.WriteBool(w, t.Allowed); err != nil {
+	// t.AllowVote (bool) (bool)
+	if err := cbg.WriteBool(w, t.AllowVote); err != nil {
+		return err
+	}
+
+	// t.Active (bool) (bool)
+	if err := cbg.WriteBool(w, t.Active); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *VoteAllowedReturn) UnmarshalCBOR(r io.Reader) error {
-	*t = VoteAllowedReturn{}
+func (t *CheckStateReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = CheckStateReturn{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -964,11 +969,11 @@ func (t *VoteAllowedReturn) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Allowed (bool) (bool)
+	// t.AllowVote (bool) (bool)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -979,9 +984,26 @@ func (t *VoteAllowedReturn) UnmarshalCBOR(r io.Reader) error {
 	}
 	switch extra {
 	case 20:
-		t.Allowed = false
+		t.AllowVote = false
 	case 21:
-		t.Allowed = true
+		t.AllowVote = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	// t.Active (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.Active = false
+	case 21:
+		t.Active = true
 	default:
 		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}

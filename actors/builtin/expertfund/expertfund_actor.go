@@ -164,12 +164,22 @@ func (a Actor) BatchCheckData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	rt.StateReadonly(&st)
 	store := adt.AsStore(rt)
 
+	cache := make(map[address.Address]bool)
 	for _, checked := range params.PieceCIDs {
-		found, err := st.HasDataID(store, checked.CID.String())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
-		if !found {
-			rt.Abortf(exitcode.ErrForbidden, "failed to find data in expertfund record")
+		expertAddr, found, err := st.GetData(store, checked.CID.String())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
+		builtin.RequireParam(rt, found, "data not found")
+
+		active, ok := cache[expertAddr]
+		if !ok {
+			var out expert.CheckStateReturn
+			code := rt.Send(expertAddr, builtin.MethodsExpert.CheckState, nil, abi.NewTokenAmount(0), &out)
+			builtin.RequireSuccess(rt, code, "failed to check expert state")
+
+			active = out.Active
+			cache[expertAddr] = active
 		}
+		builtin.RequireState(rt, active, "expert not active")
 	}
 	return nil
 }

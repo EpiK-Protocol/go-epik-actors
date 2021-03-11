@@ -203,10 +203,10 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 }
 
 func checkVoteAllowed(rt runtime.Runtime, expertAddr addr.Address) bool {
-	var out expert.VoteAllowedReturn
-	code := rt.Send(expertAddr, builtin.MethodsExpert.VoteAllowed, nil, abi.NewTokenAmount(0), &out)
-	builtin.RequireSuccess(rt, code, "failed checking vote allowed")
-	return out.Allowed
+	var out expert.CheckStateReturn
+	code := rt.Send(expertAddr, builtin.MethodsExpert.CheckState, nil, abi.NewTokenAmount(0), &out)
+	builtin.RequireSuccess(rt, code, "failed to check expert state")
+	return out.AllowVote
 }
 
 func notifyVotesChanged(rt runtime.Runtime, expertAddr addr.Address, current abi.TokenAmount) {

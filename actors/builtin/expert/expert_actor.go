@@ -34,7 +34,7 @@ func (a Actor) Exports() []interface{} {
 		11:                        a.ChangeOwner,
 		12:                        a.OnVotesChanged,
 		13:                        a.Validate,
-		14:                        a.VoteAllowed,
+		14:                        a.CheckState,
 	}
 }
 
@@ -363,14 +363,16 @@ func (a Actor) OnVotesChanged(rt Runtime, params *OnVotesChangedParams) *abi.Emp
 	return nil
 }
 
-type VoteAllowedReturn struct {
-	Allowed bool
+type CheckStateReturn struct {
+	AllowVote bool
+	Active    bool // Gained enough votes to Nominate or ImportData
 }
 
-func (a Actor) VoteAllowed(rt Runtime, _ *abi.EmptyValue) *VoteAllowedReturn {
+func (a Actor) CheckState(rt Runtime, _ *abi.EmptyValue) *CheckStateReturn {
 	var st State
 	rt.StateReadonly(&st)
-	return &VoteAllowedReturn{
-		Allowed: st.Status == ExpertStateNormal || st.Status == ExpertStateImplicated,
+	return &CheckStateReturn{
+		AllowVote: st.Status == ExpertStateNormal || st.Status == ExpertStateImplicated,
+		// TODO: Active: compare votes
 	}
 }

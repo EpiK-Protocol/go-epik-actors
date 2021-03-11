@@ -85,7 +85,7 @@ func main() {
 		expert.NominateExpertParams{},
 		expert.ChangeOwnerParams{},
 		expert.OnVotesChangedParams{},
-		expert.VoteAllowedReturn{},
+		expert.CheckStateReturn{},
 		// other types
 	); err != nil {
 		panic(err)
