@@ -27,7 +27,7 @@ func (a Actor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.ApplyRewards,
 		3:                         a.Claim,
-		4:                         a.NotifyImport,
+		4:                         a.OnExpertImport,
 		5:                         a.ResetExpert,
 		6:                         a.ChangeThreshold,
 		7:                         a.BatchCheckData,
@@ -107,24 +107,18 @@ func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.EmptyValue {
 	return nil
 }
 
-// NotifyImportParams import
-type NotifyImportParams struct {
-	Expert  address.Address
-	PieceID cid.Cid `checked:"true"`
-}
+// OnExpertImport
+func (a Actor) OnExpertImport(rt Runtime, params *builtin.OnExpertImportParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
-// NotifyImport
-func (a Actor) NotifyImport(rt Runtime, params *NotifyImportParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
-
 		found, err := st.HasDataID(adt.AsStore(rt), params.PieceID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
 		if found {
 			rt.Abortf(exitcode.ErrForbidden, "duplicate import by other expert")
 		}
-		st.PutData(adt.AsStore(rt), params.PieceID.String(), params.Expert)
+		st.PutData(adt.AsStore(rt), params.PieceID.String(), rt.Caller())
 	})
 	return nil
 }

@@ -135,7 +135,7 @@ var MethodsExpertFunds = struct {
 	Constructor     abi.MethodNum
 	ApplyRewards    abi.MethodNum
 	Claim           abi.MethodNum
-	NotifyImport    abi.MethodNum
+	OnExpertImport  abi.MethodNum
 	ResetExpert     abi.MethodNum
 	ChangeThreshold abi.MethodNum
 	BatchCheckData  abi.MethodNum
