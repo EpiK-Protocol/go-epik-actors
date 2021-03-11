@@ -42,7 +42,6 @@ func main() {
 		builtin.ConfirmSectorProofsParams{},
 		builtin.ApplyRewardParams{},
 		builtin.NotifyExpertImportParams{},
-		builtin.BlockCandidatesParams{},
 		builtin.BoolValue{},
 		builtin.ValidateGrantedParams{},
 		builtin.BatchPieceCIDParams{},
@@ -85,7 +84,8 @@ func main() {
 		expert.DataOnChainInfo{},
 		expert.NominateExpertParams{},
 		expert.ChangeOwnerParams{},
-		expert.ExpertVoteParams{},
+		expert.OnVotesChangedParams{},
+		expert.VoteAllowedReturn{},
 		// other types
 	); err != nil {
 		panic(err)

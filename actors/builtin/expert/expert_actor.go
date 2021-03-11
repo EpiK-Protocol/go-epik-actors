@@ -28,12 +28,13 @@ func (a Actor) Exports() []interface{} {
 		5:                         a.GetData,
 		6:                         a.StoreData,
 		7:                         a.Nominate,
-		8:                         a.NominateUpdate,
+		8:                         a.OnNominated,
 		9:                         a.Block,
 		10:                        a.OnImplicated,
 		11:                        a.ChangeOwner,
-		12:                        a.Vote,
+		12:                        a.OnVotesChanged,
 		13:                        a.Validate,
+		14:                        a.VoteAllowed,
 	}
 }
 
@@ -246,12 +247,12 @@ func (a Actor) Nominate(rt Runtime, params *NominateExpertParams) *abi.EmptyValu
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
 	})
 
-	code := rt.Send(params.Expert, builtin.MethodsExpert.NominateUpdate, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	code := rt.Send(params.Expert, builtin.MethodsExpert.OnNominated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to nominate expert")
 	return nil
 }
 
-func (a Actor) NominateUpdate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+func (a Actor) OnNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
 	var st State
@@ -285,10 +286,14 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	code := rt.Send(info.Proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to punish proposer expert")
 
+	code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.OnCandidateBlocked, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to notify expert blocked")
+
 	builtin.NotifyExpertFundReset(rt)
 	return nil
 }
 
+// Implicated for being the proposer of the blocked expert
 func (a Actor) OnImplicated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
@@ -333,11 +338,11 @@ func (a Actor) ChangeOwner(rt Runtime, params *ChangeOwnerParams) *abi.EmptyValu
 	return nil
 }
 
-type ExpertVoteParams struct {
-	Amount abi.TokenAmount
+type OnVotesChangedParams struct {
+	CurrentVotes abi.TokenAmount
 }
 
-func (a Actor) Vote(rt Runtime, params *ExpertVoteParams) *abi.EmptyValue {
+func (a Actor) OnVotesChanged(rt Runtime, params *OnVotesChangedParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.VoteFundActorCodeID)
 
 	validate := true
@@ -346,7 +351,7 @@ func (a Actor) Vote(rt Runtime, params *ExpertVoteParams) *abi.EmptyValue {
 		if st.Status == ExpertStateBlocked || st.Status == ExpertStateRegistered {
 			rt.Abortf(exitcode.ErrForbidden, "expert cannot be vote")
 		}
-		st.VoteAmount = params.Amount
+		st.VoteAmount = params.CurrentVotes
 
 		if err := st.Validate(adt.AsStore(rt), rt.CurrEpoch()); err != nil {
 			validate = false
@@ -356,4 +361,16 @@ func (a Actor) Vote(rt Runtime, params *ExpertVoteParams) *abi.EmptyValue {
 		builtin.NotifyExpertFundReset(rt)
 	}
 	return nil
+}
+
+type VoteAllowedReturn struct {
+	Allowed bool
+}
+
+func (a Actor) VoteAllowed(rt Runtime, _ *abi.EmptyValue) *VoteAllowedReturn {
+	var st State
+	rt.StateReadonly(&st)
+	return &VoteAllowedReturn{
+		Allowed: st.Status == ExpertStateNormal || st.Status == ExpertStateImplicated,
+	}
 }

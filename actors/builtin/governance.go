@@ -4,7 +4,6 @@ import (
 	addr "github.com/filecoin-project/go-address"
 	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/ipfs/go-cid"
@@ -44,18 +43,6 @@ func NotifyExpertFundReset(rt runtime.Runtime) {
 type NotifyVote struct {
 	Expert address.Address
 	Amount abi.TokenAmount
-}
-
-type BlockCandidatesParams struct {
-	Candidates []addr.Address
-}
-
-func NotifyExpertsBlocked(rt runtime.Runtime, blockedExperts ...addr.Address) {
-	params := &BlockCandidatesParams{
-		Candidates: blockedExperts,
-	}
-	code := rt.Send(VoteFundActorAddr, MethodsVote.BlockCandidates, params, big.Zero(), &Discard{})
-	RequireSuccess(rt, code, "failed to notify experts blocked")
 }
 
 type ExpertAddr struct {

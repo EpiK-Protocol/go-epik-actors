@@ -884,26 +884,26 @@ func (t *ChangeOwnerParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufExpertVoteParams = []byte{129}
+var lengthBufOnVotesChangedParams = []byte{129}
 
-func (t *ExpertVoteParams) MarshalCBOR(w io.Writer) error {
+func (t *OnVotesChangedParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufExpertVoteParams); err != nil {
+	if _, err := w.Write(lengthBufOnVotesChangedParams); err != nil {
 		return err
 	}
 
-	// t.Amount (big.Int) (struct)
-	if err := t.Amount.MarshalCBOR(w); err != nil {
+	// t.CurrentVotes (big.Int) (struct)
+	if err := t.CurrentVotes.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *ExpertVoteParams) UnmarshalCBOR(r io.Reader) error {
-	*t = ExpertVoteParams{}
+func (t *OnVotesChangedParams) UnmarshalCBOR(r io.Reader) error {
+	*t = OnVotesChangedParams{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -920,14 +920,70 @@ func (t *ExpertVoteParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Amount (big.Int) (struct)
+	// t.CurrentVotes (big.Int) (struct)
 
 	{
 
-		if err := t.Amount.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Amount: %w", err)
+		if err := t.CurrentVotes.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.CurrentVotes: %w", err)
 		}
 
+	}
+	return nil
+}
+
+var lengthBufVoteAllowedReturn = []byte{129}
+
+func (t *VoteAllowedReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufVoteAllowedReturn); err != nil {
+		return err
+	}
+
+	// t.Allowed (bool) (bool)
+	if err := cbg.WriteBool(w, t.Allowed); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *VoteAllowedReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = VoteAllowedReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Allowed (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.Allowed = false
+	case 21:
+		t.Allowed = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}
 	return nil
 }

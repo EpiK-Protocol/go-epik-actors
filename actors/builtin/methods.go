@@ -122,13 +122,14 @@ var MethodsExpert = struct {
 	GetData        abi.MethodNum
 	StoreData      abi.MethodNum
 	Nominate       abi.MethodNum
-	NominateUpdate abi.MethodNum
+	OnNominated    abi.MethodNum
 	Block          abi.MethodNum
 	OnImplicated   abi.MethodNum
 	ChangeOwner    abi.MethodNum
-	Vote           abi.MethodNum
+	OnVotesChanged abi.MethodNum
 	Validate       abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
+	VoteAllowed    abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
 
 var MethodsExpertFunds = struct {
 	Constructor     abi.MethodNum
@@ -144,13 +145,13 @@ var MethodsExpertFunds = struct {
 }{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 
 var MethodsVote = struct {
-	Constructor     abi.MethodNum
-	BlockCandidates abi.MethodNum
-	Vote            abi.MethodNum
-	Rescind         abi.MethodNum
-	Withdraw        abi.MethodNum
-	ApplyRewards    abi.MethodNum
-	OnEpochTickEnd  abi.MethodNum
+	Constructor        abi.MethodNum
+	OnCandidateBlocked abi.MethodNum
+	Vote               abi.MethodNum
+	Rescind            abi.MethodNum
+	Withdraw           abi.MethodNum
+	ApplyRewards       abi.MethodNum
+	OnEpochTickEnd     abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7}
 
 var MethodsRetrieval = struct {

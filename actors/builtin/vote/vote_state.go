@@ -79,14 +79,19 @@ func ConstructState(store adt.Store, fallback address.Address) (*State, error) {
 		return nil, xerrors.New("fallback not a ID-Address")
 	}
 
-	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	emptyCandidatesMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+		return nil, xerrors.Errorf("failed to create empty candidate map: %w", err)
+	}
+
+	emptyVotesMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty vote map: %w", err)
 	}
 
 	return &State{
-		Candidates:         emptyMapCid,
-		Voters:             emptyMapCid,
+		Candidates:         emptyCandidatesMapCid,
+		Voters:             emptyVotesMapCid,
 		TotalVotes:         abi.NewTokenAmount(0),
 		UnownedFunds:       abi.NewTokenAmount(0),
 		CumEarningsPerVote: abi.NewTokenAmount(0),
@@ -355,7 +360,7 @@ func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.
 			return xerrors.Errorf("negative delta earnigs %v after sub1 %v", deltaEarningsPerVote, voter.SettleCumEarningsPerVote)
 		}
 
-		voter.Withdrawable = big.Add(voter.Withdrawable, big.Mul(totalVotes, deltaEarningsPerVote))
+		voter.Withdrawable = big.Add(voter.Withdrawable, big.Div(big.Mul(totalVotes, deltaEarningsPerVote), Multiplier1E12))
 		voter.SettleCumEarningsPerVote = sameEpoch[0].BlockCumEarningsPerVote
 
 		totalVotes = big.Sub(totalVotes, blockedVotes[sameEpoch[0].BlockEpoch])
@@ -369,7 +374,7 @@ func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.
 		return xerrors.Errorf("negative delta earnings %v after sub2 %v", deltaEarningsPerVote, voter.SettleCumEarningsPerVote)
 	}
 
-	voter.Withdrawable = big.Add(voter.Withdrawable, big.Mul(totalVotes, deltaEarningsPerVote))
+	voter.Withdrawable = big.Add(voter.Withdrawable, big.Div(big.Mul(totalVotes, deltaEarningsPerVote), Multiplier1E12))
 	voter.SettleEpoch = cur
 	voter.SettleCumEarningsPerVote = st.CumEarningsPerVote
 	return nil

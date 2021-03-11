@@ -20,7 +20,7 @@ type Actor struct{}
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
-		2:                         a.BlockCandidates,
+		2:                         a.OnCandidateBlocked,
 		3:                         a.Vote,
 		4:                         a.Rescind,
 		5:                         a.Withdraw,
@@ -56,19 +56,11 @@ func (a Actor) Constructor(rt Runtime, fallback *addr.Address) *abi.EmptyValue {
 	return nil
 }
 
-func (a Actor) BlockCandidates(rt Runtime, params *builtin.BlockCandidatesParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
+func (a Actor) OnCandidateBlocked(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
-	if len(params.Candidates) == 0 {
-		return nil
-	}
-
-	candAddrs := make(map[addr.Address]struct{})
-	for _, cand := range params.Candidates {
-		resolved, ok := rt.ResolveAddress(cand)
-		builtin.RequireParam(rt, ok, "unable to resolve address %v", cand)
-
-		candAddrs[resolved] = struct{}{}
+	candAddrs := map[addr.Address]struct{}{
+		rt.Caller(): {},
 	}
 
 	var st State
@@ -99,7 +91,8 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 	candAddr, ok := rt.ResolveAddress(*candidate)
 	builtin.RequireParam(rt, ok, "unable to resolve address %v", candidate)
 
-	builtin.RequestExpertControlAddr(rt, candAddr)
+	allowed := checkVoteAllowed(rt, candAddr)
+	builtin.RequireParam(rt, allowed, "vote not allowed %s", candidate)
 
 	var st State
 	var afterVote *Candidate
@@ -145,7 +138,7 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 		st.TotalVotes = big.Add(st.TotalVotes, votes)
 	})
 
-	NotifyExpertVote(rt, candAddr, afterVote.Votes)
+	notifyVotesChanged(rt, candAddr, afterVote.Votes)
 	return nil
 }
 
@@ -204,17 +197,24 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 	})
 
 	// send notification even if blocked
-	NotifyExpertVote(rt, candAddr, afterRescind.Votes)
+	notifyVotesChanged(rt, candAddr, afterRescind.Votes)
 
 	return nil
 }
 
-func NotifyExpertVote(rt runtime.Runtime, expertAddr addr.Address, voteAmount abi.TokenAmount) {
-	params := &expert.ExpertVoteParams{
-		Amount: voteAmount,
+func checkVoteAllowed(rt runtime.Runtime, expertAddr addr.Address) bool {
+	var out expert.VoteAllowedReturn
+	code := rt.Send(expertAddr, builtin.MethodsExpert.VoteAllowed, nil, abi.NewTokenAmount(0), &out)
+	builtin.RequireSuccess(rt, code, "failed checking vote allowed")
+	return out.Allowed
+}
+
+func notifyVotesChanged(rt runtime.Runtime, expertAddr addr.Address, current abi.TokenAmount) {
+	params := &expert.OnVotesChangedParams{
+		CurrentVotes: current,
 	}
-	code := rt.Send(expertAddr, builtin.MethodsExpert.Vote, params, abi.NewTokenAmount(0), &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to notify expert vote")
+	code := rt.Send(expertAddr, builtin.MethodsExpert.OnVotesChanged, params, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to notify expert votes change")
 }
 
 // Withdraws unlocked rescinding votes and rewards, returns actual sent amount
@@ -309,9 +309,9 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 			st.UnownedFunds = big.Zero()
 			return
 		}
-
-		st.CumEarningsPerVote = big.Add(st.CumEarningsPerVote, big.Div(st.UnownedFunds, st.TotalVotes))
-		st.UnownedFunds = big.Mod(st.UnownedFunds, st.TotalVotes)
+		deltaPerVote := big.Div(big.Mul(st.UnownedFunds, Multiplier1E12), st.TotalVotes)
+		st.CumEarningsPerVote = big.Add(st.CumEarningsPerVote, deltaPerVote)
+		st.UnownedFunds = big.Sub(st.UnownedFunds, big.Div(big.Mul(deltaPerVote, st.TotalVotes), Multiplier1E12))
 	})
 
 	if !toFallback.IsZero() {

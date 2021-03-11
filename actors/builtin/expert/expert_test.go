@@ -259,12 +259,12 @@ func TestVote(t *testing.T) {
 		WithHasher(fixedHasher(0)).
 		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
 
-	t.Run("Vote", func(t *testing.T) {
+	t.Run("OnVotesChanged", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 
-		actor.Vote(rt, &expert.ExpertVoteParams{
-			Amount: abi.NewTokenAmount(1),
+		actor.OnVotesChanged(rt, &expert.OnVotesChangedParams{
+			CurrentVotes: abi.NewTokenAmount(1),
 		})
 	})
 }
@@ -335,7 +335,7 @@ func (h *actorHarness) Nominate(rt *mock.Runtime, params *expert.NominateExpertP
 
 	{
 		param := abi.EmptyValue{}
-		rt.ExpectSend(params.Expert, builtin.MethodsExpert.NominateUpdate, &param, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(params.Expert, builtin.MethodsExpert.OnNominated, &param, big.Zero(), nil, exitcode.Ok)
 	}
 
 	// {
@@ -378,7 +378,7 @@ func (h *actorHarness) ChangeOwner(rt *mock.Runtime, params *expert.ChangeOwnerP
 	rt.Verify()
 }
 
-func (h *actorHarness) Vote(rt *mock.Runtime, params *expert.ExpertVoteParams) {
+func (h *actorHarness) OnVotesChanged(rt *mock.Runtime, params *expert.OnVotesChangedParams) {
 
 	{
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ResetExpert, nil, big.Zero(), nil, exitcode.Ok)
@@ -386,7 +386,7 @@ func (h *actorHarness) Vote(rt *mock.Runtime, params *expert.ExpertVoteParams) {
 
 	rt.ExpectValidateCallerAddr(builtin.VoteFundActorAddr)
 	rt.SetCaller(builtin.VoteFundActorAddr, builtin.VoteFundActorCodeID)
-	rt.Call(h.a.Vote, params)
+	rt.Call(h.a.OnVotesChanged, params)
 	rt.Verify()
 }
 
