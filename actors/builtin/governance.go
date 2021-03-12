@@ -32,12 +32,6 @@ func NotifyExpertImport(rt runtime.Runtime, pieceID cid.Cid) {
 	RequireSuccess(rt, code, "failed to notify expert import")
 }
 
-// NotifyVoteParams vote params
-type NotifyVote struct {
-	Expert address.Address
-	Amount abi.TokenAmount
-}
-
 type ExpertAddr struct {
 	Owner addr.Address
 }
