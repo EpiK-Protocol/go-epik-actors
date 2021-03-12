@@ -18,6 +18,8 @@ type State struct {
 
 	ExpertsCount uint64
 
+	TrackedExperts cid.Cid // Set[expert]
+
 	PoolInfo cid.Cid
 
 	Datas cid.Cid // Map, AMT[key]address
@@ -57,15 +59,26 @@ type PoolInfo struct {
 
 // ConstructState expert fund construct
 func ConstructState(store adt.Store, pool cid.Cid) (*State, error) {
-	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	emptyExpertsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+
+	emptyDatasMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+
+	emptyTrackedExpertsSetCid, err := adt.StoreEmptySet(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
 	return &State{
-		Experts:  emptyMapCid,
-		PoolInfo: pool,
-		Datas:    emptyMapCid,
+		Experts:        emptyExpertsMapCid,
+		PoolInfo:       pool,
+		Datas:          emptyDatasMapCid,
+		TrackedExperts: emptyTrackedExpertsSetCid,
 
 		TotalExpertDataSize: abi.PaddedPieceSize(0),
 		TotalExpertReward:   abi.NewTokenAmount(0),

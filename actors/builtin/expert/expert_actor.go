@@ -32,7 +32,7 @@ func (a Actor) Exports() []interface{} {
 		9:                         a.Block,
 		10:                        a.OnImplicated,
 		11:                        a.ChangeOwner,
-		12:                        a.OnVotesChanged,
+		12:                        a.OnTrackUpdate,
 		13:                        a.Validate,
 		14:                        a.CheckState,
 	}
@@ -243,6 +243,8 @@ func (a Actor) Nominate(rt Runtime, params *NominateExpertParams) *abi.EmptyValu
 		info := getExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
 
+		builtin.RequireState(rt, st.Status == ExpertStateNormal, "proposer is not normal")
+
 		err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
 	})
@@ -258,12 +260,21 @@ func (a Actor) OnNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		info := getExpertInfo(rt, &st)
+
+		builtin.RequireState(rt, info.Type != builtin.ExpertFoundation, "foundation expert cannot be nominated")
+		builtin.RequireState(rt, st.Status == ExpertStateRegistered || st.Status == ExpertStateUnqualified, "nominate expert with error status")
+
 		info.Proposer = rt.Caller()
 		err := st.SaveInfo(adt.AsStore(rt), info)
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to update nominate")
 
-		st.Status = ExpertStateNormal
+		// reset LostEpoch of both new registered & unqualified experts to NoLostEpoch
+		st.LostEpoch = NoLostEpoch
+		st.Status = ExpertStateNominated
 	})
+
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.TrackNewNominated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to track new nominated")
 	return nil
 }
 
@@ -280,6 +291,8 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		builtin.RequireParam(rt, st.Status != ExpertStateBlocked, "expert already blocked")
 		builtin.RequireParam(rt, st.Status != ExpertStateRegistered, "non-nominated cannot be blocked")
 
+		// allow to block unqualified expert for they have valid votes
+
 		st.Status = ExpertStateBlocked
 	})
 
@@ -289,7 +302,6 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.OnCandidateBlocked, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to notify expert blocked")
 
-	builtin.NotifyExpertFundReset(rt)
 	return nil
 }
 
@@ -317,7 +329,7 @@ func (a Actor) OnImplicated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		}
 	})
 	if !validate {
-		builtin.NotifyExpertFundReset(rt)
+		// builtin.NotifyExpertFundReset(rt)
 	}
 	return nil
 }
@@ -338,41 +350,67 @@ func (a Actor) ChangeOwner(rt Runtime, params *ChangeOwnerParams) *abi.EmptyValu
 	return nil
 }
 
-type OnVotesChangedParams struct {
-	CurrentVotes abi.TokenAmount
-}
-
-func (a Actor) OnVotesChanged(rt Runtime, params *OnVotesChangedParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.VoteFundActorCodeID)
-
-	validate := true
-	var st State
-	rt.StateTransaction(&st, func() {
-		if st.Status == ExpertStateBlocked || st.Status == ExpertStateRegistered {
-			rt.Abortf(exitcode.ErrForbidden, "expert cannot be vote")
-		}
-		st.VoteAmount = params.CurrentVotes
-
-		if err := st.Validate(adt.AsStore(rt), rt.CurrEpoch()); err != nil {
-			validate = false
-		}
-	})
-	if !validate {
-		builtin.NotifyExpertFundReset(rt)
-	}
-	return nil
-}
-
 type CheckStateReturn struct {
 	AllowVote bool
-	Active    bool // Gained enough votes to Nominate or ImportData
+	Qualified bool
 }
 
 func (a Actor) CheckState(rt Runtime, _ *abi.EmptyValue) *CheckStateReturn {
 	var st State
 	rt.StateReadonly(&st)
 	return &CheckStateReturn{
-		AllowVote: st.Status == ExpertStateNormal || st.Status == ExpertStateImplicated,
-		// TODO: Active: compare votes
+		AllowVote: st.Status == ExpertStateNormal || st.Status == ExpertStateNominated,
+		Qualified: st.Status == ExpertStateNormal,
 	}
+}
+
+type OnTrackUpdateParams struct {
+	Votes abi.TokenAmount
+}
+
+type OnTrackUpdateReturn struct {
+	ResetMe   bool
+	UntrackMe bool // tell expertfund_actor to untrack this expert
+}
+
+// Called by expertfund.OnEpochTickEnd
+func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUpdateReturn {
+	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
+
+	var ret OnTrackUpdateReturn
+
+	var st State
+	store := adt.AsStore(rt)
+	rt.StateTransaction(&st, func() {
+		info, err := st.GetInfo(store)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not get expert info")
+
+		builtin.RequireState(rt, st.Status != ExpertStateRegistered &&
+			st.Status != ExpertStateUnqualified &&
+			info.Type != builtin.ExpertFoundation, "expert being track with error status %s, %s", st.Status, info.Type)
+
+		if st.Status == ExpertStateBlocked {
+			ret.ResetMe = true
+			ret.UntrackMe = true
+			return
+		}
+
+		beforeBelow := st.LostEpoch != NoLostEpoch
+		nowBelow := params.Votes.LessThan(ExpertVoteThreshold) // TODO: replace with actual threshold
+
+		if !beforeBelow && nowBelow {
+			st.LostEpoch = rt.CurrEpoch()
+		} else if beforeBelow && !nowBelow {
+			st.LostEpoch = NoLostEpoch
+			st.Status = ExpertStateNormal
+		} else if beforeBelow && nowBelow {
+			if rt.CurrEpoch() > st.LostEpoch+ExpertVoteCheckPeriod {
+				ret.ResetMe = true
+				ret.UntrackMe = true
+				st.Status = ExpertStateUnqualified
+			}
+		} // else do nothing, always ExpertStateNormal
+	})
+
+	return &ret
 }

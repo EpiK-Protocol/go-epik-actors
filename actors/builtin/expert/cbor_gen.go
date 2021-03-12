@@ -884,54 +884,6 @@ func (t *ChangeOwnerParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufOnVotesChangedParams = []byte{129}
-
-func (t *OnVotesChangedParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufOnVotesChangedParams); err != nil {
-		return err
-	}
-
-	// t.CurrentVotes (big.Int) (struct)
-	if err := t.CurrentVotes.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *OnVotesChangedParams) UnmarshalCBOR(r io.Reader) error {
-	*t = OnVotesChangedParams{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.CurrentVotes (big.Int) (struct)
-
-	{
-
-		if err := t.CurrentVotes.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.CurrentVotes: %w", err)
-		}
-
-	}
-	return nil
-}
-
 var lengthBufCheckStateReturn = []byte{130}
 
 func (t *CheckStateReturn) MarshalCBOR(w io.Writer) error {
@@ -948,8 +900,8 @@ func (t *CheckStateReturn) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.Active (bool) (bool)
-	if err := cbg.WriteBool(w, t.Active); err != nil {
+	// t.Qualified (bool) (bool)
+	if err := cbg.WriteBool(w, t.Qualified); err != nil {
 		return err
 	}
 	return nil
@@ -990,7 +942,7 @@ func (t *CheckStateReturn) UnmarshalCBOR(r io.Reader) error {
 	default:
 		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}
-	// t.Active (bool) (bool)
+	// t.Qualified (bool) (bool)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -1001,9 +953,135 @@ func (t *CheckStateReturn) UnmarshalCBOR(r io.Reader) error {
 	}
 	switch extra {
 	case 20:
-		t.Active = false
+		t.Qualified = false
 	case 21:
-		t.Active = true
+		t.Qualified = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	return nil
+}
+
+var lengthBufOnTrackUpdateParams = []byte{129}
+
+func (t *OnTrackUpdateParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufOnTrackUpdateParams); err != nil {
+		return err
+	}
+
+	// t.Votes (big.Int) (struct)
+	if err := t.Votes.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *OnTrackUpdateParams) UnmarshalCBOR(r io.Reader) error {
+	*t = OnTrackUpdateParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Votes (big.Int) (struct)
+
+	{
+
+		if err := t.Votes.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Votes: %w", err)
+		}
+
+	}
+	return nil
+}
+
+var lengthBufOnTrackUpdateReturn = []byte{130}
+
+func (t *OnTrackUpdateReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufOnTrackUpdateReturn); err != nil {
+		return err
+	}
+
+	// t.ResetMe (bool) (bool)
+	if err := cbg.WriteBool(w, t.ResetMe); err != nil {
+		return err
+	}
+
+	// t.UntrackMe (bool) (bool)
+	if err := cbg.WriteBool(w, t.UntrackMe); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *OnTrackUpdateReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = OnTrackUpdateReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.ResetMe (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.ResetMe = false
+	case 21:
+		t.ResetMe = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	// t.UntrackMe (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.UntrackMe = false
+	case 21:
+		t.UntrackMe = true
 	default:
 		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
 	}

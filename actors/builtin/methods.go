@@ -126,23 +126,24 @@ var MethodsExpert = struct {
 	Block          abi.MethodNum
 	OnImplicated   abi.MethodNum
 	ChangeOwner    abi.MethodNum
-	OnVotesChanged abi.MethodNum
+	OnTrackUpdate  abi.MethodNum
 	Validate       abi.MethodNum
 	CheckState     abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
 
 var MethodsExpertFunds = struct {
-	Constructor     abi.MethodNum
-	ApplyRewards    abi.MethodNum
-	Claim           abi.MethodNum
-	OnExpertImport  abi.MethodNum
-	ResetExpert     abi.MethodNum
-	ChangeThreshold abi.MethodNum
-	BatchCheckData  abi.MethodNum
-	BatchStoreData  abi.MethodNum
-	GetData         abi.MethodNum
-	ApplyForExpert  abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	Constructor       abi.MethodNum
+	ApplyRewards      abi.MethodNum
+	Claim             abi.MethodNum
+	OnExpertImport    abi.MethodNum
+	ChangeThreshold   abi.MethodNum
+	BatchCheckData    abi.MethodNum
+	BatchStoreData    abi.MethodNum
+	GetData           abi.MethodNum
+	ApplyForExpert    abi.MethodNum
+	OnEpochTickEnd    abi.MethodNum
+	TrackNewNominated abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
 
 var MethodsVote = struct {
 	Constructor        abi.MethodNum
@@ -152,7 +153,8 @@ var MethodsVote = struct {
 	Withdraw           abi.MethodNum
 	ApplyRewards       abi.MethodNum
 	OnEpochTickEnd     abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7}
+	GetCandidates      abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
 
 var MethodsRetrieval = struct {
 	Constructor      abi.MethodNum

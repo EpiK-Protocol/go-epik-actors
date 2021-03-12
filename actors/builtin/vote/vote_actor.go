@@ -26,6 +26,7 @@ func (a Actor) Exports() []interface{} {
 		5:                         a.Withdraw,
 		6:                         a.ApplyRewards,
 		7:                         a.OnEpochTickEnd,
+		8:                         a.GetCandidates,
 	}
 }
 
@@ -56,6 +57,7 @@ func (a Actor) Constructor(rt Runtime, fallback *addr.Address) *abi.EmptyValue {
 	return nil
 }
 
+// Called by Expert.Block
 func (a Actor) OnCandidateBlocked(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
@@ -68,12 +70,8 @@ func (a Actor) OnCandidateBlocked(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue
 		candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
 
-		n, err := st.BlockCandidates(candidates, candAddrs, rt.CurrEpoch())
+		_, err = st.BlockCandidates(candidates, candAddrs, rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to block candidates")
-
-		if n == 0 {
-			return
-		}
 
 		st.Candidates, err = candidates.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush candidates")
@@ -95,7 +93,6 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 	builtin.RequireParam(rt, allowed, "vote not allowed %s", candidate)
 
 	var st State
-	var afterVote *Candidate
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
 		candidates, err := adt.AsMap(store, st.Candidates, builtin.DefaultHamtBitwidth)
@@ -121,7 +118,7 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
 		}
 
-		afterVote, err = st.addToCandidate(candidates, candAddr, votes)
+		_, err = st.addToCandidate(candidates, candAddr, votes)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add votes to candidate")
 
 		err = st.addToTally(store, voter, candAddr, votes)
@@ -138,7 +135,6 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 		st.TotalVotes = big.Add(st.TotalVotes, votes)
 	})
 
-	notifyVotesChanged(rt, candAddr, afterVote.Votes)
 	return nil
 }
 
@@ -196,9 +192,6 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 		}
 	})
 
-	// send notification even if blocked
-	notifyVotesChanged(rt, candAddr, afterRescind.Votes)
-
 	return nil
 }
 
@@ -207,14 +200,6 @@ func checkVoteAllowed(rt runtime.Runtime, expertAddr addr.Address) bool {
 	code := rt.Send(expertAddr, builtin.MethodsExpert.CheckState, nil, abi.NewTokenAmount(0), &out)
 	builtin.RequireSuccess(rt, code, "failed to check expert state")
 	return out.AllowVote
-}
-
-func notifyVotesChanged(rt runtime.Runtime, expertAddr addr.Address, current abi.TokenAmount) {
-	params := &expert.OnVotesChangedParams{
-		CurrentVotes: current,
-	}
-	code := rt.Send(expertAddr, builtin.MethodsExpert.OnVotesChanged, params, abi.NewTokenAmount(0), &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to notify expert votes change")
 }
 
 // Withdraws unlocked rescinding votes and rewards, returns actual sent amount
@@ -320,4 +305,36 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	}
 
 	return nil
+}
+
+type GetCandidatesParams struct {
+	Addresses []addr.Address
+}
+
+type GetCandidatesReturn struct {
+	Votes []abi.TokenAmount
+}
+
+func (a Actor) GetCandidates(rt Runtime, params *GetCandidatesParams) *GetCandidatesReturn {
+	rt.ValidateImmediateCallerAcceptAny()
+
+	var ret GetCandidatesReturn
+
+	var st State
+	rt.StateReadonly(&st)
+
+	candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates, builtin.DefaultHamtBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
+
+	for _, candAddr := range params.Addresses {
+		builtin.RequireParam(rt, candAddr.Protocol() == addr.ID, "ID address required")
+
+		candidate, found, err := getCandidate(candidates, candAddr)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get candidate")
+		builtin.RequireParam(rt, found, "candidate not found %s", candAddr)
+
+		ret.Votes = append(ret.Votes, candidate.Votes)
+	}
+
+	return &ret
 }

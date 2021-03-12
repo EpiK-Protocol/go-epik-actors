@@ -250,25 +250,6 @@ func TestFoundationChange(t *testing.T) {
 	})
 }
 
-func TestVote(t *testing.T) {
-	owner := tutil.NewIDAddr(t, 100)
-	actorAddr := tutil.NewIDAddr(t, 1000)
-	actor := newHarness(t, actorAddr, owner)
-	builder := mock.NewBuilder(context.Background(), actor.receiver).
-		WithActorType(owner, builtin.AccountActorCodeID).
-		WithHasher(fixedHasher(0)).
-		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
-
-	t.Run("OnVotesChanged", func(t *testing.T) {
-		rt := builder.Build(t)
-		actor.constructAndVerify(rt)
-
-		actor.OnVotesChanged(rt, &expert.OnVotesChangedParams{
-			CurrentVotes: abi.NewTokenAmount(1),
-		})
-	})
-}
-
 func newExpertDataParams(pieceID cid.Cid) *expert.ExpertDataParams {
 	return &expert.ExpertDataParams{
 		PieceID: pieceID,
@@ -359,9 +340,9 @@ func (h *actorHarness) Block(rt *mock.Runtime) {
 		rt.ExpectSend(h.receiver, builtin.MethodsExpert.OnImplicated, &param, big.Zero(), nil, exitcode.Ok)
 	}
 
-	{
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ResetExpert, nil, big.Zero(), nil, exitcode.Ok)
-	}
+	// {
+	// 	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ResetExpert, nil, big.Zero(), nil, exitcode.Ok)
+	// }
 
 	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
 	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
@@ -375,18 +356,6 @@ func (h *actorHarness) ChangeOwner(rt *mock.Runtime, params *expert.ChangeOwnerP
 	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
 	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
 	rt.Call(h.a.ChangeOwner, params)
-	rt.Verify()
-}
-
-func (h *actorHarness) OnVotesChanged(rt *mock.Runtime, params *expert.OnVotesChangedParams) {
-
-	{
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ResetExpert, nil, big.Zero(), nil, exitcode.Ok)
-	}
-
-	rt.ExpectValidateCallerAddr(builtin.VoteFundActorAddr)
-	rt.SetCaller(builtin.VoteFundActorAddr, builtin.VoteFundActorCodeID)
-	rt.Call(h.a.OnVotesChanged, params)
 	rt.Verify()
 }
 

@@ -71,7 +71,7 @@ func ConstructState(store adt.Store, info cid.Cid, state ExpertState, emptyChang
 		Info:        info,
 		Datas:       emptyMapCid,
 		VoteAmount:  abi.NewTokenAmount(0),
-		LostEpoch:   abi.ChainEpoch(-1),
+		LostEpoch:   NoLostEpoch,
 		Status:      state,
 		OwnerChange: emptyChange,
 	}, nil

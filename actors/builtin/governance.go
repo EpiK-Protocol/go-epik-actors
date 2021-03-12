@@ -32,11 +32,6 @@ func NotifyExpertImport(rt runtime.Runtime, pieceID cid.Cid) {
 	RequireSuccess(rt, code, "failed to notify expert import")
 }
 
-func NotifyExpertFundReset(rt runtime.Runtime) {
-	code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.ResetExpert, nil, abi.NewTokenAmount(0), &Discard{})
-	RequireSuccess(rt, code, "failed to reset expert")
-}
-
 // NotifyVoteParams vote params
 type NotifyVote struct {
 	Expert address.Address

@@ -8,6 +8,7 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v2/support/mock"
@@ -100,6 +101,7 @@ func TestVote(t *testing.T) {
 		rt.SetReceived(big.NewInt(1))
 		rt.SetBalance(big.Zero())
 		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "non positive votes to vote", func() {
 			rt.Call(actor.Vote, &candidate1)
 		})

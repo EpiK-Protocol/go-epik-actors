@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 
+	address "github.com/filecoin-project/go-address"
 	abi "github.com/filecoin-project/go-state-types/abi"
+	big "github.com/filecoin-project/go-state-types/big"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	xerrors "golang.org/x/xerrors"
 )
@@ -519,5 +521,163 @@ func (t *RescindParams) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
+	return nil
+}
+
+var lengthBufGetCandidatesParams = []byte{129}
+
+func (t *GetCandidatesParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufGetCandidatesParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Addresses ([]address.Address) (slice)
+	if len(t.Addresses) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Addresses was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Addresses))); err != nil {
+		return err
+	}
+	for _, v := range t.Addresses {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *GetCandidatesParams) UnmarshalCBOR(r io.Reader) error {
+	*t = GetCandidatesParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Addresses ([]address.Address) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Addresses: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Addresses = make([]address.Address, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v address.Address
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.Addresses[i] = v
+	}
+
+	return nil
+}
+
+var lengthBufGetCandidatesReturn = []byte{129}
+
+func (t *GetCandidatesReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufGetCandidatesReturn); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Votes ([]big.Int) (slice)
+	if len(t.Votes) > cbg.MaxLength {
+		return xerrors.Errorf("Slice value in field t.Votes was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Votes))); err != nil {
+		return err
+	}
+	for _, v := range t.Votes {
+		if err := v.MarshalCBOR(w); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *GetCandidatesReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = GetCandidatesReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Votes ([]big.Int) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.MaxLength {
+		return fmt.Errorf("t.Votes: array too large (%d)", extra)
+	}
+
+	if maj != cbg.MajArray {
+		return fmt.Errorf("expected cbor array")
+	}
+
+	if extra > 0 {
+		t.Votes = make([]big.Int, extra)
+	}
+
+	for i := 0; i < int(extra); i++ {
+
+		var v big.Int
+		if err := v.UnmarshalCBOR(br); err != nil {
+			return err
+		}
+
+		t.Votes[i] = v
+	}
+
 	return nil
 }

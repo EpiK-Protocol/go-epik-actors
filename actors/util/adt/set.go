@@ -33,6 +33,14 @@ func MakeEmptySet(s Store, bitwidth int) (*Set, error) {
 	return &Set{m}, nil
 }
 
+func StoreEmptySet(store Store, bitwidth int) (cid.Cid, error) {
+	s, err := MakeEmptySet(store, bitwidth)
+	if err != nil {
+		return cid.Undef, err
+	}
+	return s.Root()
+}
+
 // Root return the root cid of HAMT.
 func (h *Set) Root() (cid.Cid, error) {
 	return h.m.Root()

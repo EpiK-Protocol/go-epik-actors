@@ -14,7 +14,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{136}
+var lengthBufState = []byte{137}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -37,6 +37,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ExpertsCount)); err != nil {
 		return err
+	}
+
+	// t.TrackedExperts (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.TrackedExperts); err != nil {
+		return xerrors.Errorf("failed to write cid field t.TrackedExperts: %w", err)
 	}
 
 	// t.PoolInfo (cid.Cid) (struct)
@@ -90,7 +96,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 8 {
+	if extra != 9 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -118,6 +124,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
 		t.ExpertsCount = uint64(extra)
+
+	}
+	// t.TrackedExperts (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.TrackedExperts: %w", err)
+		}
+
+		t.TrackedExperts = c
 
 	}
 	// t.PoolInfo (cid.Cid) (struct)

@@ -84,8 +84,9 @@ func main() {
 		expert.DataOnChainInfo{},
 		expert.NominateExpertParams{},
 		expert.ChangeOwnerParams{},
-		expert.OnVotesChangedParams{},
 		expert.CheckStateReturn{},
+		expert.OnTrackUpdateParams{},
+		expert.OnTrackUpdateReturn{},
 		// other types
 	); err != nil {
 		panic(err)
@@ -308,6 +309,8 @@ func main() {
 		vote.Voter{},
 		vote.VotesInfo{},
 		vote.RescindParams{},
+		vote.GetCandidatesParams{},
+		vote.GetCandidatesReturn{},
 	); err != nil {
 		panic(err)
 	}

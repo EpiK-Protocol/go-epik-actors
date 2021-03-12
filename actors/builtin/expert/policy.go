@@ -6,6 +6,22 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
 
+/*
+					+ ---------------------------------------------------------------------------------------------- +
+					|																			 					 |
+					|												    						 				  	 |
+					|												    						 			   	  	 |
+					|								  	   			              + -----------> blocked	    	 |
+					|						                                      | 						    	 |
+					|					  + ----> qualified(normal/implicated) -- +               	                 |
+		            |       			  |						                  |  	                             |
+	registered ---- + -----> nominated -- +							              + ---------------------------> unqualified
+										  |	                               			            					 ↑
+										  + ------------------------------------------------------------------------ +
+
+
+*/
+
 // ExpertState is the state of expert.
 type ExpertState uint64
 
@@ -13,14 +29,20 @@ const (
 	// ExpertStateRegistered registered expert
 	ExpertStateRegistered ExpertState = iota
 
+	// Expert was nominated by qualified one.
+	ExpertStateNominated
+
 	// ExpertStateNormal foundation expert
 	ExpertStateNormal
 
 	// ExpertStateImplicated implicated expert
-	ExpertStateImplicated
+	ExpertStateImplicated // TODO:
 
 	// ExpertStateBlocked blocked expert
 	ExpertStateBlocked
+
+	// Number of votes decreased to less than threshold.
+	ExpertStateUnqualified
 )
 
 // ExpertApplyCost expert apply cost
@@ -34,3 +56,5 @@ var ExpertVoteThresholdAddition = big.Add(ExpertVoteThreshold, big.Mul(big.NewIn
 
 // ExpertVoteCheckPeriod period of expert vote check duration
 var ExpertVoteCheckPeriod = abi.ChainEpoch(3 * builtin.EpochsInDay) // 3 * 24 hours PARAM_SPEC
+
+const NoLostEpoch = abi.ChainEpoch(-1)
