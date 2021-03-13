@@ -294,6 +294,7 @@ func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		// allow to block unqualified expert for they have valid votes
 
 		st.Status = ExpertStateBlocked
+		st.LostEpoch = rt.CurrEpoch()
 	})
 
 	code := rt.Send(info.Proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
@@ -398,18 +399,24 @@ func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUp
 		beforeBelow := st.LostEpoch != NoLostEpoch
 		nowBelow := params.Votes.LessThan(ExpertVoteThreshold) // TODO: replace with actual threshold
 
-		if !beforeBelow && nowBelow {
-			st.LostEpoch = rt.CurrEpoch()
-		} else if beforeBelow && !nowBelow {
-			st.LostEpoch = NoLostEpoch
-			st.Status = ExpertStateNormal
-		} else if beforeBelow && nowBelow {
-			if rt.CurrEpoch() > st.LostEpoch+ExpertVoteCheckPeriod {
-				ret.ResetMe = true
-				ret.UntrackMe = true
-				st.Status = ExpertStateUnqualified
+		if !beforeBelow {
+			if nowBelow {
+				st.LostEpoch = rt.CurrEpoch()
+			} else {
+				st.Status = ExpertStateNormal
 			}
-		} // else do nothing, always ExpertStateNormal
+		} else {
+			if nowBelow {
+				if rt.CurrEpoch() > st.LostEpoch+ExpertVoteCheckPeriod {
+					ret.ResetMe = true
+					ret.UntrackMe = true
+					st.Status = ExpertStateUnqualified
+				}
+			} else {
+				st.LostEpoch = NoLostEpoch
+				st.Status = ExpertStateNormal
+			}
+		}
 	})
 
 	return &ret

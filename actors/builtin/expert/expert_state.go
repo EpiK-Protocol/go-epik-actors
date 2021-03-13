@@ -21,7 +21,7 @@ type State struct {
 	// VoteAmount expert vote amount
 	VoteAmount abi.TokenAmount
 
-	// LostEpoch record expert votes <  epoch
+	// LostEpoch record expert votes <  epoch or blocked epoch
 	LostEpoch abi.ChainEpoch
 
 	// Status of expert
