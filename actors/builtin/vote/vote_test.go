@@ -442,6 +442,44 @@ func TestRescind(t *testing.T) {
 		require.True(t, st.TotalVotes.Equals(big.NewInt(999)))
 		require.True(t, st.CumEarningsPerVote.IsZero())
 	})
+
+	t.Run("withdraw after lock period over", func(t *testing.T) {
+		rt, actor := setupFunc()
+		rt.SetBalance(big.NewInt(1000))
+
+		rt.SetEpoch(100)
+		actor.vote(rt, caller, candidate1, big.NewInt(1000))
+		actor.cronTick(rt, nil)
+
+		rt.SetEpoch(101)
+		actor.rescind(rt, caller, candidate1, big.NewInt(1))
+		actor.cronTick(rt, nil)
+
+		var st vote.State
+		rt.GetState(&st)
+		list, err := st.ListVotesInfo(adt.AsStore(rt), caller)
+		require.NoError(t, err)
+		require.True(t, len(list) == 1)
+		require.True(t, list[candidate1].RescindingVotes.Equals(abi.NewTokenAmount(1)))
+		require.True(t, list[candidate1].Votes.Equals(abi.NewTokenAmount(999)))
+		require.True(t, list[candidate1].LastRescindEpoch == 101)
+
+		sum := actor.checkState(rt)
+		require.True(t, sum.TotalRescindingVotes.Equals(big.NewInt(1)))
+		require.True(t, sum.TotalNonBlockedVotes.Equals(big.NewInt(999)))
+		require.True(t, sum.TotalBlockedVotes.Equals(big.NewInt(0)))
+		require.True(t, st.TotalVotes.Equals(big.NewInt(999)))
+		require.True(t, st.CumEarningsPerVote.IsZero())
+
+		// last epoch that not withdrawable
+		rt.SetEpoch(101 + vote.RescindingUnlockDelay)
+		actor.withdraw(rt, caller, caller, big.Zero())
+		require.True(t, rt.Balance().Equals(big.NewInt(1000)))
+
+		rt.SetEpoch(102 + vote.RescindingUnlockDelay)
+		actor.withdraw(rt, caller, caller, big.NewInt(1))
+		require.True(t, rt.Balance().Equals(big.NewInt(999)))
+	})
 }
 
 func TestApplyRewards(t *testing.T) {
@@ -547,6 +585,201 @@ func TestWithdraw(t *testing.T) {
 	})
 }
 
+func TestOnEpochTickEnd(t *testing.T) {
+	caller := tutil.NewIDAddr(t, 100)
+	caller2 := tutil.NewIDAddr(t, 101)
+	fallback := tutil.NewIDAddr(t, 102)
+	candidate1 := tutil.NewIDAddr(t, 103)
+	candidate2 := tutil.NewIDAddr(t, 104)
+	candidate3 := tutil.NewIDAddr(t, 105)
+
+	setupFunc := func() (*mock.Runtime, *actorHarness) {
+		builder := mock.NewBuilder(context.Background(), builtin.VoteFundActorAddr).
+			WithActorType(fallback, builtin.AccountActorCodeID)
+		rt := builder.Build(t)
+
+		actor := newHarness(t, fallback)
+		actor.constructAndVerify(rt)
+
+		return rt, actor
+	}
+
+	t.Run("send funds to fallback when no votes", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		// zero funds, no send
+		rt.SetEpoch(100)
+		actor.applyRewards(rt, abi.NewTokenAmount(0))
+		var st vote.State
+		rt.GetState(&st)
+		require.True(t, st.UnownedFunds.Equals(big.NewInt(0)))
+
+		rt.SetCaller(builtin.CronActorAddr, builtin.CronActorCodeID)
+		rt.ExpectValidateCallerAddr(builtin.CronActorAddr)
+		rt.Call(actor.OnEpochTickEnd, nil)
+		rt.Verify()
+
+		// non-zero funds, send to fallback
+		rt.SetEpoch(101)
+		funds := big.NewInt(13)
+		rt.SetBalance(funds)
+		actor.applyRewards(rt, funds)
+		rt.GetState(&st)
+		require.True(t, st.UnownedFunds.Equals(funds))
+
+		rt.SetCaller(builtin.CronActorAddr, builtin.CronActorCodeID)
+		rt.ExpectValidateCallerAddr(builtin.CronActorAddr)
+		rt.ExpectSend(fallback, builtin.MethodSend, nil, funds, nil, exitcode.Ok)
+		rt.Call(actor.OnEpochTickEnd, nil)
+		rt.Verify()
+
+		rt.GetState(&st)
+		require.True(t, st.UnownedFunds.IsZero() && rt.Balance().Sign() == 0)
+	})
+
+	t.Run("vote, withdraw and rescind", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		// vote at 100
+		rt.SetEpoch(100)
+		actor.vote(rt, caller, candidate1, abi.NewTokenAmount(99))
+		actor.cronTick(rt, nil)
+
+		// apply rewards at 101
+		rt.SetEpoch(101)
+		actor.applyRewards(rt, abi.NewTokenAmount(100))
+		actor.cronTick(rt, nil)
+		rt.SetBalance(abi.NewTokenAmount(199)) // 100 rewards + 99 votes
+
+		var st vote.State
+		rt.GetState(&st)
+		cumPerVote := st.CumEarningsPerVote
+		require.True(t, cumPerVote.Equals(big.NewInt(1010101010101))) // ⌊100 * 1e12 / 99⌋
+		require.True(t, st.UnownedFunds.Equals(big.NewInt(1)))        // 100 - ⌊1010101010101 * 99 / 1e12⌋
+
+		// actual states
+		voter, _ := st.GetVoter(adt.AsStore(rt), caller)
+		require.True(t, voter.SettleEpoch == 100)
+		require.True(t, voter.Withdrawable.Equals(big.Zero()))
+		require.True(t, voter.SettleCumEarningsPerVote.Equals(big.Zero()))
+
+		// estimate settle states
+		voter, _ = st.EstimateSettle(adt.AsStore(rt), caller, 101)
+		require.True(t, voter.Withdrawable.Equals(abi.NewTokenAmount(99)))
+		require.True(t, voter.SettleCumEarningsPerVote.Equals(st.CumEarningsPerVote))
+
+		// withdaw at 102
+		rt.SetEpoch(102)
+		actor.withdraw(rt, caller, caller, abi.NewTokenAmount(99))
+		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(100)))
+		actor.cronTick(rt, nil)
+
+		rt.GetState(&st)
+		require.True(t, st.UnownedFunds.Equals(big.NewInt(1)))
+		one99Delta := abi.NewTokenAmount(10101010101)                                  // ⌊1 * 1e12 / 99⌋
+		require.True(t, st.CumEarningsPerVote.Equals(big.Add(cumPerVote, one99Delta))) // 1020202020202
+
+		// resciding at 103
+		rt.SetEpoch(103)
+		actor.rescind(rt, caller, candidate1, abi.NewTokenAmount(88))
+		actor.cronTick(rt, nil)
+		rt.GetState(&st)
+		deltaltaAfterRescind := abi.NewTokenAmount(90909090909)                                                         // ⌊1 * 1e12 / 11⌋ = 90909090909
+		require.True(t, st.CumEarningsPerVote.Equals(big.Add(abi.NewTokenAmount(1020202020202), deltaltaAfterRescind))) // 1111111111111
+		voter, _ = st.EstimateSettle(adt.AsStore(rt), caller, 103)
+		require.True(t, voter.Withdrawable.IsZero()) //  st.UnownedFunds = 1
+		cumPerVote = st.CumEarningsPerVote
+
+		// cron to 104
+		rt.SetEpoch(104)
+		list, err := st.ListVotesInfo(adt.AsStore(rt), caller)
+		require.NoError(t, err)
+		require.True(t, len(list) == 1 && st.TotalVotes.Equals(abi.NewTokenAmount(11)))
+		require.True(t, list[candidate1].RescindingVotes.Equals(abi.NewTokenAmount(88))) // caller 1 rescinding 88
+		require.True(t, list[candidate1].Votes.Equals(abi.NewTokenAmount(11)))
+		require.True(t, list[candidate1].LastRescindEpoch == 103)
+
+		actor.vote(rt, caller2, candidate2, abi.NewTokenAmount(80)) // call1 - 11, caller2 - 80
+		actor.applyRewards(rt, abi.NewTokenAmount(90))              // UnownedFunds = 91
+		actor.cronTick(rt, nil)
+		rt.SetBalance(abi.NewTokenAmount(270)) // call1 99(11+88) + call2 80 + UnownedFunds 91
+
+		rt.GetState(&st)
+		deltaPerVote := calcExpectDeltaPerVote(abi.NewTokenAmount(91), abi.NewTokenAmount(91)) // 1000000000000
+		require.True(t, big.Sub(st.CumEarningsPerVote, cumPerVote).Equals(deltaPerVote))
+
+		voter1, _ := st.EstimateSettle(adt.AsStore(rt), caller, 104)
+		require.True(t, voter1.Withdrawable.Equals(abi.NewTokenAmount(11)))
+		voter2, _ := st.EstimateSettle(adt.AsStore(rt), caller2, 104)
+		require.True(t, voter2.Withdrawable.Equals(abi.NewTokenAmount(80)))
+		require.True(t, st.UnownedFunds.IsZero())
+	})
+
+	t.Run("block some candidates", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		expW := func(w1, w2 int64) {
+			var st vote.State
+			rt.GetState(&st)
+
+			voter1, _ := st.EstimateSettle(adt.AsStore(rt), caller, 100)
+			require.True(t, voter1.Withdrawable.Equals(abi.NewTokenAmount(w1)))
+			voter2, _ := st.EstimateSettle(adt.AsStore(rt), caller2, 100)
+			require.True(t, voter2.Withdrawable.Equals(abi.NewTokenAmount(w2)))
+		}
+
+		// award 120 attoEPK per epoch
+		rt.SetEpoch(100)
+		actor.vote(rt, caller, candidate1, abi.NewTokenAmount(10))
+		actor.vote(rt, caller, candidate2, abi.NewTokenAmount(10))
+		actor.vote(rt, caller, candidate3, abi.NewTokenAmount(10))
+		actor.vote(rt, caller2, candidate3, abi.NewTokenAmount(10))
+		actor.applyRewards(rt, abi.NewTokenAmount(120)) // 30:10
+		actor.cronTick(rt, nil)
+
+		rt.SetEpoch(102)
+		actor.applyRewards(rt, abi.NewTokenAmount(240)) // 120*2, 30:10
+		actor.cronTick(rt, nil)
+		expW(270, 90)
+
+		// block candidate1
+		rt.SetEpoch(103)
+		actor.blockCandidate(rt, candidate1)
+		actor.applyRewards(rt, abi.NewTokenAmount(120)) // 20:10
+		actor.cronTick(rt, nil)
+		expW(350, 130)
+
+		// caller2 vote for candidate3
+		rt.SetEpoch(104)
+		actor.vote(rt, caller2, candidate3, abi.NewTokenAmount(10))
+		actor.applyRewards(rt, abi.NewTokenAmount(120)) // 20:20
+		actor.cronTick(rt, nil)
+		expW(410, 190)
+
+		// caller1 vote for candidate3
+		rt.SetEpoch(105)
+		actor.vote(rt, caller, candidate3, abi.NewTokenAmount(10))
+		actor.applyRewards(rt, abi.NewTokenAmount(120)) // 30:20
+		actor.cronTick(rt, nil)
+		expW(482, 238)
+
+		// block candidate2
+		rt.SetEpoch(106)
+		actor.blockCandidate(rt, candidate2)
+		actor.applyRewards(rt, abi.NewTokenAmount(120)) // 20:20
+		actor.cronTick(rt, nil)
+		expW(542, 298)
+
+		var st vote.State
+		rt.GetState(&st)
+		require.True(t, st.TotalVotes.Equals(abi.NewTokenAmount(40)))
+	})
+}
+
+func calcExpectDeltaPerVote(funds, votes abi.TokenAmount) abi.TokenAmount {
+	return big.Div(big.Mul(funds, vote.Multiplier1E12), votes)
+}
+
 type actorHarness struct {
 	vote.Actor
 	t *testing.T
@@ -598,19 +831,37 @@ func (h *actorHarness) vote(rt *mock.Runtime, voter, candidate address.Address, 
 	rt.Verify()
 }
 
-func (h *actorHarness) blockCandidate(rt *mock.Runtime, candidate address.Address) {
-	rt.SetCaller(candidate, builtin.ExpertActorCodeID)
-	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	rt.Call(h.OnCandidateBlocked, nil)
+func (h *actorHarness) rescind(rt *mock.Runtime, voter, candidate address.Address, amount abi.TokenAmount) {
+	params := vote.RescindParams{
+		Candidate: candidate,
+		Votes:     amount,
+	}
+	rt.SetCaller(voter, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+	rt.Call(h.Rescind, &params)
 	rt.Verify()
 }
 
-func (h *actorHarness) cronTick(rt *mock.Runtime) {
+func (h *actorHarness) blockCandidate(rt *mock.Runtime, candidate address.Address) {
+	rt.SetCaller(candidate, builtin.ExpertActorCodeID)
+	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
+	ret := rt.Call(h.OnCandidateBlocked, nil)
+	assert.Nil(h.t, ret)
+	rt.Verify()
+}
+
+type cronTickConf struct {
+	totalVotes   abi.TokenAmount
+	unownedFunds abi.TokenAmount
+}
+
+func (h *actorHarness) cronTick(rt *mock.Runtime, conf *cronTickConf) {
 	rt.ExpectValidateCallerAddr(builtin.CronActorAddr)
 	rt.SetCaller(builtin.CronActorAddr, builtin.CronActorCodeID)
-	param := abi.EmptyValue{}
-
-	rt.Call(h.OnEpochTickEnd, &param)
+	if conf != nil && !conf.unownedFunds.IsZero() && conf.totalVotes.IsZero() {
+		rt.ExpectSend(h.fallback, builtin.MethodSend, nil, conf.unownedFunds, nil, exitcode.Ok)
+	}
+	rt.Call(h.OnEpochTickEnd, nil)
 	rt.Verify()
 }
 
@@ -649,9 +900,13 @@ func (h *actorHarness) applyRewards(rt *mock.Runtime, amount abi.TokenAmount) {
 	require.True(h.t, big.Sub(st.UnownedFunds, before).Equals(amount))
 }
 
-func (h *actorHarness) withdraw(rt *mock.Runtime, voter, recipient address.Address) *abi.TokenAmount {
+func (h *actorHarness) withdraw(rt *mock.Runtime, voter, recipient address.Address, expectAmount abi.TokenAmount) {
 	rt.SetCaller(voter, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+	if !expectAmount.IsZero() {
+		rt.ExpectSend(recipient, builtin.MethodSend, nil, expectAmount, nil, exitcode.Ok)
+	}
 	v := rt.Call(h.Withdraw, &voter)
-	return v.(*abi.TokenAmount)
+	rt.Verify()
+	require.True(h.t, v.(*abi.TokenAmount).Equals(expectAmount))
 }

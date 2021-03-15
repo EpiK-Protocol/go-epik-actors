@@ -291,18 +291,23 @@ func (st *State) EstimateSettleAll(s adt.Store, cur abi.ChainEpoch) (map[addr.Ad
 	return ret, nil
 }
 
-func (st *State) EstimateSettle(s adt.Store, voter *Voter, cur abi.ChainEpoch) error {
+func (st *State) EstimateSettle(s adt.Store, voterAddr addr.Address, cur abi.ChainEpoch) (*Voter, error) {
 	candidates, err := adt.AsMap(s, st.Candidates, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	voter, err := st.GetVoter(s, voterAddr)
+	if err != nil {
+		return nil, err
 	}
 
 	err = st.settle(s, voter, candidates, cur)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return err
+	return voter, nil
 }
 
 func (st *State) settle(s adt.Store, voter *Voter, candidates *adt.Map, cur abi.ChainEpoch) error {
@@ -450,6 +455,48 @@ func (st *State) withdrawUnlockedVotes(s adt.Store, voter *Voter, cur abi.ChainE
 		return abi.NewTokenAmount(0), false, xerrors.Errorf("failed to flush tally: %w", err)
 	}
 	return totalUnlocked, false, nil
+}
+
+func (st *State) GetVoter(store adt.Store, voterAddr addr.Address) (*Voter, error) {
+	voters, err := adt.AsMap(store, st.Voters, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, err
+	}
+	voter, found, err := getVoter(voters, voterAddr)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, xerrors.Errorf("voter not found: %s", voterAddr)
+	}
+	return voter, nil
+}
+
+func (st *State) ListVotesInfo(store adt.Store, voterAddr addr.Address) (map[addr.Address]VotesInfo, error) {
+	voter, err := st.GetVoter(store, voterAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	tally, err := adt.AsMap(store, voter.Tally, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := make(map[addr.Address]VotesInfo)
+	var out VotesInfo
+	err = tally.ForEach(&out, func(k string) error {
+		cand, err := addr.NewFromBytes([]byte(k))
+		if err != nil {
+			return err
+		}
+		ret[cand] = out
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
 }
 
 func setCandidate(candidates *adt.Map, candAddr addr.Address, cand *Candidate) error {
