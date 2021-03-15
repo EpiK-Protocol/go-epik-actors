@@ -357,6 +357,8 @@ type CheckStateReturn struct {
 }
 
 func (a Actor) CheckState(rt Runtime, _ *abi.EmptyValue) *CheckStateReturn {
+	rt.ValidateImmediateCallerAcceptAny()
+
 	var st State
 	rt.StateReadonly(&st)
 	return &CheckStateReturn{
