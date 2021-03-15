@@ -210,11 +210,7 @@ func (a Actor) Withdraw(rt Runtime, to *addr.Address) *abi.TokenAmount {
 	builtin.RequireParam(rt, ok, "failed to resolve address %v", to)
 
 	codeID, ok := rt.GetActorCodeCID(recipient)
-	builtin.RequireParam(rt, ok, "no code for address %v", recipient)
-
-	if codeID.Equals(builtin.StorageMinerActorCodeID) {
-		recipient, _, _ = builtin.RequestMinerControlAddrs(rt, recipient)
-	}
+	builtin.RequireParam(rt, ok && builtin.IsPrincipal(codeID), "recipient is not principle")
 
 	total := abi.NewTokenAmount(0)
 	var st State
