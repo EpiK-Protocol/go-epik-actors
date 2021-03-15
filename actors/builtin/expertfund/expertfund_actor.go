@@ -250,7 +250,7 @@ type ApplyForExpertReturn struct {
 }
 
 func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyForExpertReturn {
-	rt.ValidateImmediateCallerAcceptAny()
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	var st State
 	rt.StateReadonly(&st)
