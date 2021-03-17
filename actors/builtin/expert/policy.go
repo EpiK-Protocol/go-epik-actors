@@ -52,7 +52,7 @@ var ExpertApplyCost = big.Mul(big.NewInt(99), builtin.TokenPrecision)
 var ExpertVoteThreshold = big.Mul(big.NewInt(100000), builtin.TokenPrecision)
 
 // ExpertVoteThresholdAddition addition threshold of expert vote amount
-var ExpertVoteThresholdAddition = big.Add(ExpertVoteThreshold, big.Mul(big.NewInt(25000), builtin.TokenPrecision))
+var ExpertVoteThresholdAddition = big.Mul(big.NewInt(25000), builtin.TokenPrecision)
 
 // ExpertVoteCheckPeriod period of expert vote check duration
 var ExpertVoteCheckPeriod = abi.ChainEpoch(3 * builtin.EpochsInDay) // 3 * 24 hours PARAM_SPEC

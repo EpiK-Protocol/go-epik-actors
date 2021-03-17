@@ -6,6 +6,7 @@ import (
 	xerrors "golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -26,6 +27,8 @@ type State struct {
 
 	// Status of expert
 	Status ExpertState
+
+	ImplicatedTimes uint64
 
 	// OwnerChange owner change info
 	OwnerChange cid.Cid
@@ -68,12 +71,13 @@ func ConstructState(store adt.Store, info cid.Cid, state ExpertState, emptyChang
 	}
 
 	return &State{
-		Info:        info,
-		Datas:       emptyMapCid,
-		VoteAmount:  abi.NewTokenAmount(0),
-		LostEpoch:   NoLostEpoch,
-		Status:      state,
-		OwnerChange: emptyChange,
+		Info:            info,
+		Datas:           emptyMapCid,
+		VoteAmount:      abi.NewTokenAmount(0),
+		LostEpoch:       NoLostEpoch,
+		Status:          state,
+		ImplicatedTimes: 0,
+		OwnerChange:     emptyChange,
 	}, nil
 }
 
@@ -221,7 +225,7 @@ func (st *State) Validate(strore adt.Store, currEpoch abi.ChainEpoch) error {
 			}
 		}
 	case ExpertStateImplicated:
-		if st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
+		if st.VoteAmount.LessThan(st.voteThreshold()) {
 			if st.LostEpoch < 0 {
 				return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
 			} else if (st.LostEpoch + ExpertVoteCheckPeriod) < currEpoch {
@@ -233,4 +237,8 @@ func (st *State) Validate(strore adt.Store, currEpoch abi.ChainEpoch) error {
 	}
 
 	return nil
+}
+
+func (st *State) voteThreshold() abi.TokenAmount {
+	return big.Add(ExpertVoteThreshold, big.Mul(big.NewIntUnsigned(st.ImplicatedTimes), ExpertVoteThresholdAddition))
 }

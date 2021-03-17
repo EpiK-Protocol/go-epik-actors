@@ -321,8 +321,9 @@ func (a Actor) OnImplicated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 		// TODO: repeatly punish?
 		st.Status = ExpertStateImplicated
+		st.ImplicatedTimes++
 		if st.VoteAmount.GreaterThanEqual(ExpertVoteThreshold) &&
-			st.VoteAmount.LessThan(ExpertVoteThresholdAddition) {
+			st.VoteAmount.LessThan(st.voteThreshold()) {
 			st.LostEpoch = rt.CurrEpoch()
 		}
 		if err := st.Validate(adt.AsStore(rt), rt.CurrEpoch()); err != nil {

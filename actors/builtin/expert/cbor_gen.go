@@ -14,7 +14,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{134}
+var lengthBufState = []byte{135}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -61,6 +61,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
+	// t.ImplicatedTimes (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ImplicatedTimes)); err != nil {
+		return err
+	}
+
 	// t.OwnerChange (cid.Cid) (struct)
 
 	if err := cbg.WriteCidBuf(scratch, w, t.OwnerChange); err != nil {
@@ -84,7 +90,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -158,6 +164,20 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
 		t.Status = ExpertState(extra)
+
+	}
+	// t.ImplicatedTimes (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.ImplicatedTimes = uint64(extra)
 
 	}
 	// t.OwnerChange (cid.Cid) (struct)
