@@ -254,7 +254,7 @@ func (a Actor) OnNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		info := getExpertInfo(rt, &st)
 
 		builtin.RequireState(rt, info.Type != builtin.ExpertFoundation, "foundation expert cannot be nominated")
-		builtin.RequireState(rt, st.Status == ExpertStateRegistered || st.Status == ExpertStateUnqualified, "nominate expert with error status")
+		builtin.RequireState(rt, st.Status == ExpertStateRegistered || st.Status == ExpertStateDisqualified, "nominate expert with error status")
 
 		info.Proposer = rt.Caller()
 		err := st.SaveInfo(adt.AsStore(rt), info)
@@ -381,7 +381,7 @@ func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUp
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not get expert info")
 
 		builtin.RequireState(rt, st.Status != ExpertStateRegistered &&
-			st.Status != ExpertStateUnqualified &&
+			st.Status != ExpertStateDisqualified &&
 			info.Type != builtin.ExpertFoundation, "expert being track with error status %s, %s", st.Status, info.Type)
 
 		if st.Status == ExpertStateBlocked {
@@ -404,7 +404,7 @@ func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUp
 				if rt.CurrEpoch() > st.LostEpoch+ExpertVoteCheckPeriod {
 					ret.ResetMe = true
 					ret.UntrackMe = true
-					st.Status = ExpertStateUnqualified
+					st.Status = ExpertStateDisqualified
 				}
 			} else {
 				st.LostEpoch = NoLostEpoch

@@ -9,14 +9,14 @@ import (
 /*
 					+ ---------------------------------------------------------------------------------------------- +
 					|																			 					 |
-					|												    						 				  	 |
-					|												    						 			   	  	 |
+					|																			 				  	 |
+					|												    		  			 				   	  	 |
 					|								  	   			              + -----------> blocked	    	 |
 					|						                                      | 						    	 |
 					|					  + ----> qualified(normal/implicated) -- +               	                 |
-		            |       			  |						                  |  	                             |
-	registered ---- + -----> nominated -- +							              + ---------------------------> unqualified
-										  |	                               			            					 ↑
+		            |       			  |						                  | (no enough vote for 3 days)      |
+	registered ---- + -----> nominated -- +							              + ---------------------------> disqualified
+										  |	                    (no enough vote for 3 days)         				 ↑
 										  + ------------------------------------------------------------------------ +
 
 
@@ -42,7 +42,7 @@ const (
 	ExpertStateBlocked
 
 	// Number of votes decreased to less than threshold.
-	ExpertStateUnqualified
+	ExpertStateDisqualified
 )
 
 // ExpertApplyCost expert apply cost
