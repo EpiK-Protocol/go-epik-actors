@@ -336,17 +336,16 @@ func (a Actor) OnImplicated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-type ChangeOwnerParams struct {
-	Owner addr.Address
-}
-
-func (a Actor) ChangeOwner(rt Runtime, params *ChangeOwnerParams) *abi.EmptyValue {
+func (a Actor) ChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.ChangeOwner)
 
+	builtin.RequireParam(rt, !newOwner.Empty(), "empty address")
+	builtin.RequireParam(rt, newOwner.Protocol() == addr.ID, "owner address must be an ID address")
+
 	var st State
 	rt.StateTransaction(&st, func() {
-		err := st.ApplyOwnerChange(adt.AsStore(rt), rt.CurrEpoch(), params.Owner)
+		err := st.ApplyOwnerChange(adt.AsStore(rt), rt.CurrEpoch(), *newOwner)
 		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to change expert owner")
 	})
 	return nil

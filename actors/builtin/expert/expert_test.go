@@ -243,10 +243,8 @@ func TestFoundationChange(t *testing.T) {
 	t.Run("ChangeOwner", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
-
-		actor.ChangeOwner(rt, &expert.ChangeOwnerParams{
-			Owner: tutil.NewIDAddr(t, 101),
-		})
+		newOwner := tutil.NewIDAddr(t, 101)
+		actor.ChangeOwner(rt, &newOwner)
 	})
 }
 
@@ -351,11 +349,11 @@ func (h *actorHarness) Block(rt *mock.Runtime) {
 	rt.Verify()
 }
 
-func (h *actorHarness) ChangeOwner(rt *mock.Runtime, params *expert.ChangeOwnerParams) {
+func (h *actorHarness) ChangeOwner(rt *mock.Runtime, newOwner *addr.Address) {
 
 	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
 	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
-	rt.Call(h.a.ChangeOwner, params)
+	rt.Call(h.a.ChangeOwner, newOwner)
 	rt.Verify()
 }
 

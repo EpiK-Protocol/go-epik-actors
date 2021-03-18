@@ -83,7 +83,6 @@ func main() {
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},
 		expert.NominateExpertParams{},
-		expert.ChangeOwnerParams{},
 		expert.CheckStateReturn{},
 		expert.OnTrackUpdateParams{},
 		expert.OnTrackUpdateReturn{},
