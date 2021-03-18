@@ -32,12 +32,12 @@ func NotifyExpertImport(rt runtime.Runtime, pieceID cid.Cid) {
 	RequireSuccess(rt, code, "failed to notify expert import")
 }
 
-type ExpertAddr struct {
+type ExpertControlAddressReturn struct {
 	Owner addr.Address
 }
 
 func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (ownerAddr addr.Address) {
-	var addr ExpertAddr
+	var addr ExpertControlAddressReturn
 	code := rt.Send(expertAddr, MethodsExpert.ControlAddress, nil, abi.NewTokenAmount(0), &addr)
 	RequireSuccess(rt, code, "failed fetching expert control address")
 

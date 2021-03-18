@@ -280,7 +280,7 @@ func (h *actorHarness) constructAndVerify(rt *mock.Runtime) {
 
 func (h *actorHarness) controlAddress(rt *mock.Runtime) (owner addr.Address) {
 	rt.ExpectValidateCallerAny()
-	ret := rt.Call(h.a.ControlAddress, nil).(*expert.GetControlAddressReturn)
+	ret := rt.Call(h.a.ControlAddress, nil).(*builtin.ExpertControlAddressReturn)
 	require.NotNil(h.t, ret)
 	rt.Verify()
 	return ret.Owner

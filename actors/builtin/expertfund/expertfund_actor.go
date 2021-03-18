@@ -91,20 +91,22 @@ type ClaimFundParams struct {
 }
 
 // Claim claim the received value into the balance.
-func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.EmptyValue {
+func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.TokenAmount {
+	builtin.RequireParam(rt, params.Amount.GreaterThan(big.Zero()), "non-positive amount")
 
+	var actual abi.TokenAmount
 	var st State
-	var expertOwner address.Address
 	rt.StateTransaction(&st, func() {
-		expertOwner = builtin.RequestExpertControlAddr(rt, params.Expert)
+		rt.ValidateImmediateCallerIs(builtin.RequestExpertControlAddr(rt, params.Expert))
 
-		rt.ValidateImmediateCallerIs(expertOwner)
-
-		err := st.Claim(rt, params.Expert, params.Amount)
+		var err error
+		actual, err = st.Claim(rt, params.Expert, params.Amount)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to claim expert fund")
 	})
-	code := rt.Send(expertOwner, builtin.MethodSend, nil, params.Amount, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send claim amount")
+	if !actual.IsZero() {
+		code := rt.Send(rt.Caller(), builtin.MethodSend, nil, actual, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send claimed fund")
+	}
 	return nil
 }
 

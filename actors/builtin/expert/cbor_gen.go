@@ -494,54 +494,6 @@ func (t *ConstructorParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufGetControlAddressReturn = []byte{129}
-
-func (t *GetControlAddressReturn) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufGetControlAddressReturn); err != nil {
-		return err
-	}
-
-	// t.Owner (address.Address) (struct)
-	if err := t.Owner.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *GetControlAddressReturn) UnmarshalCBOR(r io.Reader) error {
-	*t = GetControlAddressReturn{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.Owner (address.Address) (struct)
-
-	{
-
-		if err := t.Owner.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Owner: %w", err)
-		}
-
-	}
-	return nil
-}
-
 var lengthBufExpertDataParams = []byte{131}
 
 func (t *ExpertDataParams) MarshalCBOR(w io.Writer) error {

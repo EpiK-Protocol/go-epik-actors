@@ -135,14 +135,14 @@ func (t *GetControlAddressesReturn) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufExpertAddr = []byte{129}
+var lengthBufExpertControlAddressReturn = []byte{129}
 
-func (t *ExpertAddr) MarshalCBOR(w io.Writer) error {
+func (t *ExpertControlAddressReturn) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufExpertAddr); err != nil {
+	if _, err := w.Write(lengthBufExpertControlAddressReturn); err != nil {
 		return err
 	}
 
@@ -153,8 +153,8 @@ func (t *ExpertAddr) MarshalCBOR(w io.Writer) error {
 	return nil
 }
 
-func (t *ExpertAddr) UnmarshalCBOR(r io.Reader) error {
-	*t = ExpertAddr{}
+func (t *ExpertControlAddressReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = ExpertControlAddressReturn{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)

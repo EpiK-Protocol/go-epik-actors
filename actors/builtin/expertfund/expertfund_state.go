@@ -227,27 +227,27 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 }
 
 // Claim claim expert fund.
-func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmount) error {
+func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
 	if err := st.UpdatePool(rt); err != nil {
-		return err
+		return big.Zero(), err
 	}
 
 	pool, err := st.GetPoolInfo(rt)
 	if err != nil {
-		return err
+		return big.Zero(), err
 	}
 
 	experts, err := adt.AsMap(adt.AsStore(rt), st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return err
+		return big.Zero(), err
 	}
 	var out ExpertInfo
 	found, err := experts.Get(abi.AddrKey(fromAddr), &out)
 	if err != nil {
-		return err
+		return big.Zero(), err
 	}
 	if !found {
-		return xerrors.Errorf("expert not found")
+		return big.Zero(), xerrors.Errorf("expert not found")
 	}
 
 	if out.DataSize > 0 {
@@ -256,26 +256,24 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 		pending = big.Sub(pending, out.RewardDebt)
 		unlocked, err := st.AddLockedFunds(rt, &out, pending)
 		if err != nil {
-			return err
+			return big.Zero(), err
 		}
 		out.UnlockedFunds = big.Add(out.UnlockedFunds, unlocked)
 	}
 	debt := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
 	out.RewardDebt = big.Div(debt, AccumulatedMultiplier)
 
-	if out.UnlockedFunds.LessThan(amount) {
-		return xerrors.Errorf("insufficient unlocked funds")
-	}
-	out.UnlockedFunds = big.Sub(out.UnlockedFunds, amount)
+	actual := big.Min(out.UnlockedFunds, amount)
+	out.UnlockedFunds = big.Sub(out.UnlockedFunds, actual)
 
 	err = experts.Put(abi.AddrKey(fromAddr), &out)
 	if err != nil {
-		return err
+		return big.Zero(), err
 	}
 	if st.Experts, err = experts.Root(); err != nil {
-		return err
+		return big.Zero(), err
 	}
-	return nil
+	return actual, nil
 }
 
 // UpdateExpert update expert.

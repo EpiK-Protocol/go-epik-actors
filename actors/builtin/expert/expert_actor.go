@@ -98,15 +98,11 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 	return nil
 }
 
-type GetControlAddressReturn struct {
-	Owner addr.Address
-}
-
-func (a Actor) ControlAddress(rt Runtime, _ *abi.EmptyValue) *GetControlAddressReturn {
+func (a Actor) ControlAddress(rt Runtime, _ *abi.EmptyValue) *builtin.ExpertControlAddressReturn {
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
-	var aReturn GetControlAddressReturn
+	var aReturn builtin.ExpertControlAddressReturn
 	rt.StateTransaction(&st, func() {
 		info := getExpertInfo(rt, &st)
 		aReturn.Owner = info.Owner

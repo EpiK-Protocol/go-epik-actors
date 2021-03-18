@@ -38,7 +38,7 @@ func main() {
 
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/cbor_gen.go", "builtin",
 		builtin.GetControlAddressesReturn{},
-		builtin.ExpertAddr{},
+		builtin.ExpertControlAddressReturn{},
 		builtin.ConfirmSectorProofsParams{},
 		builtin.ApplyRewardParams{},
 		builtin.OnExpertImportParams{},
@@ -78,7 +78,6 @@ func main() {
 		expert.PendingOwnerChange{},
 		// method params
 		expert.ConstructorParams{},
-		expert.GetControlAddressReturn{},
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},
 		expert.NominateExpertParams{},
