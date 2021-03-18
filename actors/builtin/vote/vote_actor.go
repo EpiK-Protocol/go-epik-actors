@@ -57,7 +57,7 @@ func (a Actor) Constructor(rt Runtime, fallback *addr.Address) *abi.EmptyValue {
 	return nil
 }
 
-// Called by Expert.Block
+// Called by Expert.GovBlock
 func (a Actor) OnCandidateBlocked(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 

@@ -79,7 +79,6 @@ func main() {
 		// method params
 		expert.ConstructorParams{},
 		expert.GetControlAddressReturn{},
-		expert.ChangeAddressParams{},
 		expert.ExpertDataParams{},
 		expert.DataOnChainInfo{},
 		expert.NominateExpertParams{},

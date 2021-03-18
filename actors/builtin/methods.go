@@ -117,15 +117,15 @@ var MethodsMiner = struct {
 var MethodsExpert = struct {
 	Constructor    abi.MethodNum
 	ControlAddress abi.MethodNum
-	ChangeAddress  abi.MethodNum
+	ChangeOwner    abi.MethodNum
 	ImportData     abi.MethodNum
 	GetData        abi.MethodNum
 	StoreData      abi.MethodNum
 	Nominate       abi.MethodNum
 	OnNominated    abi.MethodNum
-	Block          abi.MethodNum
+	GovBlock       abi.MethodNum
 	OnImplicated   abi.MethodNum
-	ChangeOwner    abi.MethodNum
+	GovChangeOwner abi.MethodNum
 	OnTrackUpdate  abi.MethodNum
 	Validate       abi.MethodNum
 	CheckState     abi.MethodNum

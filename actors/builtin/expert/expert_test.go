@@ -223,11 +223,11 @@ func TestBlock(t *testing.T) {
 		WithHasher(fixedHasher(0)).
 		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
 
-	t.Run("Block", func(t *testing.T) {
+	t.Run("GovBlock", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 
-		actor.Block(rt)
+		actor.GovBlock(rt)
 	})
 }
 
@@ -240,11 +240,11 @@ func TestFoundationChange(t *testing.T) {
 		WithHasher(fixedHasher(0)).
 		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
 
-	t.Run("ChangeOwner", func(t *testing.T) {
+	t.Run("GovChangeOwner", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 		newOwner := tutil.NewIDAddr(t, 101)
-		actor.ChangeOwner(rt, &newOwner)
+		actor.GovChangeOwner(rt, &newOwner)
 	})
 }
 
@@ -331,7 +331,7 @@ func (h *actorHarness) Nominate(rt *mock.Runtime, params *expert.NominateExpertP
 	rt.Verify()
 }
 
-func (h *actorHarness) Block(rt *mock.Runtime) {
+func (h *actorHarness) GovBlock(rt *mock.Runtime) {
 
 	{
 		param := abi.EmptyValue{}
@@ -345,15 +345,15 @@ func (h *actorHarness) Block(rt *mock.Runtime) {
 	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
 	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
 	param := abi.EmptyValue{}
-	rt.Call(h.a.Block, &param)
+	rt.Call(h.a.GovBlock, &param)
 	rt.Verify()
 }
 
-func (h *actorHarness) ChangeOwner(rt *mock.Runtime, newOwner *addr.Address) {
+func (h *actorHarness) GovChangeOwner(rt *mock.Runtime, newOwner *addr.Address) {
 
 	rt.ExpectValidateCallerAddr(builtin.GovernActorAddr)
 	rt.SetCaller(builtin.GovernActorAddr, builtin.GovernActorCodeID)
-	rt.Call(h.a.ChangeOwner, newOwner)
+	rt.Call(h.a.GovChangeOwner, newOwner)
 	rt.Verify()
 }
 

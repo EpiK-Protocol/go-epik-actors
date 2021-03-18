@@ -23,15 +23,15 @@ func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.ControlAddress,
-		3:                         a.ChangeAddress,
+		3:                         a.ChangeOwner,
 		4:                         a.ImportData,
 		5:                         a.GetData,
 		6:                         a.StoreData,
 		7:                         a.Nominate,
 		8:                         a.OnNominated,
-		9:                         a.Block,
+		9:                         a.GovBlock,
 		10:                        a.OnImplicated,
-		11:                        a.ChangeOwner,
+		11:                        a.GovChangeOwner,
 		12:                        a.OnTrackUpdate,
 		13:                        a.Validate,
 		14:                        a.CheckState,
@@ -133,19 +133,15 @@ func resolveOwnerAddress(rt Runtime, raw addr.Address) addr.Address {
 	return resolved
 }
 
-type ChangeAddressParams struct {
-	NewOwner addr.Address
-}
-
-func (a Actor) ChangeAddress(rt Runtime, params *ChangeAddressParams) *abi.EmptyValue {
+func (a Actor) ChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		info := getExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
-		owner := resolveOwnerAddress(rt, params.NewOwner)
+		owner := resolveOwnerAddress(rt, *newOwner)
 		info.Owner = owner
 		err := st.SaveInfo(adt.AsStore(rt), info)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change address")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change owner")
 	})
 	return nil
 }
@@ -278,9 +274,9 @@ func (a Actor) OnNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-func (a Actor) Block(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+func (a Actor) GovBlock(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
-	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.Block)
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.GovBlock)
 
 	var st State
 	var info *ExpertInfo
@@ -336,9 +332,9 @@ func (a Actor) OnImplicated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-func (a Actor) ChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
+func (a Actor) GovChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
-	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.ChangeOwner)
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.GovChangeOwner)
 
 	builtin.RequireParam(rt, !newOwner.Empty(), "empty address")
 	builtin.RequireParam(rt, newOwner.Protocol() == addr.ID, "owner address must be an ID address")
@@ -346,7 +342,7 @@ func (a Actor) ChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		err := st.ApplyOwnerChange(adt.AsStore(rt), rt.CurrEpoch(), *newOwner)
-		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to change expert owner")
+		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to apply owner change")
 	})
 	return nil
 }
