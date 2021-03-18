@@ -19,6 +19,8 @@ type State struct {
 	// Information for all submit rdf data.
 	Datas cid.Cid // Map, AMT[key]DataOnChainInfo (sparse)
 
+	DataCount uint64
+
 	// VoteAmount expert vote amount
 	VoteAmount abi.TokenAmount
 
@@ -139,6 +141,7 @@ func (st *State) GetData(store adt.Store, pieceID string) (*DataOnChainInfo, boo
 	return &info, found, nil
 }
 
+// !! not used
 func (st *State) DeleteData(store adt.Store, pieceID string) error {
 	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -148,7 +151,7 @@ func (st *State) DeleteData(store adt.Store, pieceID string) error {
 	if err != nil {
 		return xerrors.Errorf("failed to delete data for %v: %w", pieceID, err)
 	}
-
+	st.DataCount--
 	st.Datas, err = datas.Root()
 	return err
 }

@@ -172,6 +172,7 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 
 		err = st.PutData(store, newDataInfo)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to import data")
+		st.DataCount++
 	})
 	builtin.NotifyExpertImport(rt, params.PieceID)
 	return nil
