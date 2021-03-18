@@ -554,21 +554,12 @@ func TestWithdraw(t *testing.T) {
 		return rt, actor
 	}
 
-	t.Run("fail when recipient is not principle", func(t *testing.T) {
-		rt, actor := setupFunc()
-		rt.SetCaller(caller, builtin.AccountActorCodeID)
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "recipient is not principle", func() {
-			rt.Call(actor.Withdraw, &exptf)
-		})
-	})
-
 	t.Run("fail when voter not found", func(t *testing.T) {
 		rt, actor := setupFunc()
 		rt.SetCaller(caller, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "voter not found", func() {
-			rt.Call(actor.Withdraw, &caller)
+			rt.Call(actor.Withdraw, nil)
 		})
 	})
 
@@ -579,7 +570,7 @@ func TestWithdraw(t *testing.T) {
 
 		rt.SetCaller(caller, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		v := rt.Call(actor.Withdraw, &caller)
+		v := rt.Call(actor.Withdraw, nil)
 		amt := v.(*abi.TokenAmount)
 		require.True(t, amt.IsZero())
 	})
@@ -906,7 +897,7 @@ func (h *actorHarness) withdraw(rt *mock.Runtime, voter, recipient address.Addre
 	if !expectAmount.IsZero() {
 		rt.ExpectSend(recipient, builtin.MethodSend, nil, expectAmount, nil, exitcode.Ok)
 	}
-	v := rt.Call(h.Withdraw, &voter)
+	v := rt.Call(h.Withdraw, nil)
 	rt.Verify()
 	require.True(h.t, v.(*abi.TokenAmount).Equals(expectAmount))
 }

@@ -203,14 +203,8 @@ func checkVoteAllowed(rt runtime.Runtime, expertAddr addr.Address) bool {
 }
 
 // Withdraws unlocked rescinding votes and rewards, returns actual sent amount
-func (a Actor) Withdraw(rt Runtime, to *addr.Address) *abi.TokenAmount {
+func (a Actor) Withdraw(rt Runtime, _ *abi.EmptyValue) *abi.TokenAmount {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
-
-	recipient, ok := rt.ResolveAddress(*to)
-	builtin.RequireParam(rt, ok, "failed to resolve address %v", to)
-
-	codeID, ok := rt.GetActorCodeCID(recipient)
-	builtin.RequireParam(rt, ok && builtin.IsPrincipal(codeID), "recipient is not principle")
 
 	total := abi.NewTokenAmount(0)
 	var st State
@@ -251,7 +245,7 @@ func (a Actor) Withdraw(rt Runtime, to *addr.Address) *abi.TokenAmount {
 	builtin.RequireState(rt, total.LessThanEqual(rt.CurrentBalance()), "expected withdrawn amount %v exceeds balance %v", total, rt.CurrentBalance())
 
 	if total.GreaterThan(big.Zero()) {
-		code := rt.Send(recipient, builtin.MethodSend, nil, total, &builtin.Discard{})
+		code := rt.Send(rt.Caller(), builtin.MethodSend, nil, total, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds")
 	}
 
