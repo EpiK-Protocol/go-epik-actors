@@ -127,7 +127,7 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 					return xerrors.Errorf("failed to check bitfield empty(revoke): %w", err)
 				}
 				if empty {
-					err = mp.Delete(abi.CidKey(codeID))
+					_, err = mp.TryDelete(abi.CidKey(codeID))
 					if err != nil {
 						return xerrors.Errorf("failed to delete empty bitfield(revoke): %w", err)
 					}
@@ -150,7 +150,8 @@ func (st *State) grantOrRevoke(store adt.Store, governors *adt.Map, governor add
 		return xerrors.Errorf("failed to collect keys: %w", err)
 	}
 	if len(keys) == 0 {
-		return governors.Delete(abi.AddrKey(governor))
+		_, err = governors.TryDelete(abi.AddrKey(governor))
+		return err
 	} else {
 		out.CodeMethods, err = mp.Root()
 		if err != nil {

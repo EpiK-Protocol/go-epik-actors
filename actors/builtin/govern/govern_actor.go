@@ -141,9 +141,7 @@ func checkGrantOrRevokeParams(rt runtime.Runtime, params *GrantOrRevokeParams) (
 
 	if !params.All {
 		seenCodeID := make(map[cid.Cid]struct{})
-		seenMethod := make(map[abi.MethodNum]struct{})
 		for _, info := range params.Authorities {
-
 			_, ok := seenCodeID[info.ActorCodeID]
 			builtin.RequireParam(rt, !ok, "duplicated actor code %s", info.ActorCodeID)
 			seenCodeID[info.ActorCodeID] = struct{}{}
@@ -152,15 +150,18 @@ func checkGrantOrRevokeParams(rt runtime.Runtime, params *GrantOrRevokeParams) (
 			builtin.RequireParam(rt, ok, "actor code %s not found", info.ActorCodeID)
 
 			if !info.All {
-				for _, method := range info.Methods {
-					_, ok = seenMethod[method]
-					builtin.RequireParam(rt, !ok, "duplicated method %s", method)
-					seenMethod[method] = struct{}{}
+				if len(info.Methods) > 0 {
+					seenMethod := make(map[abi.MethodNum]struct{})
+					for _, method := range info.Methods {
+						_, ok = governedMethods[method]
+						builtin.RequireParam(rt, ok, "method %d of actor code %s not found", method, info.ActorCodeID)
 
-					_, ok = governedMethods[method]
-					builtin.RequireParam(rt, ok, "method %d of actor code %s not found", method, info.ActorCodeID)
+						_, ok = seenMethod[method]
+						builtin.RequireParam(rt, !ok, "duplicated method %s", method)
+						seenMethod[method] = struct{}{}
+					}
+					target[info.ActorCodeID] = info.Methods
 				}
-				target[info.ActorCodeID] = info.Methods
 			} else {
 				// fill in all priviledges on this actor
 				for method := range governedMethods {
