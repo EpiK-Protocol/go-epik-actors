@@ -447,6 +447,84 @@ func TestRevoke(t *testing.T) {
 	})
 }
 
+func TestValidateGranted(t *testing.T) {
+	super := tutil.NewIDAddr(t, 100)
+	governor := tutil.NewIDAddr(t, 101)
+
+	setupFunc := func() (*mock.Runtime, *actorHarness) {
+		builder := mock.NewBuilder(context.Background(), builtin.VoteFundActorAddr).
+			WithActorType(governor, builtin.MultisigActorCodeID).
+			WithActorType(super, builtin.AccountActorCodeID)
+		rt := builder.Build(t)
+
+		actor := newHarness(t, super)
+		actor.constructAndVerify(rt)
+
+		return rt, actor
+	}
+
+	t.Run("fail when caller is ungranted", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		rt.SetCaller(builtin.RewardActorAddr, builtin.RewardActorCodeID)
+		rt.ExpectValidateCallerType(govern.GovernedCallerTypes...)
+		rt.ExpectAbort(exitcode.SysErrForbidden, func() {
+			rt.Call(actor.ValidateGranted, &builtin.ValidateGrantedParams{})
+		})
+	})
+
+	t.Run("actor not granted", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		rt.SetCaller(builtin.KnowledgeFundActorAddr, builtin.KnowledgeFundActorCodeID)
+		rt.ExpectValidateCallerType(govern.GovernedCallerTypes...)
+		rt.ExpectAbortContainsMessage(exitcode.ErrForbidden, "method not granted", func() {
+			rt.Call(actor.ValidateGranted, &builtin.ValidateGrantedParams{
+				Caller: governor,
+				Method: builtin.MethodsKnowledge.ChangePayee,
+			})
+		})
+	})
+
+	t.Run("method not granted", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		actor.grant(rt, &govern.GrantOrRevokeParams{
+			Governor: governor,
+			Authorities: []govern.Authority{
+				{ActorCodeID: builtin.StorageMarketActorCodeID, Methods: []abi.MethodNum{builtin.MethodsMarket.ResetQuotas}},
+			},
+		})
+
+		rt.SetCaller(builtin.StorageMarketActorAddr, builtin.StorageMarketActorCodeID)
+		rt.ExpectValidateCallerType(govern.GovernedCallerTypes...)
+		rt.ExpectAbortContainsMessage(exitcode.ErrForbidden, "method not granted", func() {
+			rt.Call(actor.ValidateGranted, &builtin.ValidateGrantedParams{
+				Caller: governor,
+				Method: builtin.MethodsMarket.SetInitialQuota,
+			})
+		})
+	})
+
+	t.Run("granted", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		actor.grant(rt, &govern.GrantOrRevokeParams{
+			Governor: governor,
+			Authorities: []govern.Authority{
+				{ActorCodeID: builtin.StorageMarketActorCodeID, Methods: []abi.MethodNum{builtin.MethodsMarket.ResetQuotas}},
+			},
+		})
+
+		rt.SetCaller(builtin.StorageMarketActorAddr, builtin.StorageMarketActorCodeID)
+		rt.ExpectValidateCallerType(govern.GovernedCallerTypes...)
+		rt.Call(actor.ValidateGranted, &builtin.ValidateGrantedParams{
+			Caller: governor,
+			Method: builtin.MethodsMarket.ResetQuotas,
+		})
+	})
+}
+
 type actorHarness struct {
 	govern.Actor
 	t *testing.T
