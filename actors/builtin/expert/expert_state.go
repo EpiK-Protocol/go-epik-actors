@@ -17,12 +17,9 @@ type State struct {
 	Info cid.Cid
 
 	// Information for all submit rdf data.
-	Datas cid.Cid // Map, AMT[key]DataOnChainInfo (sparse)
+	Datas cid.Cid // Map, HAMT[pieceCid]DataOnChainInfo (sparse)
 
 	DataCount uint64
-
-	// VoteAmount expert vote amount
-	VoteAmount abi.TokenAmount
 
 	// LostEpoch record expert votes <  epoch or blocked epoch
 	LostEpoch abi.ChainEpoch
@@ -31,15 +28,6 @@ type State struct {
 	Status ExpertState
 
 	ImplicatedTimes uint64
-
-	// OwnerChange owner change info
-	OwnerChange cid.Cid
-}
-
-// PendingOwnerChange pending owner change
-type PendingOwnerChange struct {
-	ApplyEpoch abi.ChainEpoch
-	ApplyOwner addr.Address
 }
 
 // ExpertInfo expert info
@@ -57,6 +45,10 @@ type ExpertInfo struct {
 
 	// Proposer of expert
 	Proposer addr.Address
+
+	// Only for owner change by governor
+	ApplyNewOwner      addr.Address
+	ApplyNewOwnerEpoch abi.ChainEpoch
 }
 
 type DataOnChainInfo struct {
@@ -66,7 +58,7 @@ type DataOnChainInfo struct {
 	Redundancy uint64
 }
 
-func ConstructState(store adt.Store, info cid.Cid, state ExpertState, emptyChange cid.Cid) (*State, error) {
+func ConstructState(store adt.Store, info cid.Cid, state ExpertState) (*State, error) {
 	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
@@ -75,11 +67,9 @@ func ConstructState(store adt.Store, info cid.Cid, state ExpertState, emptyChang
 	return &State{
 		Info:            info,
 		Datas:           emptyMapCid,
-		VoteAmount:      abi.NewTokenAmount(0),
 		LostEpoch:       NoLostEpoch,
 		Status:          state,
 		ImplicatedTimes: 0,
-		OwnerChange:     emptyChange,
 	}, nil
 }
 
@@ -98,20 +88,6 @@ func (st *State) SaveInfo(store adt.Store, info *ExpertInfo) error {
 	}
 	st.Info = c
 	return nil
-}
-
-func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
-	pieces, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return false, err
-	}
-
-	var info DataOnChainInfo
-	found, err := pieces.Get(adt.StringKey(pieceID), &info)
-	if err != nil {
-		return false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
-	}
-	return found, nil
 }
 
 func (st *State) PutData(store adt.Store, data *DataOnChainInfo) error {
@@ -149,7 +125,7 @@ func (st *State) DeleteData(store adt.Store, pieceID string) error {
 	}
 	err = datas.Delete(adt.StringKey(pieceID))
 	if err != nil {
-		return xerrors.Errorf("failed to delete data for %v: %w", pieceID, err)
+		return xerrors.Errorf("failed to delete data for %s: %w", pieceID, err)
 	}
 	st.DataCount--
 	st.Datas, err = datas.Root()
@@ -168,80 +144,6 @@ func (st *State) ForEachData(store adt.Store, f func(*DataOnChainInfo)) error {
 	})
 }
 
-func (st *State) GetOwnerChange(store adt.Store) (*PendingOwnerChange, error) {
-
-	var change PendingOwnerChange
-	if err := store.Get(store.Context(), st.OwnerChange, &change); err != nil {
-		return nil, xerrors.Errorf("failed to get owner change %w", err)
-	}
-	return &change, nil
-}
-
-func (st *State) ApplyOwnerChange(store adt.Store, currEpoch abi.ChainEpoch, applyOwner addr.Address) error {
-	change := &PendingOwnerChange{
-		ApplyEpoch: currEpoch,
-		ApplyOwner: applyOwner,
-	}
-	c, err := store.Put(store.Context(), change)
-	if err != nil {
-		return err
-	}
-	st.OwnerChange = c
-	return nil
-}
-
-func (st *State) AutoUpdateOwnerChange(store adt.Store, currEpoch abi.ChainEpoch) error {
-	info, err := st.GetInfo(store)
-	if err != nil {
-		return err
-	}
-
-	change, err := st.GetOwnerChange(store)
-	if err != nil {
-		return err
-	}
-	if info.Owner != change.ApplyOwner &&
-		change.ApplyEpoch > 0 &&
-		(currEpoch-change.ApplyEpoch) >= ExpertVoteCheckPeriod {
-		info.Owner = change.ApplyOwner
-		if err := st.SaveInfo(store, info); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (st *State) Validate(strore adt.Store, currEpoch abi.ChainEpoch) error {
-	switch st.Status {
-	case ExpertStateNormal:
-		info, err := st.GetInfo(strore)
-		if err != nil {
-			return err
-		}
-		if info.Type != builtin.ExpertFoundation {
-			if st.VoteAmount.LessThan(ExpertVoteThreshold) {
-				if st.LostEpoch < 0 {
-					return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
-				} else if (st.LostEpoch + ExpertVoteCheckPeriod) < currEpoch {
-					return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
-				}
-			}
-		}
-	case ExpertStateImplicated:
-		if st.VoteAmount.LessThan(st.voteThreshold()) {
-			if st.LostEpoch < 0 {
-				return xerrors.Errorf("failed to vaildate expert with below vote:%w", st.VoteAmount)
-			} else if (st.LostEpoch + ExpertVoteCheckPeriod) < currEpoch {
-				return xerrors.Errorf("failed to vaildate expert with lost vote:%w", st.VoteAmount)
-			}
-		}
-	default:
-		return xerrors.Errorf("failed to validate expert status: %d", st.Status)
-	}
-
-	return nil
-}
-
-func (st *State) voteThreshold() abi.TokenAmount {
+func (st *State) VoteThreshold() abi.TokenAmount {
 	return big.Add(ExpertVoteThreshold, big.Mul(big.NewIntUnsigned(st.ImplicatedTimes), ExpertVoteThresholdAddition))
 }

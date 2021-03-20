@@ -75,7 +75,6 @@ func main() {
 		// actor state
 		expert.State{},
 		expert.ExpertInfo{},
-		expert.PendingOwnerChange{},
 		// method params
 		expert.ConstructorParams{},
 		expert.ExpertDataParams{},

@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
@@ -67,93 +66,6 @@ func TestData(t *testing.T) {
 	})
 }
 
-func TestChangeOwner(t *testing.T) {
-	t.Run("save, get", func(t *testing.T) {
-		harness := constructStateHarness(t)
-
-		change, err := harness.s.GetOwnerChange(harness.store)
-		assert.NoError(t, err)
-
-		err = harness.s.ApplyOwnerChange(harness.store, change.ApplyEpoch, change.ApplyOwner)
-		assert.NoError(t, err)
-
-		newChange, err := harness.s.GetOwnerChange(harness.store)
-		assert.NoError(t, err)
-
-		assert.Equal(t, change, newChange)
-	})
-
-	t.Run("auto update", func(t *testing.T) {
-		harness := constructStateHarness(t)
-
-		owner := tutils.NewBLSAddr(t, 2)
-		err := harness.s.ApplyOwnerChange(harness.store, abi.ChainEpoch(100), owner)
-		assert.NoError(t, err)
-
-		err = harness.s.AutoUpdateOwnerChange(harness.store, abi.ChainEpoch(1000))
-		assert.NoError(t, err)
-
-		info, err := harness.s.GetInfo(harness.store)
-		assert.NoError(t, err)
-
-		assert.NotEqual(t, owner, info.Owner)
-
-		err = harness.s.AutoUpdateOwnerChange(harness.store, abi.ChainEpoch(1000)+expert.ExpertVoteCheckPeriod)
-		assert.NoError(t, err)
-
-		info, err = harness.s.GetInfo(harness.store)
-		assert.NoError(t, err)
-
-		assert.Equal(t, owner, info.Owner)
-
-	})
-}
-
-func TestValidate(t *testing.T) {
-	t.Run("validate", func(t *testing.T) {
-		harness := constructStateHarness(t)
-
-		info, err := harness.s.GetInfo(harness.store)
-		assert.NoError(t, err)
-
-		err = harness.s.Validate(harness.store, 1)
-		assert.NoError(t, err)
-
-		info.Type = builtin.ExpertNormal
-		err = harness.s.SaveInfo(harness.store, info)
-		assert.NoError(t, err)
-
-		err = harness.s.Validate(harness.store, 1)
-		assert.Error(t, err)
-
-		harness.s.VoteAmount = expert.ExpertVoteThreshold
-		err = harness.s.Validate(harness.store, 1)
-		assert.NoError(t, err)
-
-		harness.s.Status = expert.ExpertStateBlocked
-		err = harness.s.Validate(harness.store, 1)
-		assert.Error(t, err)
-
-		harness.s.Status = expert.ExpertStateImplicated
-		err = harness.s.Validate(harness.store, 1)
-		assert.Error(t, err)
-
-		harness.s.Status = expert.ExpertStateImplicated
-		harness.s.LostEpoch = abi.ChainEpoch(0)
-		err = harness.s.Validate(harness.store, 1)
-		assert.NoError(t, err)
-
-		harness.s.Status = expert.ExpertStateImplicated
-		harness.s.LostEpoch = abi.ChainEpoch(0)
-		err = harness.s.Validate(harness.store, expert.ExpertVoteCheckPeriod+1)
-		assert.Error(t, err)
-
-		harness.s.Status = expert.ExpertStateBlocked
-		err = harness.s.Validate(harness.store, expert.ExpertVoteCheckPeriod+1)
-		assert.Error(t, err)
-	})
-}
-
 type stateHarness struct {
 	t testing.TB
 
@@ -191,10 +103,12 @@ func constructStateHarness(t *testing.T) *stateHarness {
 	owner := tutils.NewBLSAddr(t, 1)
 
 	info := &expert.ExpertInfo{
-		Owner:           owner,
-		Type:            builtin.ExpertFoundation,
-		ApplicationHash: "aHash",
-		Proposer:        owner,
+		Owner:              owner,
+		Type:               builtin.ExpertFoundation,
+		ApplicationHash:    "aHash",
+		Proposer:           owner,
+		ApplyNewOwner:      owner,
+		ApplyNewOwnerEpoch: -1,
 	}
 	infoCid, err := store.Put(context.Background(), info)
 	require.NoError(t, err)
@@ -204,13 +118,7 @@ func constructStateHarness(t *testing.T) *stateHarness {
 		eState = expert.ExpertStateNormal
 	}
 
-	changeCid, err := store.Put(context.Background(), &expert.PendingOwnerChange{
-		ApplyOwner: owner,
-		ApplyEpoch: abi.ChainEpoch(-1),
-	})
-	require.NoError(t, err)
-
-	state, err := expert.ConstructState(store, infoCid, eState, changeCid)
+	state, err := expert.ConstructState(store, infoCid, eState)
 	require.NoError(t, err)
 
 	return &stateHarness{

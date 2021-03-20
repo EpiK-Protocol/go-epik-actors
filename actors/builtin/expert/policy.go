@@ -7,41 +7,51 @@ import (
 )
 
 /*
-					+ ---------------------------------------------------------------------------------------------- +
-					|																			 					 |
-					|																			 				  	 |
-					|												    		  			 				   	  	 |
-					|								  	   			              + -----------> blocked	    	 |
-					|						                                      | 						    	 |
-					|					  + ----> qualified(normal/implicated) -- +               	                 |
-		            |       			  |						                  | (no enough vote for 3 days)      |
-	registered ---- + -----> nominated -- +							              + ---------------------------> disqualified
-										  |	                    (no enough vote for 3 days)         				 ↑
+
+								 + ----------------------------------------------------------------------------------- +
+								 |																 					   |
+								 |																 				  	   |
+								 |		  +	---------------------> blocked	<-------------------------------------- +  |
+								 |		  |						      ↑			  	  	 				   	  	    |  |
+					    		 |	      |                           |             						    	|  |
+				    			 |	      |                	          |            									|  |
+		            			 ↓     	  |	 (enough votes)			  |             (no enough vote for 3 days)     |  |
+	registered ------------> nominated -- +	----------------> normal(qualified) -------------------------------> disqualified
+										  |																			 ↑
+										  |																			 |
+										  |	                    (no enough vote for 3 days)         				 |
 										  + ------------------------------------------------------------------------ +
-
-
 */
 
 // ExpertState is the state of expert.
 type ExpertState uint64
 
+func (es ExpertState) AllowVote() bool {
+	return es == ExpertStateNormal || es == ExpertStateNominated
+}
+
+// Qualified true means expert can:
+//	1. import new data
+//	2. nominate new expert
+//	3. accept new miner to store his data
+func (es ExpertState) Qualified() bool {
+	return es == ExpertStateNormal
+}
+
 const (
-	// ExpertStateRegistered registered expert
+	// ExpertStateRegistered new registered expert.
 	ExpertStateRegistered ExpertState = iota
 
 	// Expert was nominated by qualified one.
 	ExpertStateNominated
 
-	// ExpertStateNormal foundation expert
+	// Expert can import data and nominate new expert.
 	ExpertStateNormal
-
-	// ExpertStateImplicated implicated expert
-	ExpertStateImplicated // TODO:
 
 	// ExpertStateBlocked blocked expert
 	ExpertStateBlocked
 
-	// Number of votes decreased to less than threshold.
+	// Expert was disqualified, cause he has no enough votes for at least 3 days.
 	ExpertStateDisqualified
 )
 
@@ -56,5 +66,8 @@ var ExpertVoteThresholdAddition = big.Mul(big.NewInt(25000), builtin.TokenPrecis
 
 // ExpertVoteCheckPeriod period of expert vote check duration
 var ExpertVoteCheckPeriod = abi.ChainEpoch(3 * builtin.EpochsInDay) // 3 * 24 hours PARAM_SPEC
+
+// Only used for owner change by governor
+var NewOwnerActivateDelay = abi.ChainEpoch(3 * builtin.EpochsInDay) // 3 * 24 hours PARAM_SPEC
 
 const NoLostEpoch = abi.ChainEpoch(-1)

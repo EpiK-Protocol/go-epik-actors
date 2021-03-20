@@ -14,7 +14,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{135}
+var lengthBufState = []byte{134}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -39,8 +39,9 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Datas: %w", err)
 	}
 
-	// t.VoteAmount (big.Int) (struct)
-	if err := t.VoteAmount.MarshalCBOR(w); err != nil {
+	// t.DataCount (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DataCount)); err != nil {
 		return err
 	}
 
@@ -67,12 +68,6 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.OwnerChange (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.OwnerChange); err != nil {
-		return xerrors.Errorf("failed to write cid field t.OwnerChange: %w", err)
-	}
-
 	return nil
 }
 
@@ -90,7 +85,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 7 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -118,13 +113,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		t.Datas = c
 
 	}
-	// t.VoteAmount (big.Int) (struct)
+	// t.DataCount (uint64) (uint64)
 
 	{
 
-		if err := t.VoteAmount.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.VoteAmount: %w", err)
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
 		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.DataCount = uint64(extra)
 
 	}
 	// t.LostEpoch (abi.ChainEpoch) (int64)
@@ -180,22 +180,10 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		t.ImplicatedTimes = uint64(extra)
 
 	}
-	// t.OwnerChange (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.OwnerChange: %w", err)
-		}
-
-		t.OwnerChange = c
-
-	}
 	return nil
 }
 
-var lengthBufExpertInfo = []byte{132}
+var lengthBufExpertInfo = []byte{134}
 
 func (t *ExpertInfo) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -235,6 +223,22 @@ func (t *ExpertInfo) MarshalCBOR(w io.Writer) error {
 	if err := t.Proposer.MarshalCBOR(w); err != nil {
 		return err
 	}
+
+	// t.ApplyNewOwner (address.Address) (struct)
+	if err := t.ApplyNewOwner.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.ApplyNewOwnerEpoch (abi.ChainEpoch) (int64)
+	if t.ApplyNewOwnerEpoch >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ApplyNewOwnerEpoch)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.ApplyNewOwnerEpoch-1)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -252,7 +256,7 @@ func (t *ExpertInfo) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 6 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -298,59 +302,16 @@ func (t *ExpertInfo) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	return nil
-}
+	// t.ApplyNewOwner (address.Address) (struct)
 
-var lengthBufPendingOwnerChange = []byte{130}
+	{
 
-func (t *PendingOwnerChange) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufPendingOwnerChange); err != nil {
-		return err
-	}
-
-	scratch := make([]byte, 9)
-
-	// t.ApplyEpoch (abi.ChainEpoch) (int64)
-	if t.ApplyEpoch >= 0 {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.ApplyEpoch)); err != nil {
-			return err
+		if err := t.ApplyNewOwner.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.ApplyNewOwner: %w", err)
 		}
-	} else {
-		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.ApplyEpoch-1)); err != nil {
-			return err
-		}
+
 	}
-
-	// t.ApplyOwner (address.Address) (struct)
-	if err := t.ApplyOwner.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *PendingOwnerChange) UnmarshalCBOR(r io.Reader) error {
-	*t = PendingOwnerChange{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 2 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.ApplyEpoch (abi.ChainEpoch) (int64)
+	// t.ApplyNewOwnerEpoch (abi.ChainEpoch) (int64)
 	{
 		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
 		var extraI int64
@@ -373,16 +334,7 @@ func (t *PendingOwnerChange) UnmarshalCBOR(r io.Reader) error {
 			return fmt.Errorf("wrong type for int64 field: %d", maj)
 		}
 
-		t.ApplyEpoch = abi.ChainEpoch(extraI)
-	}
-	// t.ApplyOwner (address.Address) (struct)
-
-	{
-
-		if err := t.ApplyOwner.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.ApplyOwner: %w", err)
-		}
-
+		t.ApplyNewOwnerEpoch = abi.ChainEpoch(extraI)
 	}
 	return nil
 }

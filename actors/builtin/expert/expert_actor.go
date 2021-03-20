@@ -1,6 +1,7 @@
 package expert
 
 import (
+	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
@@ -33,8 +34,7 @@ func (a Actor) Exports() []interface{} {
 		10:                        a.OnImplicated,
 		11:                        a.GovChangeOwner,
 		12:                        a.OnTrackUpdate,
-		13:                        a.Validate,
-		14:                        a.CheckState,
+		13:                        a.CheckState,
 	}
 }
 
@@ -77,10 +77,12 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 
 	owner := resolveOwnerAddress(rt, params.Owner)
 	info := &ExpertInfo{
-		Owner:           owner,
-		Proposer:        owner, // same with owner means not nominated
-		Type:            params.Type,
-		ApplicationHash: params.ApplicationHash,
+		Owner:              owner,
+		Proposer:           owner, // same with owner means new registered expert
+		Type:               params.Type,
+		ApplicationHash:    params.ApplicationHash,
+		ApplyNewOwner:      owner,
+		ApplyNewOwnerEpoch: -1,
 	}
 	infoCid := rt.StorePut(info)
 
@@ -89,10 +91,7 @@ func (a Actor) Constructor(rt Runtime, params *ConstructorParams) *abi.EmptyValu
 		eState = ExpertStateNormal
 	}
 
-	ownerChange := rt.StorePut(&PendingOwnerChange{
-		ApplyOwner: owner,
-		ApplyEpoch: abi.ChainEpoch(-1)})
-	st, err := ConstructState(adt.AsStore(rt), infoCid, eState, ownerChange)
+	st, err := ConstructState(adt.AsStore(rt), infoCid, eState)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct initial state")
 	rt.StateCreate(st)
 	return nil
@@ -102,20 +101,31 @@ func (a Actor) ControlAddress(rt Runtime, _ *abi.EmptyValue) *builtin.ExpertCont
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
-	var aReturn builtin.ExpertControlAddressReturn
-	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
-		aReturn.Owner = info.Owner
-	})
-	return &aReturn
+	rt.StateReadonly(&st)
+
+	info, changed := checkAndGetExpertInfo(rt, &st)
+	if changed {
+		rt.StateTransaction(&st, func() {
+			info.ApplyNewOwnerEpoch = -1 // clear
+			err := st.SaveInfo(adt.AsStore(rt), info)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "faile to save expert info")
+		})
+	}
+	return &builtin.ExpertControlAddressReturn{Owner: info.Owner}
 }
 
-func getExpertInfo(rt Runtime, st *State) *ExpertInfo {
-	err := st.AutoUpdateOwnerChange(adt.AsStore(rt), rt.CurrEpoch())
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not update owner")
-	info, err := st.GetInfo(adt.AsStore(rt))
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not read expert info")
-	return info
+func checkAndGetExpertInfo(rt Runtime, st *State) (info *ExpertInfo, ownerChanged bool) {
+	store := adt.AsStore(rt)
+
+	info, err := st.GetInfo(store)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get info")
+
+	if info.ApplyNewOwnerEpoch > 0 && info.Owner != info.ApplyNewOwner &&
+		(rt.CurrEpoch()-info.ApplyNewOwnerEpoch) >= NewOwnerActivateDelay {
+		info.Owner = info.ApplyNewOwner
+		return info, true
+	}
+	return info, false
 }
 
 // Resolves an address to an ID address and verifies that it is address of an account or multisig actor.
@@ -130,13 +140,19 @@ func resolveOwnerAddress(rt Runtime, raw addr.Address) addr.Address {
 }
 
 func (a Actor) ChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
+	resolvedNewOwner := resolveOwnerAddress(rt, *newOwner)
+
 	var st State
 	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
+		store := adt.AsStore(rt)
+
+		info, _ := checkAndGetExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
-		owner := resolveOwnerAddress(rt, *newOwner)
-		info.Owner = owner
-		err := st.SaveInfo(adt.AsStore(rt), info)
+
+		info.Owner = resolvedNewOwner
+		info.ApplyNewOwnerEpoch = -1
+
+		err := st.SaveInfo(store, info)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change owner")
 	})
 	return nil
@@ -152,17 +168,19 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 	var st State
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
-		rt.ValidateImmediateCallerIs(info.Owner)
+		builtin.RequireState(rt, st.Status.Qualified(), "expert is unqualified")
 
-		err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
-		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
+		info, ownerChanged := checkAndGetExpertInfo(rt, &st)
+		rt.ValidateImmediateCallerIs(info.Owner)
+		if ownerChanged {
+			info.ApplyNewOwnerEpoch = -1
+			err := st.SaveInfo(store, info)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "faile to save expert info")
+		}
 
 		_, found, err := st.GetData(store, params.PieceID.String())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data")
-		if found {
-			builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "duplicate expert import")
-		}
+		builtin.RequireParam(rt, !found, "duplicate expert import")
 
 		newDataInfo := &DataOnChainInfo{
 			RootID:    params.RootID,
@@ -186,43 +204,31 @@ func (a Actor) GetData(rt Runtime, params *ExpertDataParams) *DataOnChainInfo {
 	store := adt.AsStore(rt)
 
 	data, found, err := st.GetData(store, params.PieceID.String())
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data %v", params.PieceID)
-	builtin.RequireParam(rt, found, "data %v has not imported", params.PieceID)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data: %s", params.PieceID)
+	builtin.RequireParam(rt, found, "data not imported: %s", params.PieceID)
 	return data
 }
 
-func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) *DataOnChainInfo {
-	rt.ValidateImmediateCallerType(builtin.ExpertFundActorCodeID)
+func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) (out *DataOnChainInfo) {
+	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
 
-	var out *DataOnChainInfo
 	var st State
 	rt.StateTransaction(&st, func() {
+
+		builtin.RequireState(rt, st.Status.Qualified(), "expert is unqualified")
+
 		store := adt.AsStore(rt)
-
-		err := st.Validate(store, rt.CurrEpoch())
-		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
-
 		data, found, err := st.GetData(store, params.PieceID.String())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data %v", params.PieceID)
-		builtin.RequireParam(rt, found, "data %v has not imported", params.PieceID)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data: %s", params.PieceID)
+		builtin.RequireParam(rt, found, "data not imported: %s", params.PieceID)
+
 		data.Redundancy++
 		err = st.PutData(store, data)
-		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to store data")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to store data")
 
 		out = data
 	})
-	return out
-}
-
-func (a Actor) Validate(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerAcceptAny()
-
-	var st State
-	rt.StateReadonly(&st)
-
-	err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
-	builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to validate expert")
-	return nil
+	return
 }
 
 type NominateExpertParams struct {
@@ -232,15 +238,19 @@ type NominateExpertParams struct {
 func (a Actor) Nominate(rt Runtime, params *NominateExpertParams) *abi.EmptyValue {
 
 	var st State
-	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
-		rt.ValidateImmediateCallerIs(info.Owner)
+	rt.StateReadonly(&st)
 
-		builtin.RequireState(rt, st.Status == ExpertStateNormal, "proposer is not normal")
+	builtin.RequireState(rt, st.Status.Qualified(), "nominator is unqualified")
 
-		err := st.Validate(adt.AsStore(rt), rt.CurrEpoch())
-		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "invalid expert")
-	})
+	info, changed := checkAndGetExpertInfo(rt, &st)
+	rt.ValidateImmediateCallerIs(info.Owner)
+	if changed {
+		rt.StateTransaction(&st, func() {
+			info.ApplyNewOwnerEpoch = -1
+			err := st.SaveInfo(adt.AsStore(rt), info)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "faile to save expert info")
+		})
+	}
 
 	code := rt.Send(params.Expert, builtin.MethodsExpert.OnNominated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to nominate expert")
@@ -250,16 +260,18 @@ func (a Actor) Nominate(rt Runtime, params *NominateExpertParams) *abi.EmptyValu
 func (a Actor) OnNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
+	store := adt.AsStore(rt)
 	var st State
 	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
+		info, err := st.GetInfo(store)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get info")
 
-		builtin.RequireState(rt, info.Type != builtin.ExpertFoundation, "foundation expert cannot be nominated")
-		builtin.RequireState(rt, st.Status == ExpertStateRegistered || st.Status == ExpertStateDisqualified, "nominate expert with error status")
+		builtin.RequireParam(rt, info.Type != builtin.ExpertFoundation, "foundation expert cannot be nominated")
+		builtin.RequireParam(rt, st.Status == ExpertStateRegistered || st.Status == ExpertStateDisqualified, "nominate expert with invalid status")
 
 		info.Proposer = rt.Caller()
-		err := st.SaveInfo(adt.AsStore(rt), info)
-		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to update nominate")
+		err = st.SaveInfo(store, info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to save info")
 
 		// reset LostEpoch of both new registered & unqualified experts to NoLostEpoch
 		st.LostEpoch = NoLostEpoch
@@ -276,25 +288,28 @@ func (a Actor) GovBlock(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.GovBlock)
 
 	var st State
-	var info *ExpertInfo
+	var proposer address.Address
 	rt.StateTransaction(&st, func() {
-		info = getExpertInfo(rt, &st)
+		info, err := st.GetInfo(adt.AsStore(rt))
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not read expert info")
 
 		builtin.RequireParam(rt, info.Type != builtin.ExpertFoundation, "foundation expert cannot be blocked")
 		builtin.RequireParam(rt, st.Status != ExpertStateBlocked, "expert already blocked")
-		builtin.RequireParam(rt, st.Status != ExpertStateRegistered, "non-nominated cannot be blocked")
+		builtin.RequireParam(rt, st.Status != ExpertStateRegistered, "expert not nominated")
 
-		// allow to block unqualified expert for they have valid votes
+		// Blocking disqualified/nominated/normal experts are allowed, for
+		// they probably own valid votes.
 
 		st.Status = ExpertStateBlocked
-		st.LostEpoch = rt.CurrEpoch()
+		st.LostEpoch = rt.CurrEpoch() // record epoch being blocked
+		proposer = info.Proposer
 	})
 
-	code := rt.Send(info.Proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to punish proposer expert")
+	code := rt.Send(proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to call OnImplicated")
 
 	code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.OnCandidateBlocked, nil, abi.NewTokenAmount(0), &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to notify expert blocked")
+	builtin.RequireSuccess(rt, code, "failed to call OnCandidateBlocked")
 
 	return nil
 }
@@ -303,29 +318,16 @@ func (a Actor) GovBlock(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 func (a Actor) OnImplicated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
-	validate := true
 	var st State
 	rt.StateTransaction(&st, func() {
-		info := getExpertInfo(rt, &st)
+		info, err := st.GetInfo(adt.AsStore(rt))
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not read expert info")
+
 		if info.Type == builtin.ExpertFoundation {
-			// foundation will not be punished forever
 			return
 		}
-
-		// TODO: repeatly punish?
-		st.Status = ExpertStateImplicated
 		st.ImplicatedTimes++
-		if st.VoteAmount.GreaterThanEqual(ExpertVoteThreshold) &&
-			st.VoteAmount.LessThan(st.voteThreshold()) {
-			st.LostEpoch = rt.CurrEpoch()
-		}
-		if err := st.Validate(adt.AsStore(rt), rt.CurrEpoch()); err != nil {
-			validate = false
-		}
 	})
-	if !validate {
-		// builtin.NotifyExpertFundReset(rt)
-	}
 	return nil
 }
 
@@ -338,8 +340,16 @@ func (a Actor) GovChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValu
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		err := st.ApplyOwnerChange(adt.AsStore(rt), rt.CurrEpoch(), *newOwner)
-		builtin.RequireNoErr(rt, err, exitcode.ErrForbidden, "failed to apply owner change")
+		store := adt.AsStore(rt)
+
+		info, err := st.GetInfo(store)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get expert info")
+
+		info.ApplyNewOwner = *newOwner
+		info.ApplyNewOwnerEpoch = rt.CurrEpoch()
+
+		err = st.SaveInfo(store, info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to save info")
 	})
 	return nil
 }
@@ -355,8 +365,8 @@ func (a Actor) CheckState(rt Runtime, _ *abi.EmptyValue) *CheckStateReturn {
 	var st State
 	rt.StateReadonly(&st)
 	return &CheckStateReturn{
-		AllowVote: st.Status == ExpertStateNormal || st.Status == ExpertStateNominated,
-		Qualified: st.Status == ExpertStateNormal,
+		AllowVote: st.Status.AllowVote(),
+		Qualified: st.Status.Qualified(),
 	}
 }
 
@@ -379,11 +389,11 @@ func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUp
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
 		info, err := st.GetInfo(store)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "could not get expert info")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get expert info")
 
 		builtin.RequireState(rt, st.Status != ExpertStateRegistered &&
 			st.Status != ExpertStateDisqualified &&
-			info.Type != builtin.ExpertFoundation, "expert being track with error status %s, %s", st.Status, info.Type)
+			info.Type != builtin.ExpertFoundation, "unexpected expert status or type: %d, %d", st.Status, info.Type)
 
 		if st.Status == ExpertStateBlocked {
 			ret.ResetMe = true
@@ -392,7 +402,7 @@ func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUp
 		}
 
 		beforeBelow := st.LostEpoch != NoLostEpoch
-		nowBelow := params.Votes.LessThan(ExpertVoteThreshold) // TODO: replace with actual threshold
+		nowBelow := params.Votes.LessThan(st.VoteThreshold())
 
 		if !beforeBelow {
 			if nowBelow {
@@ -402,10 +412,11 @@ func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUp
 			}
 		} else {
 			if nowBelow {
-				if rt.CurrEpoch() > st.LostEpoch+ExpertVoteCheckPeriod {
+				if rt.CurrEpoch() >= st.LostEpoch+ExpertVoteCheckPeriod {
 					ret.ResetMe = true
 					ret.UntrackMe = true
 					st.Status = ExpertStateDisqualified
+					// DO NOT change st.LostEpoch
 				}
 			} else {
 				st.LostEpoch = NoLostEpoch

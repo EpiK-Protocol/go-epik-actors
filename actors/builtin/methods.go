@@ -127,9 +127,8 @@ var MethodsExpert = struct {
 	OnImplicated   abi.MethodNum
 	GovChangeOwner abi.MethodNum
 	OnTrackUpdate  abi.MethodNum
-	Validate       abi.MethodNum
 	CheckState     abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
 
 var MethodsExpertFunds = struct {
 	Constructor       abi.MethodNum
