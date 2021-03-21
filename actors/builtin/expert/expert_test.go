@@ -412,7 +412,7 @@ func TestOnNominated(t *testing.T) {
 
 		rt.SetCaller(expertAddr, builtin.ExpertActorCodeID)
 		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.TrackNewNominated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.AddTrackedExpert, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
 		rt.Call(actor.OnNominated, nil)
 		rt.Verify()
 
@@ -771,9 +771,8 @@ func TestOnTrackUpdate(t *testing.T) {
 
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "unexpected expert status or type", func() {
-			rt.Call(actor.OnTrackUpdate, &expert.OnTrackUpdateParams{Votes: big.Zero()})
-		})
+		ret := rt.Call(actor.OnTrackUpdate, &expert.OnTrackUpdateParams{Votes: big.Zero()}).(*expert.OnTrackUpdateReturn)
+		require.True(t, ret.UntrackMe == true && ret.ResetMe == false)
 	})
 
 	t.Run("unexpected status", func(t *testing.T) {
@@ -786,9 +785,8 @@ func TestOnTrackUpdate(t *testing.T) {
 
 			rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 			rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-			rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "unexpected expert status or type", func() {
-				rt.Call(actor.OnTrackUpdate, &expert.OnTrackUpdateParams{Votes: big.Zero()})
-			})
+			ret := rt.Call(actor.OnTrackUpdate, &expert.OnTrackUpdateParams{Votes: big.Zero()}).(*expert.OnTrackUpdateReturn)
+			require.True(t, ret.UntrackMe == true && ret.ResetMe == false)
 		}
 	})
 
@@ -1048,7 +1046,7 @@ func (h *actorHarness) nominate(rt *mock.Runtime, params *expert.NominateExpertP
 func (h *actorHarness) onNominate(rt *mock.Runtime) {
 	rt.SetCaller(h.proposer, builtin.ExpertActorCodeID)
 	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.TrackNewNominated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
+	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.AddTrackedExpert, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
 	rt.Call(h.OnNominated, nil)
 	rt.Verify()
 }

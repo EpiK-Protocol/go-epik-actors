@@ -278,7 +278,7 @@ func (a Actor) OnNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		st.Status = ExpertStateNominated
 	})
 
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.TrackNewNominated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.AddTrackedExpert, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to track new nominated")
 	return nil
 }
@@ -391,9 +391,12 @@ func (a Actor) OnTrackUpdate(rt Runtime, params *OnTrackUpdateParams) *OnTrackUp
 		info, err := st.GetInfo(store)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get expert info")
 
-		builtin.RequireState(rt, st.Status != ExpertStateRegistered &&
-			st.Status != ExpertStateDisqualified &&
-			info.Type != builtin.ExpertFoundation, "unexpected expert status or type: %d, %d", st.Status, info.Type)
+		// Should not happen, but in case
+		if info.Type == builtin.ExpertFoundation ||
+			st.Status == ExpertStateDisqualified || st.Status == ExpertStateRegistered {
+			ret.UntrackMe = true
+			return
+		}
 
 		if st.Status == ExpertStateBlocked {
 			ret.ResetMe = true

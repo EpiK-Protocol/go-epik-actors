@@ -131,17 +131,17 @@ var MethodsExpert = struct {
 }{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
 
 var MethodsExpertFunds = struct {
-	Constructor       abi.MethodNum
-	ApplyRewards      abi.MethodNum
-	Claim             abi.MethodNum
-	OnExpertImport    abi.MethodNum
-	ChangeThreshold   abi.MethodNum
-	BatchCheckData    abi.MethodNum
-	BatchStoreData    abi.MethodNum
-	GetData           abi.MethodNum
-	ApplyForExpert    abi.MethodNum
-	OnEpochTickEnd    abi.MethodNum
-	TrackNewNominated abi.MethodNum
+	Constructor      abi.MethodNum
+	ApplyRewards     abi.MethodNum
+	Claim            abi.MethodNum
+	OnExpertImport   abi.MethodNum
+	ChangeThreshold  abi.MethodNum
+	BatchCheckData   abi.MethodNum
+	BatchStoreData   abi.MethodNum
+	GetData          abi.MethodNum
+	ApplyForExpert   abi.MethodNum
+	OnEpochTickEnd   abi.MethodNum
+	AddTrackedExpert abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
 
 var MethodsVote = struct {

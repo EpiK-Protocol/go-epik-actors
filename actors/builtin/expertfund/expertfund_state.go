@@ -22,13 +22,13 @@ type State struct {
 
 	PoolInfo cid.Cid
 
-	Datas cid.Cid // Map, AMT[key]address
+	Datas cid.Cid // Map, HAMT[key]address
 
 	// TotalExpertDataSize total expert registered data size
 	TotalExpertDataSize abi.PaddedPieceSize
 
 	// TotalExpertReward total expert fund receive rewards
-	TotalExpertReward abi.TokenAmount
+	TotalExpertReward abi.TokenAmount // TODO: remove
 
 	LastFundBalance abi.TokenAmount
 
@@ -87,28 +87,18 @@ func ConstructState(store adt.Store, pool cid.Cid) (*State, error) {
 	}, nil
 }
 
-func (st *State) HasDataID(store adt.Store, pieceID string) (bool, error) {
-	pieces, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return false, err
-	}
-
-	var expert addr.Address
-	found, err := pieces.Get(adt.StringKey(pieceID), &expert)
-	if err != nil {
-		return false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
-	}
-	return found, nil
-}
-
-func (st *State) PutData(store adt.Store, pieceID string, expert addr.Address) error {
+// MustPutAbsentData returns error if data already exists.
+func (st *State) MustPutAbsentData(store adt.Store, pieceID string, expert addr.Address) error {
 	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
-
-	if err := datas.Put(adt.StringKey(pieceID), &expert); err != nil {
-		return xerrors.Errorf("failed to put expert %v: %w", expert, err)
+	absent, err := datas.PutIfAbsent(adt.StringKey(pieceID), &expert)
+	if err != nil {
+		return xerrors.Errorf("failed to put data %s from expert %s: %w", pieceID, expert, err)
+	}
+	if !absent {
+		return xerrors.Errorf("put duplicate data %s from expert %s", pieceID, expert)
 	}
 	st.Datas, err = datas.Root()
 	return err
@@ -364,21 +354,66 @@ func (st *State) UpdatePool(rt Runtime) error {
 	return nil
 }
 
-func (st *State) getExpert(s adt.Store, a addr.Address) (*ExpertInfo, bool, error) {
+func (st *State) GetExpert(s adt.Store, a addr.Address) (*ExpertInfo, error) {
 	experts, err := adt.AsMap(s, st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return nil, false, err
+		return nil, xerrors.Errorf("failed to load experts: %w", err)
 	}
 
 	var out ExpertInfo
 	found, err := experts.Get(abi.AddrKey(a), &out)
 	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get expert for address %v from store %s: %w", a, st.Experts, err)
+		return nil, xerrors.Errorf("failed to get expert for address %v from store %s: %w", a, st.Experts, err)
 	}
 	if !found {
-		return nil, false, nil
+		return nil, xerrors.Errorf("expert not found: %s", a)
 	}
-	return &out, true, nil
+	return &out, nil
+}
+
+func (st *State) ListTrackedExperts(s adt.Store) ([]addr.Address, error) {
+	tracked, err := adt.AsSet(s, st.TrackedExperts, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to load tracked experts: %w", err)
+	}
+
+	var addrs []addr.Address
+	err = tracked.ForEach(func(k string) error {
+		a, err := addr.NewFromBytes([]byte(k))
+		if err != nil {
+			return err
+		}
+		addrs = append(addrs, a)
+		return nil
+	})
+	if err != nil {
+		return nil, xerrors.Errorf("failed to iterate traced expert: %w", err)
+	}
+	return addrs, nil
+}
+
+func (st *State) DeleteTrackedExperts(s adt.Store, addrs []addr.Address) error {
+	if len(addrs) == 0 {
+		return nil
+	}
+
+	tracked, err := adt.AsSet(s, st.TrackedExperts, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return xerrors.Errorf("failed to load tracked experts: %w", err)
+	}
+
+	for _, adr := range addrs {
+		_, err := tracked.TryDelete(abi.AddrKey(adr))
+		if err != nil {
+			return xerrors.Errorf("failed to delete tracked expert %s: %w", adr, err)
+		}
+	}
+
+	st.TrackedExperts, err = tracked.Root()
+	if err != nil {
+		return xerrors.Errorf("failed to flush tracked experts: %w", err)
+	}
+	return nil
 }
 
 func (st *State) setExpert(store adt.Store, ida addr.Address, expert *ExpertInfo) error {

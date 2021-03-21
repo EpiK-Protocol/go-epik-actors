@@ -34,7 +34,7 @@ func (a Actor) Exports() []interface{} {
 		8:                         a.GetData,
 		9:                         a.ApplyForExpert,
 		10:                        a.OnEpochTickEnd,
-		11:                        a.TrackNewNominated,
+		11:                        a.AddTrackedExpert,
 	}
 }
 
@@ -116,12 +116,8 @@ func (a Actor) OnExpertImport(rt Runtime, params *builtin.OnExpertImportParams) 
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		found, err := st.HasDataID(adt.AsStore(rt), params.PieceID.String())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check data in fund record")
-		if found {
-			rt.Abortf(exitcode.ErrForbidden, "duplicate import by other expert")
-		}
-		st.PutData(adt.AsStore(rt), params.PieceID.String(), rt.Caller())
+		err := st.MustPutAbsentData(adt.AsStore(rt), params.PieceID.String(), rt.Caller())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put data")
 	})
 	return nil
 }
@@ -173,6 +169,10 @@ func (a Actor) BatchCheckData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 // BatchStoreData batch store data
 func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.StorageMarketActorAddr)
+
+	if len(params.PieceCIDs) == 0 {
+		return nil
+	}
 
 	var experts []address.Address
 	var rst State
@@ -226,9 +226,7 @@ func (a Actor) GetData(rt Runtime, params *GetDataParams) *DataInfo {
 
 	expertAddr, found, err := st.GetData(store, params.PieceID.String())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
-	if !found {
-		rt.Abortf(exitcode.ErrForbidden, "data not found.")
-	}
+	builtin.RequireState(rt, found, "data not found")
 
 	var out expert.DataOnChainInfo
 	code := rt.Send(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{PieceID: params.PieceID}, abi.NewTokenAmount(0), &out)
@@ -306,7 +304,7 @@ func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyFo
 }
 
 // Called by Expert.Nominate
-func (a Actor) TrackNewNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
+func (a Actor) AddTrackedExpert(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
 	var st State
@@ -317,7 +315,10 @@ func (a Actor) TrackNewNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue 
 		k := abi.AddrKey(rt.Caller())
 		has, err := trackedExperts.Has(k)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check if expert being tracked")
-		builtin.RequireParam(rt, !has, "expert already being tracked %s", rt.Caller())
+		if has {
+			// do not abort here
+			return
+		}
 
 		err = trackedExperts.Put(k)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put new nominated")
@@ -329,25 +330,15 @@ func (a Actor) TrackNewNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue 
 }
 
 // Called by Cron.
+// 	1. track experts' votes and update their status
 func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.CronActorAddr)
 
 	var st State
 	rt.StateReadonly(&st)
 
-	trackedExperts, err := adt.AsSet(adt.AsStore(rt), st.TrackedExperts, builtin.DefaultHamtBitwidth)
+	experts, err := st.ListTrackedExperts(adt.AsStore(rt))
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load TrackedExperts")
-
-	var experts []address.Address
-	err = trackedExperts.ForEach(func(k string) error {
-		expertAddr, err := address.NewFromBytes([]byte(k))
-		if err != nil {
-			return err
-		}
-		experts = append(experts, expertAddr)
-		return nil
-	})
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to iterate TrackedExperts")
 
 	if len(experts) == 0 {
 		return nil
@@ -381,18 +372,8 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to reset expert %s", expertAddr)
 		}
 
-		if len(untrackExperts) > 0 {
-			trackedExperts, err := adt.AsSet(adt.AsStore(rt), st.TrackedExperts, builtin.DefaultHamtBitwidth)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load TrackedExperts")
-
-			for _, untrackAddr := range untrackExperts {
-				err := trackedExperts.Delete(abi.AddrKey(untrackAddr))
-				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete tracked expert %s", untrackAddr)
-			}
-
-			st.TrackedExperts, err = trackedExperts.Root()
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush TrackedExperts")
-		}
+		err := st.DeleteTrackedExperts(adt.AsStore(rt), untrackExperts)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete tracked experts")
 	})
 	return nil
 }
