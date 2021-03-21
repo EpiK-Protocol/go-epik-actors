@@ -1,6 +1,7 @@
 package expertfund
 
 import (
+	"math"
 	"strconv"
 
 	"github.com/filecoin-project/go-address"
@@ -121,8 +122,10 @@ func (st *State) GetData(store adt.Store, pieceID string) (addr.Address, bool, e
 }
 
 // Deposit deposit expert data to fund.
-func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPieceSize) error {
-	st.TotalExpertDataSize += size
+func (st *State) Deposit(rt Runtime, fromAddr address.Address, originSize abi.PaddedPieceSize) error {
+	// Note: Considering that audio files are larger than text files, it is not fair to text files, so take the square root of size
+	fixedSize := abi.PaddedPieceSize(math.Sqrt(float64(originSize)))
+	st.TotalExpertDataSize += fixedSize
 	if err := st.UpdatePool(rt); err != nil {
 		return err
 	}
@@ -149,7 +152,7 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, size abi.PaddedPi
 		return err
 	}
 
-	out.DataSize += size
+	out.DataSize += fixedSize
 	debt := big.Mul(abi.NewTokenAmount(int64(out.DataSize)), pool.AccPerShare)
 	out.RewardDebt = big.Div(debt, AccumulatedMultiplier)
 	err = experts.Put(abi.AddrKey(fromAddr), &out)
