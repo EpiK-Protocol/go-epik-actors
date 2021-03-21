@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/govern"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
@@ -153,6 +154,22 @@ func main() {
 		multisig.ChangeNumApprovalsThresholdParams{},
 		multisig.SwapSignerParams{},
 		multisig.LockBalanceParams{},
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/flowch/cbor_gen.go", "flowch",
+		// actor state
+		flowch.State{},
+		flowch.LaneState{},
+		// method params and returns
+		flowch.ConstructorParams{},
+		flowch.UpdateChannelStateParams{},
+		flowch.SignedVoucher{},
+		flowch.ModVerifyParams{},
+		flowch.AddFundsParams{},
+		// other types
+		flowch.Merge{},
 	); err != nil {
 		panic(err)
 	}

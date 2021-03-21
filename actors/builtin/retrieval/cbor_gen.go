@@ -234,10 +234,9 @@ func (t *RetrievalDataParams) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.PieceID (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.PieceID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
+	// t.Flowch (address.Address) (struct)
+	if err := t.Flowch.MarshalCBOR(w); err != nil {
+		return err
 	}
 
 	// t.Size (uint64) (uint64)
@@ -276,16 +275,13 @@ func (t *RetrievalDataParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.PieceID (cid.Cid) (struct)
+	// t.Flowch (address.Address) (struct)
 
 	{
 
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.PieceID: %w", err)
+		if err := t.Flowch.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Flowch: %w", err)
 		}
-
-		t.PieceID = c
 
 	}
 	// t.Size (uint64) (uint64)
@@ -336,15 +332,8 @@ func (t *RetrievalState) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.PieceID (string) (string)
-	if len(t.PieceID) > cbg.MaxLength {
-		return xerrors.Errorf("Value in field t.PieceID was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.PieceID))); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, string(t.PieceID)); err != nil {
+	// t.Flowch (address.Address) (struct)
+	if err := t.Flowch.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -395,15 +384,14 @@ func (t *RetrievalState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.PieceID (string) (string)
+	// t.Flowch (address.Address) (struct)
 
 	{
-		sval, err := cbg.ReadStringBuf(br, scratch)
-		if err != nil {
-			return err
+
+		if err := t.Flowch.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Flowch: %w", err)
 		}
 
-		t.PieceID = string(sval)
 	}
 	// t.PieceSize (abi.PaddedPieceSize) (uint64)
 

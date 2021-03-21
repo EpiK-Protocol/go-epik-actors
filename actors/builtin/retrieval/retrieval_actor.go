@@ -9,7 +9,6 @@ import (
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -148,7 +147,7 @@ func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, reci
 
 // RetrievalDataParams retrieval data params
 type RetrievalDataParams struct {
-	PieceID  cid.Cid
+	Flowch   addr.Address
 	Size     uint64
 	Client   addr.Address
 	Provider addr.Address
@@ -156,22 +155,16 @@ type RetrievalDataParams struct {
 
 // RetrievalData retrieval data statistics
 func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, approvedCallers := escrowAddress(rt, params.Client)
+	nominal, _, _ := escrowAddress(rt, params.Client)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerIs(approvedCallers...)
-
-	var out expertfund.DataInfo
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.GetData, &expertfund.GetDataParams{
-		PieceID: params.PieceID,
-	}, abi.NewTokenAmount(0), &out)
-	builtin.RequireSuccess(rt, code, "failed to load expert data.")
+	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {
 		statistics := &RetrievalState{
-			PieceID:   params.PieceID.String(),
-			PieceSize: out.Data.PieceSize,
+			Flowch:    params.Flowch,
+			PieceSize: abi.PaddedPieceSize(params.Size),
 			Client:    params.Client,
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
@@ -184,17 +177,24 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 
 // ConfirmData retrieval data statistics
 func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, approvedCallers := escrowAddress(rt, params.Client)
-	_, _, providerCallers := escrowAddress(rt, params.Provider)
-	approvedCallers = append(approvedCallers, providerCallers...)
+	nominal, _, _ := escrowAddress(rt, params.Client)
+	// _, _, providerCallers := escrowAddress(rt, params.Provider)
+	// approvedCallers = append(approvedCallers, providerCallers...)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerIs(approvedCallers...)
+	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
 
 	var reward abi.TokenAmount
 	var st State
 	rt.StateTransaction(&st, func() {
-		amount, err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, params.PieceID.String())
+		statistics := &RetrievalState{
+			Flowch:    params.Flowch,
+			PieceSize: abi.PaddedPieceSize(params.Size),
+			Client:    params.Client,
+			Provider:  params.Provider,
+			Epoch:     rt.CurrEpoch(),
+		}
+		amount, err := st.ConfirmData(adt.AsStore(rt), nominal, statistics)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to confirm data")
 		reward = amount
 	})

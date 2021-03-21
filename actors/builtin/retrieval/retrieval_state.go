@@ -37,7 +37,7 @@ type State struct {
 
 // RetrievalState record retrieval data statistics
 type RetrievalState struct {
-	PieceID   string
+	Flowch    addr.Address
 	PieceSize abi.PaddedPieceSize
 	Client    addr.Address
 	Provider  addr.Address
@@ -212,9 +212,14 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 	}
 
 	var totalSize abi.PaddedPieceSize
+	index := int64(-1)
 	err = mmap.ForEach(abi.AddrKey(fromAddr), &out, func(i int64) error {
 		if out.Epoch/RetrievalStateDuration >= curEpochDay {
 			totalSize += out.PieceSize
+		}
+		if out.Flowch == state.Flowch {
+			index = i
+			state.PieceSize += out.PieceSize
 		}
 		return nil
 	})
@@ -236,7 +241,11 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 	if big.Sub(balance, required).LessThan(big.Zero()) {
 		return exitcode.ErrInsufficientFunds, xerrors.Errorf("not enough balance to statistics for addr %s: escrow balance %s < required %s", fromAddr, balance, required)
 	}
-	mmap.Add(abi.AddrKey(fromAddr), state)
+	if index < 0 {
+		mmap.Add(abi.AddrKey(fromAddr), state)
+	} else {
+		mmap.Set(abi.AddrKey(fromAddr), uint64(index), state)
+	}
 	if st.RetrievalBatch, err = mmap.Root(); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
@@ -245,20 +254,18 @@ func (st *State) RetrievalData(rt Runtime, fromAddr addr.Address, state *Retriev
 }
 
 // ConfirmData record the retrieval data
-func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr addr.Address, pieceID string) (abi.TokenAmount, error) {
+func (st *State) ConfirmData(store adt.Store, fromAddr addr.Address, state *RetrievalState) (abi.TokenAmount, error) {
 	mmap, err := adt.AsMultimap(store, st.RetrievalBatch, builtin.DefaultHamtBitwidth, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval batch set: %w", err)
 	}
 
 	index := int64(-1)
-	var outs []RetrievalState
 	var out RetrievalState
 	err = mmap.ForEach(abi.AddrKey(fromAddr), &out, func(i int64) error {
-		if out.PieceID == pieceID {
+		if out.Flowch == state.Flowch {
 			index = i
 		}
-		outs = append(outs, out)
 		return nil
 	})
 	if err != nil {
@@ -268,7 +275,7 @@ func (st *State) ConfirmData(store adt.Store, currEpoch abi.ChainEpoch, fromAddr
 		return abi.NewTokenAmount(0), xerrors.Errorf("confirm data not found for addr %s", fromAddr)
 	}
 
-	amount := big.Mul(big.NewInt(int64(outs[index].PieceSize)), RetrievalRewardPerByte)
+	amount := big.Mul(big.NewInt(int64(state.PieceSize)), RetrievalRewardPerByte)
 	if st.PendingReward.GreaterThanEqual(amount) {
 		st.PendingReward = big.Sub(st.PendingReward, amount)
 	} else {

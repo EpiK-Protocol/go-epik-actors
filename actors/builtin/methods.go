@@ -43,6 +43,14 @@ var MethodsMultisig = struct {
 	LockBalance                 abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9}
 
+var MethodsFlowch = struct {
+	Constructor        abi.MethodNum
+	UpdateChannelState abi.MethodNum
+	Settle             abi.MethodNum
+	Collect            abi.MethodNum
+	AddFunds           abi.MethodNum
+}{MethodConstructor, 2, 3, 4, 5}
+
 var MethodsPaych = struct {
 	Constructor        abi.MethodNum
 	UpdateChannelState abi.MethodNum

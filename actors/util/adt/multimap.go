@@ -84,6 +84,36 @@ func (mm *Multimap) Add(key abi.Keyer, value cbor.Marshaler) error {
 	return nil
 }
 
+// Adds a value for a key.
+func (mm *Multimap) Set(key abi.Keyer, i uint64, value cbor.Marshaler) error {
+	// Load the array under key, or initialize a new empty one if not found.
+	array, found, err := mm.Get(key)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return xerrors.Errorf("failed to find value by index: %v", i)
+	}
+
+	// Append to the array.
+	if err = array.Set(i, value); err != nil {
+		return errors.Wrapf(err, "failed to set multimap key %v value %v", key, value)
+	}
+
+	c, err := array.Root()
+	if err != nil {
+		return xerrors.Errorf("failed to flush child array: %w", err)
+	}
+
+	// Store the new array root under key.
+	newArrayRoot := cbg.CborCid(c)
+	err = mm.mp.Put(key, &newArrayRoot)
+	if err != nil {
+		return errors.Wrapf(err, "failed to store multimap values")
+	}
+	return nil
+}
+
 // Removes all values for a key.
 func (mm *Multimap) RemoveAll(key abi.Keyer) error {
 	if _, err := mm.mp.TryDelete(key); err != nil {
