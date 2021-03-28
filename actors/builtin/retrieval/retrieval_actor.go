@@ -161,7 +161,7 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerIs(approvedCallers...)
 
-	var out expertfund.DataInfo
+	var out expertfund.GetDataReturn
 	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.GetData, &expertfund.GetDataParams{
 		PieceID: params.PieceID,
 	}, abi.NewTokenAmount(0), &out)

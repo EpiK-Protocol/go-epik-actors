@@ -31,8 +31,10 @@ func constructStateHarness(t *testing.T) *stateHarness {
 	store := ipld.NewADTStore(context.Background())
 
 	info := &expertfund.PoolInfo{
-		LastRewardBlock: abi.ChainEpoch(0),
-		AccPerShare:     abi.NewTokenAmount(0)}
+		TotalExpertDataSize: 0,
+		AccPerShare:         abi.NewTokenAmount(0),
+		LastRewardBalance:   abi.NewTokenAmount(0),
+	}
 	infoCid, err := store.Put(context.Background(), info)
 	require.NoError(t, err)
 

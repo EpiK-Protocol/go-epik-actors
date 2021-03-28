@@ -10,6 +10,7 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/ipfs/go-cid"
 
+	rtt "github.com/filecoin-project/go-state-types/rt"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	initact "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
@@ -60,8 +61,9 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
 	pool := rt.StorePut(&PoolInfo{
-		LastRewardBlock: abi.ChainEpoch(0),
-		AccPerShare:     abi.NewTokenAmount(0),
+		TotalExpertDataSize: 0,
+		AccPerShare:         abi.NewTokenAmount(0),
+		LastRewardBalance:   abi.NewTokenAmount(0),
 	})
 	st, err := ConstructState(adt.AsStore(rt), pool)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
@@ -71,16 +73,8 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 
 // ApplyRewards apply the received value into the fund balance.
 func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	msgValue := rt.ValueReceived()
-	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "balance to add must be greater than zero")
-
-	var st State
-	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
-
-		st.TotalExpertReward = big.Add(st.TotalExpertReward, msgValue)
-	})
-
+	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
+	builtin.RequireParam(rt, rt.ValueReceived().GreaterThan(big.Zero()), "balance to add must be greater than zero")
 	return nil
 }
 
@@ -107,7 +101,7 @@ func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.TokenAmount {
 		code := rt.Send(rt.Caller(), builtin.MethodSend, nil, actual, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send claimed fund")
 	}
-	return nil
+	return &actual
 }
 
 // OnExpertImport
@@ -199,7 +193,8 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	rt.StateTransaction(&st, func() {
 		for i, data := range datas {
 			if data.Redundancy == st.DataStoreThreshold {
-				st.Deposit(rt, experts[i], data.PieceSize)
+				err := st.Deposit(rt, experts[i], data.PieceSize)
+				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit %s", experts[i])
 			}
 		}
 	})
@@ -211,13 +206,13 @@ type GetDataParams struct {
 	PieceID cid.Cid `checked:"true"`
 }
 
-type DataInfo struct {
+type GetDataReturn struct {
 	Expert address.Address
 	Data   *expert.DataOnChainInfo
 }
 
 // GetData returns store data info
-func (a Actor) GetData(rt Runtime, params *GetDataParams) *DataInfo {
+func (a Actor) GetData(rt Runtime, params *GetDataParams) *GetDataReturn {
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
@@ -232,7 +227,7 @@ func (a Actor) GetData(rt Runtime, params *GetDataParams) *DataInfo {
 	code := rt.Send(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{PieceID: params.PieceID}, abi.NewTokenAmount(0), &out)
 	builtin.RequireSuccess(rt, code, "failed to get data in expert record")
 
-	return &DataInfo{
+	return &GetDataReturn{
 		Expert: expertAddr,
 		Data:   &out,
 	}
@@ -294,7 +289,7 @@ func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyFo
 			UnlockedFunds: abi.NewTokenAmount(0),
 			VestingFunds:  emptyMapCid,
 		}
-		err = st.setExpert(adt.AsStore(rt), addresses.IDAddress, &ei)
+		err = st.SetExpert(adt.AsStore(rt), addresses.IDAddress, &ei, true)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set new expert: %v", err)
 
 		st.ExpertsCount++
@@ -368,14 +363,23 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		return nil
 	}
 
+	totalBurn := abi.NewTokenAmount(0)
 	rt.StateTransaction(&st, func() {
 		for _, expertAddr := range resetExperts {
-			err := st.Reset(rt, expertAddr)
+			burn, err := st.Reset(rt, expertAddr)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to reset expert %s", expertAddr)
+			totalBurn = big.Add(totalBurn, burn)
+			if burn.GreaterThan(big.Zero()) {
+				rt.Log(rtt.WARN, "expert reward will be burnt for resetting: %s, %s", expertAddr, burn)
+			}
 		}
 
 		err := st.DeleteTrackedExperts(adt.AsStore(rt), untrackExperts)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete tracked experts")
 	})
+	if totalBurn.GreaterThan(big.Zero()) {
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, totalBurn, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to burn funds")
+	}
 	return nil
 }

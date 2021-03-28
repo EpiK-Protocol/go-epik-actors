@@ -315,11 +315,11 @@ func (h *actorHarness) onExpertImport(rt *mock.Runtime, exp address.Address, par
 }
 
 func (h *actorHarness) getData(rt *mock.Runtime, expertAddr address.Address,
-	params *expertfund.GetDataParams, expectDataInfo *expert.DataOnChainInfo) *expertfund.DataInfo {
+	params *expertfund.GetDataParams, expectDataInfo *expert.DataOnChainInfo) *expertfund.GetDataReturn {
 	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 	rt.ExpectValidateCallerAny()
 	rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{PieceID: params.PieceID}, abi.NewTokenAmount(0), expectDataInfo, exitcode.Ok)
-	ret := rt.Call(h.GetData, params).(*expertfund.DataInfo)
+	ret := rt.Call(h.GetData, params).(*expertfund.GetDataReturn)
 	rt.Verify()
 	return ret
 }

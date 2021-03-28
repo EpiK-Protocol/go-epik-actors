@@ -96,7 +96,7 @@ func main() {
 		expertfund.ExpertInfo{},
 		expertfund.ClaimFundParams{},
 		expertfund.GetDataParams{},
-		expertfund.DataInfo{},
+		expertfund.GetDataReturn{},
 		expertfund.ChangeThresholdParams{},
 		expertfund.ApplyForExpertParams{},
 		expertfund.ApplyForExpertReturn{},

@@ -1,6 +1,8 @@
 package expertfund
 
 import (
+	"context"
+
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
@@ -8,9 +10,10 @@ import (
 )
 
 type StateSummary struct {
-	ExpertsCount int
-	TrackedCount int
-	DatasCount   int
+	ExpertsCount      int
+	TrackedCount      int
+	DatasCount        int
+	LastRewardBalance abi.TokenAmount
 }
 
 // Checks internal invariants of expertfund state.
@@ -32,7 +35,14 @@ func CheckStateInvariants(st *State, store adt.Store) (*StateSummary, *builtin.M
 		acc.RequireNoError(err, "failed to iterate experts")
 	}
 	acc.Require(st.ExpertsCount == uint64(sum.ExpertsCount), "experts count mismatch: %d, %d", st.ExpertsCount, sum.ExpertsCount)
-	acc.Require(st.TotalExpertDataSize == sumDataSize, "total data size != sum of experts' data size")
+
+	var pool PoolInfo
+	if err := store.Get(context.Background(), st.PoolInfo, &pool); err != nil {
+		acc.Addf("failed to load Pool: %v", err)
+	} else {
+		acc.Require(pool.TotalExpertDataSize == sumDataSize, "total data size != sum of experts' data size")
+		sum.LastRewardBalance = pool.LastRewardBalance
+	}
 
 	// TrackedExperts
 	if texperts, err := adt.AsSet(store, st.TrackedExperts, builtin.DefaultHamtBitwidth); err != nil {
