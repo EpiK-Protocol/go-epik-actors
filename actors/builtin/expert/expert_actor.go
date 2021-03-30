@@ -196,39 +196,55 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 	return nil
 }
 
-func (a Actor) GetData(rt Runtime, params *ExpertDataParams) *DataOnChainInfo {
+func (a Actor) GetData(rt Runtime, params *builtin.CheckedCID) *DataOnChainInfo {
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
 	rt.StateReadonly(&st)
-	store := adt.AsStore(rt)
 
-	data, found, err := st.GetData(store, params.PieceID.String())
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data: %s", params.PieceID)
-	builtin.RequireParam(rt, found, "data not imported: %s", params.PieceID)
+	data, found, err := st.GetData(adt.AsStore(rt), params.CID.String())
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data: %s", params.CID)
+	builtin.RequireParam(rt, found, "data not imported: %s", params.CID)
 	return data
 }
 
-func (a Actor) StoreData(rt Runtime, params *ExpertDataParams) (out *DataOnChainInfo) {
+type StoreDataReturn struct {
+	Infos []*DataOnChainInfo
+}
+
+func (a Actor) StoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *StoreDataReturn {
 	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
 
+	ret := StoreDataReturn{
+		Infos: make([]*DataOnChainInfo, 0, len(params.PieceCIDs)),
+	}
 	var st State
 	rt.StateTransaction(&st, func() {
 
 		builtin.RequireState(rt, st.Status.Qualified(), "expert is unqualified")
 
-		store := adt.AsStore(rt)
-		data, found, err := st.GetData(store, params.PieceID.String())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data: %s", params.PieceID)
-		builtin.RequireParam(rt, found, "data not imported: %s", params.PieceID)
+		datas, err := adt.AsMap(adt.AsStore(rt), st.Datas, builtin.DefaultHamtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load Datas")
 
-		data.Redundancy++
-		err = st.PutData(store, data)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to store data")
+		for _, piece := range params.PieceCIDs {
+			k := adt.StringKey(piece.CID.String())
 
-		out = data
+			var info DataOnChainInfo
+			found, err := datas.Get(k, &info)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data %s: %w", piece.CID, err)
+			builtin.RequireParam(rt, found, "data not imported %s", piece.CID)
+
+			info.Redundancy++
+			err = datas.Put(k, &info)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put data %s: %w", piece.CID, err)
+
+			ret.Infos = append(ret.Infos, &info)
+		}
+
+		st.Datas, err = datas.Root()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush Datas")
 	})
-	return
+	return &ret
 }
 
 type NominateExpertParams struct {
@@ -278,7 +294,7 @@ func (a Actor) OnNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 		st.Status = ExpertStateNominated
 	})
 
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.AddTrackedExpert, nil, abi.NewTokenAmount(0), &builtin.Discard{})
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertNominated, nil, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to track new nominated")
 	return nil
 }

@@ -20,13 +20,9 @@ const (
 	ExpertNormal
 )
 
-type OnExpertImportParams struct {
-	PieceID cid.Cid `checked:"true"`
-}
-
 func NotifyExpertImport(rt runtime.Runtime, pieceID cid.Cid) {
-	params := &OnExpertImportParams{
-		PieceID: pieceID,
+	params := &CheckedCID{
+		CID: pieceID,
 	}
 	code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.OnExpertImport, params, abi.NewTokenAmount(0), &Discard{})
 	RequireSuccess(rt, code, "failed to notify expert import")

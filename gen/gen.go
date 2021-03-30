@@ -41,7 +41,6 @@ func main() {
 		builtin.ExpertControlAddressReturn{},
 		builtin.ConfirmSectorProofsParams{},
 		builtin.ApplyRewardParams{},
-		builtin.OnExpertImportParams{},
 		builtin.BoolValue{},
 		builtin.ValidateGrantedParams{},
 		builtin.BatchPieceCIDParams{},
@@ -83,6 +82,7 @@ func main() {
 		expert.CheckStateReturn{},
 		expert.OnTrackUpdateParams{},
 		expert.OnTrackUpdateReturn{},
+		expert.StoreDataReturn{},
 		// other types
 	); err != nil {
 		panic(err)
@@ -91,11 +91,11 @@ func main() {
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/expertfund/cbor_gen.go", "expertfund",
 		// actor state
 		expertfund.State{},
+		expertfund.DataInfo{},
 		expertfund.PoolInfo{},
-		// method params
 		expertfund.ExpertInfo{},
+		// method params and returns
 		expertfund.ClaimFundParams{},
-		expertfund.GetDataParams{},
 		expertfund.GetDataReturn{},
 		expertfund.ChangeThresholdParams{},
 		expertfund.ApplyForExpertParams{},

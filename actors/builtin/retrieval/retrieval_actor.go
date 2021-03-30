@@ -162,8 +162,8 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 	rt.ValidateImmediateCallerIs(approvedCallers...)
 
 	var out expertfund.GetDataReturn
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.GetData, &expertfund.GetDataParams{
-		PieceID: params.PieceID,
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.GetData, &builtin.CheckedCID{
+		CID: params.PieceID,
 	}, abi.NewTokenAmount(0), &out)
 	builtin.RequireSuccess(rt, code, "failed to load expert data.")
 

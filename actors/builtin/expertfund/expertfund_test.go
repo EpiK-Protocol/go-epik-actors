@@ -3,6 +3,7 @@ package expertfund_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/filecoin-project/go-address"
@@ -131,32 +132,31 @@ func TestOnExpertImport(t *testing.T) {
 
 		// piece 1
 		pieceID1 := tutil.MakeCID("1", &miner.SealedCIDPrefix)
-		actor.onExpertImport(rt, expert1, &builtin.OnExpertImportParams{PieceID: pieceID1})
+		actor.onExpertImport(rt, expert1, &builtin.CheckedCID{CID: pieceID1})
 		st := getState(rt)
-		expertAddr, found, err := st.GetData(adt.AsStore(rt), pieceID1.String())
+		dataInfo, err := st.GetDataInfos(adt.AsStore(rt), pieceID1)
 		require.NoError(t, err)
-		require.True(t, found && expertAddr == expert1)
+		require.True(t, dataInfo[0].Expert == expert1)
 
 		// piece 2
 		pieceID2 := tutil.MakeCID("2", &miner.SealedCIDPrefix)
-		actor.onExpertImport(rt, expert2, &builtin.OnExpertImportParams{PieceID: pieceID2})
+		actor.onExpertImport(rt, expert2, &builtin.CheckedCID{CID: pieceID2})
 		st = getState(rt)
-		expertAddr2, found, err := st.GetData(adt.AsStore(rt), pieceID2.String())
+		dataInfo2, err := st.GetDataInfos(adt.AsStore(rt), pieceID2)
 		require.NoError(t, err)
-		require.True(t, found && expertAddr2 == expert2)
+		require.True(t, dataInfo2[0].Expert == expert2)
 
 		// not found
-		_, found, err = st.GetData(adt.AsStore(rt), tutil.MakeCID("3", &miner.SealedCIDPrefix).String())
-		require.NoError(t, err)
-		require.True(t, !found)
+		_, err = st.GetDataInfos(adt.AsStore(rt), tutil.MakeCID("3", &miner.SealedCIDPrefix))
+		require.True(t, strings.Contains(err.Error(), "DataInfo not found"))
 
 		// re-put piece 1 with expert 1
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "put duplicate data", func() {
-			actor.onExpertImport(rt, expert1, &builtin.OnExpertImportParams{PieceID: pieceID1})
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "duplicate imported data", func() {
+			actor.onExpertImport(rt, expert1, &builtin.CheckedCID{CID: pieceID1})
 		})
 		// re-put piece 1 with expert 2
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "put duplicate data", func() {
-			actor.onExpertImport(rt, expert2, &builtin.OnExpertImportParams{PieceID: pieceID1})
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "duplicate imported data", func() {
+			actor.onExpertImport(rt, expert2, &builtin.CheckedCID{CID: pieceID1})
 		})
 	})
 }
@@ -173,9 +173,9 @@ func TestGetData(t *testing.T) {
 		actor.constructAndVerify(rt)
 
 		pieceID := tutil.MakeCID("1", &miner.SealedCIDPrefix)
-		actor.onExpertImport(rt, expert1, &builtin.OnExpertImportParams{PieceID: pieceID})
+		actor.onExpertImport(rt, expert1, &builtin.CheckedCID{CID: pieceID})
 
-		di := actor.getData(rt, expert1, &expertfund.GetDataParams{PieceID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID.String()})
+		di := actor.getData(rt, expert1, &builtin.CheckedCID{CID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID.String()})
 		require.True(t, di.Expert == expert1 && di.Data.PieceID == pieceID.String())
 	})
 
@@ -185,8 +185,8 @@ func TestGetData(t *testing.T) {
 
 		pieceID := tutil.MakeCID("1", &miner.SealedCIDPrefix)
 
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "data not found", func() {
-			actor.getData(rt, expert1, &expertfund.GetDataParams{PieceID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID.String()})
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "DataInfo not found", func() {
+			actor.getData(rt, expert1, &builtin.CheckedCID{CID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID.String()})
 		})
 	})
 
@@ -195,22 +195,25 @@ func TestGetData(t *testing.T) {
 		actor.constructAndVerify(rt)
 
 		pieceID := tutil.MakeCID("1", &miner.SealedCIDPrefix)
-		actor.onExpertImport(rt, expert1, &builtin.OnExpertImportParams{PieceID: pieceID})
+		actor.onExpertImport(rt, expert1, &builtin.CheckedCID{CID: pieceID})
 
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAny()
-		rt.ExpectSend(expert1, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{PieceID: pieceID}, abi.NewTokenAmount(0), &expert.DataOnChainInfo{PieceID: pieceID.String()}, exitcode.ErrForbidden)
+		rt.ExpectSend(expert1, builtin.MethodsExpert.GetData, &builtin.CheckedCID{CID: pieceID}, abi.NewTokenAmount(0), &expert.DataOnChainInfo{PieceID: pieceID.String()}, exitcode.ErrForbidden)
 
 		rt.ExpectAbort(exitcode.ErrForbidden, func() {
-			rt.Call(actor.GetData, &expertfund.GetDataParams{PieceID: pieceID})
+			rt.Call(actor.GetData, &builtin.CheckedCID{CID: pieceID})
 		})
 	})
 }
 
-func TestAddTrackedExpert(t *testing.T) {
+func TestOnExpertNominated(t *testing.T) {
 	receiver := tutil.NewIDAddr(t, 100)
+	owner := tutil.NewIDAddr(t, 101)
 	expert1 := tutil.NewIDAddr(t, 1000)
 	expert2 := tutil.NewIDAddr(t, 1001)
+	uniqueAddr1 := tutil.NewActorAddr(t, "expert1")
+	uniqueAddr2 := tutil.NewActorAddr(t, "expert2")
 
 	actor := actorHarness{expertfund.Actor{}, t}
 	builder := mock.NewBuilder(context.Background(), receiver).WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
@@ -219,15 +222,21 @@ func TestAddTrackedExpert(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 
+		expectExecRet := &initact.ExecReturn{IDAddress: expert1, RobustAddress: uniqueAddr1}
+		actor.applyForExpert(rt, owner, builtin.ExpertFoundation, expectExecRet)
+
+		expectExecRet = &initact.ExecReturn{IDAddress: expert2, RobustAddress: uniqueAddr2}
+		actor.applyForExpert(rt, owner, builtin.ExpertNormal, expectExecRet)
+
 		// add expert1
-		actor.addTrackedExpert(rt, expert1)
+		actor.onExpertNominated(rt, expert1)
 		st := getState(rt)
 		experts, err := st.ListTrackedExperts(adt.AsStore(rt))
 		require.NoError(t, err)
 		require.True(t, len(experts) == 1 && experts[0] == expert1)
 
 		// add expert2
-		actor.addTrackedExpert(rt, expert2)
+		actor.onExpertNominated(rt, expert2)
 		st = getState(rt)
 		experts, err = st.ListTrackedExperts(adt.AsStore(rt))
 		require.NoError(t, err)
@@ -238,7 +247,7 @@ func TestAddTrackedExpert(t *testing.T) {
 		actor.checkState(rt)
 	})
 
-	t.Run("nothing adding duplicate", func(t *testing.T) {
+	t.Run("fail adding duplicate", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt)
 
@@ -247,14 +256,20 @@ func TestAddTrackedExpert(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, len(experts) == 0)
 
+		expectExecRet := &initact.ExecReturn{IDAddress: expert1, RobustAddress: uniqueAddr1}
+		actor.applyForExpert(rt, owner, builtin.ExpertFoundation, expectExecRet)
+
 		// add expert1
-		actor.addTrackedExpert(rt, expert1)
-		// re-add expert1
-		actor.addTrackedExpert(rt, expert1)
+		actor.onExpertNominated(rt, expert1)
 		st = getState(rt)
 		experts, err = st.ListTrackedExperts(adt.AsStore(rt))
 		require.NoError(t, err)
 		require.True(t, len(experts) == 1 && experts[0] == expert1)
+
+		// re-add expert1
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "expert already activated", func() {
+			actor.onExpertNominated(rt, expert1)
+		})
 	})
 }
 
@@ -300,14 +315,40 @@ func (h *actorHarness) constructAndVerify(rt *mock.Runtime) {
 	rt.Verify()
 }
 
-func (h *actorHarness) addTrackedExpert(rt *mock.Runtime, exp address.Address) {
+func (h *actorHarness) applyForExpert(rt *mock.Runtime, owner address.Address, expertType builtin.ExpertType,
+	expectExecReturn *initact.ExecReturn) *expertfund.ApplyForExpertReturn {
+	rt.SetReceived(abi.NewTokenAmount(99))
+	rt.SetBalance(abi.NewTokenAmount(99))
+	rt.SetCaller(owner, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+
+	ctorParams := expert.ConstructorParams{
+		Owner:    owner,
+		Proposer: owner,
+		Type:     expertType,
+	}
+	ctorParamBuf := new(bytes.Buffer)
+	err := ctorParams.MarshalCBOR(ctorParamBuf)
+	require.NoError(h.t, err)
+	rt.ExpectSend(builtin.InitActorAddr, builtin.MethodsInit.Exec,
+		&initact.ExecParams{
+			CodeCID:           builtin.ExpertActorCodeID,
+			ConstructorParams: ctorParamBuf.Bytes(),
+		}, abi.NewTokenAmount(99), expectExecReturn, exitcode.Ok)
+
+	ret := (rt.Call(h.ApplyForExpert, &expertfund.ApplyForExpertParams{Owner: owner})).(*expertfund.ApplyForExpertReturn)
+	rt.Verify()
+	return ret
+}
+
+func (h *actorHarness) onExpertNominated(rt *mock.Runtime, exp address.Address) {
 	rt.SetCaller(exp, builtin.ExpertActorCodeID)
 	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	rt.Call(h.AddTrackedExpert, nil)
+	rt.Call(h.OnExpertNominated, nil)
 	rt.Verify()
 }
 
-func (h *actorHarness) onExpertImport(rt *mock.Runtime, exp address.Address, params *builtin.OnExpertImportParams) {
+func (h *actorHarness) onExpertImport(rt *mock.Runtime, exp address.Address, params *builtin.CheckedCID) {
 	rt.SetCaller(exp, builtin.ExpertActorCodeID)
 	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
 	rt.Call(h.OnExpertImport, params)
@@ -315,10 +356,10 @@ func (h *actorHarness) onExpertImport(rt *mock.Runtime, exp address.Address, par
 }
 
 func (h *actorHarness) getData(rt *mock.Runtime, expertAddr address.Address,
-	params *expertfund.GetDataParams, expectDataInfo *expert.DataOnChainInfo) *expertfund.GetDataReturn {
+	params *builtin.CheckedCID, expectDataInfo *expert.DataOnChainInfo) *expertfund.GetDataReturn {
 	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 	rt.ExpectValidateCallerAny()
-	rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &expert.ExpertDataParams{PieceID: params.PieceID}, abi.NewTokenAmount(0), expectDataInfo, exitcode.Ok)
+	rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &builtin.CheckedCID{CID: params.CID}, abi.NewTokenAmount(0), expectDataInfo, exitcode.Ok)
 	ret := rt.Call(h.GetData, params).(*expertfund.GetDataReturn)
 	rt.Verify()
 	return ret

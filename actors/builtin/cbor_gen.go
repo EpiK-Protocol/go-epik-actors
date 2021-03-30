@@ -328,61 +328,6 @@ func (t *ApplyRewardParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufOnExpertImportParams = []byte{129}
-
-func (t *OnExpertImportParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufOnExpertImportParams); err != nil {
-		return err
-	}
-
-	scratch := make([]byte, 9)
-
-	// t.PieceID (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.PieceID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
-	}
-
-	return nil
-}
-
-func (t *OnExpertImportParams) UnmarshalCBOR(r io.Reader) error {
-	*t = OnExpertImportParams{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.PieceID (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.PieceID: %w", err)
-		}
-
-		t.PieceID = c
-
-	}
-	return nil
-}
-
 var lengthBufBoolValue = []byte{129}
 
 func (t *BoolValue) MarshalCBOR(w io.Writer) error {

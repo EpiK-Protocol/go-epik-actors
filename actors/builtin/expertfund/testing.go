@@ -3,7 +3,6 @@ package expertfund
 import (
 	"context"
 
-	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -56,11 +55,11 @@ func CheckStateInvariants(st *State, store adt.Store) (*StateSummary, *builtin.M
 	}
 
 	// Datas
-	if datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth); err != nil {
+	if datas, err := adt.AsMap(store, st.DataByPiece, builtin.DefaultHamtBitwidth); err != nil {
 		acc.Addf("failed to load datas: %v", err)
 	} else {
-		var adr address.Address
-		err = datas.ForEach(&adr, func(k string) error {
+		var out DataInfo
+		err = datas.ForEach(&out, func(k string) error {
 			sum.DatasCount++
 			return nil
 		})

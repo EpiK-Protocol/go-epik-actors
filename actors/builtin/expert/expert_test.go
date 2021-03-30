@@ -179,16 +179,16 @@ func TestImportData(t *testing.T) {
 
 		// first
 		params := newExpertDataParams()
+		checkedID := builtin.CheckedCID{CID: params.PieceID}
+
 		rt.SetCaller(owner, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(owner)
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &builtin.OnExpertImportParams{
-			PieceID: params.PieceID,
-		}, abi.NewTokenAmount(0), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &checkedID, abi.NewTokenAmount(0), nil, exitcode.Ok)
 		rt.Call(actor.ImportData, params)
 		rt.Verify()
 
 		st := getState(rt)
-		info := actor.getData(rt, params)
+		info := actor.getData(rt, &checkedID)
 		require.True(t, st.DataCount == 1 &&
 			info.PieceID == params.PieceID.String() &&
 			info.RootID == params.RootID &&
@@ -196,9 +196,11 @@ func TestImportData(t *testing.T) {
 
 		// second
 		params2 := newExpertDataParams()
+		checkedID2 := builtin.CheckedCID{CID: params2.PieceID}
+
 		actor.importData(rt, params2)
 		st = getState(rt)
-		info = actor.getData(rt, params2)
+		info = actor.getData(rt, &checkedID2)
 		require.True(t, st.DataCount == 2 &&
 			info.PieceID == params2.PieceID.String() &&
 			info.RootID == params2.RootID &&
@@ -236,7 +238,7 @@ func TestStoreData(t *testing.T) {
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "expert is unqualified", func() {
-			rt.Call(actor.StoreData, newExpertDataParams())
+			rt.Call(actor.StoreData, newStoreDataParams(newExpertDataParams()))
 		})
 	})
 
@@ -247,7 +249,18 @@ func TestStoreData(t *testing.T) {
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "data not imported", func() {
-			rt.Call(actor.StoreData, newExpertDataParams())
+			rt.Call(actor.StoreData, newStoreDataParams(newExpertDataParams()))
+		})
+
+		// piece 1 imported but piece 2 not
+		params1 := newExpertDataParams()
+		params2 := newExpertDataParams()
+		actor.importData(rt, params1)
+
+		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
+		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "data not imported "+params2.PieceID.String(), func() {
+			rt.Call(actor.StoreData, newStoreDataParams(params1, params2))
 		})
 	})
 
@@ -255,21 +268,24 @@ func TestStoreData(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt, builtin.ExpertFoundation)
 
-		params := newExpertDataParams()
-		actor.importData(rt, params)
+		params1 := newExpertDataParams()
+		actor.importData(rt, params1)
 
 		// first time
-		info := actor.storeData(rt, params)
-		require.True(t, info.Redundancy == 1 &&
-			info.PieceID == params.PieceID.String() &&
-			info.RootID == params.RootID &&
-			info.PieceSize == params.PieceSize)
+		ret := actor.storeData(rt, newStoreDataParams(params1))
+		require.True(t, ret.Infos[0].Redundancy == 1 &&
+			ret.Infos[0].PieceID == params1.PieceID.String() &&
+			ret.Infos[0].RootID == params1.RootID &&
+			ret.Infos[0].PieceSize == params1.PieceSize)
+
 		// second time
-		info = actor.storeData(rt, params)
-		require.True(t, info.Redundancy == 2 &&
-			info.PieceID == params.PieceID.String() &&
-			info.RootID == params.RootID &&
-			info.PieceSize == params.PieceSize)
+		params2 := newExpertDataParams()
+		actor.importData(rt, params2)
+		ret = actor.storeData(rt, newStoreDataParams(params1, params2))
+		require.True(t, ret.Infos[0].Redundancy == 2 && ret.Infos[1].Redundancy == 1 &&
+			ret.Infos[1].PieceID == params2.PieceID.String() &&
+			ret.Infos[1].RootID == params2.RootID &&
+			ret.Infos[1].PieceSize == params2.PieceSize)
 	})
 }
 
@@ -412,7 +428,7 @@ func TestOnNominated(t *testing.T) {
 
 		rt.SetCaller(expertAddr, builtin.ExpertActorCodeID)
 		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.AddTrackedExpert, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertNominated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
 		rt.Call(actor.OnNominated, nil)
 		rt.Verify()
 
@@ -959,6 +975,14 @@ func TestCheckState(t *testing.T) {
 	}
 }
 
+func newStoreDataParams(expertDataParams ...*expert.ExpertDataParams) *builtin.BatchPieceCIDParams {
+	var ret builtin.BatchPieceCIDParams
+	for _, p := range expertDataParams {
+		ret.PieceCIDs = append(ret.PieceCIDs, builtin.CheckedCID{CID: p.PieceID})
+	}
+	return &ret
+}
+
 func newExpertDataParams() *expert.ExpertDataParams {
 	rd := rand.Intn(100) + 100
 	pieceID := tutil.MakeCID(strconv.Itoa(rd), &miner.SealedCIDPrefix)
@@ -1011,22 +1035,22 @@ func (h *actorHarness) controlAddress(rt *mock.Runtime) (owner addr.Address) {
 func (h *actorHarness) importData(rt *mock.Runtime, params *expert.ExpertDataParams) {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAddr(h.owner)
-	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &builtin.OnExpertImportParams{
-		PieceID: params.PieceID,
+	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &builtin.CheckedCID{
+		CID: params.PieceID,
 	}, abi.NewTokenAmount(0), nil, exitcode.Ok)
 	rt.Call(h.ImportData, params)
 	rt.Verify()
 }
 
-func (h *actorHarness) storeData(rt *mock.Runtime, params *expert.ExpertDataParams) *expert.DataOnChainInfo {
+func (h *actorHarness) storeData(rt *mock.Runtime, params *builtin.BatchPieceCIDParams) *expert.StoreDataReturn {
 	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 	rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-	ret := rt.Call(h.StoreData, params).(*expert.DataOnChainInfo)
+	ret := rt.Call(h.StoreData, params).(*expert.StoreDataReturn)
 	rt.Verify()
 	return ret
 }
 
-func (h *actorHarness) getData(rt *mock.Runtime, params *expert.ExpertDataParams) *expert.DataOnChainInfo {
+func (h *actorHarness) getData(rt *mock.Runtime, params *builtin.CheckedCID) *expert.DataOnChainInfo {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
 	ret := rt.Call(h.GetData, params).(*expert.DataOnChainInfo)
@@ -1046,7 +1070,7 @@ func (h *actorHarness) nominate(rt *mock.Runtime, params *expert.NominateExpertP
 func (h *actorHarness) onNominate(rt *mock.Runtime) {
 	rt.SetCaller(h.proposer, builtin.ExpertActorCodeID)
 	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.AddTrackedExpert, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
+	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertNominated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
 	rt.Call(h.OnNominated, nil)
 	rt.Verify()
 }

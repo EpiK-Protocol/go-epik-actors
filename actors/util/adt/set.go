@@ -51,6 +51,10 @@ func (h *Set) Put(k abi.Keyer) error {
 	return h.m.Put(k, nil)
 }
 
+func (h *Set) PutIfAbsent(k abi.Keyer) (bool, error) {
+	return h.m.PutIfAbsent(k, nil)
+}
+
 // Has returns true iff `k` is in the set.
 func (h *Set) Has(k abi.Keyer) (bool, error) {
 	return h.m.Get(k, nil)

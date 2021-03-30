@@ -22,15 +22,23 @@ type State struct {
 
 	PoolInfo cid.Cid
 
-	Datas cid.Cid // Map, HAMT[piece]ExpertAddress
+	DataByPiece cid.Cid // Map, HAMT[piece]DataInfo
 
 	DataStoreThreshold uint64
 }
 
+type DataInfo struct {
+	Expert    addr.Address
+	Deposited bool
+}
+
 // ExpertInfo info of expert registered data
 type ExpertInfo struct {
-	// DataSize total of expert data size
+	// DataSize total deposited data size of expert
 	DataSize abi.PaddedPieceSize
+
+	// true when nominated, false when reset
+	Active bool
 
 	// RewardDebt reward debt
 	RewardDebt abi.TokenAmount
@@ -48,6 +56,7 @@ type PoolInfo struct {
 
 	TotalExpertDataSize abi.PaddedPieceSize
 
+	// LastRewardBalance should be updated after any funds withdrawval or burning.
 	LastRewardBalance abi.TokenAmount
 }
 
@@ -71,49 +80,37 @@ func ConstructState(store adt.Store, pool cid.Cid) (*State, error) {
 	return &State{
 		Experts:        emptyExpertsMapCid,
 		PoolInfo:       pool,
-		Datas:          emptyDatasMapCid,
+		DataByPiece:    emptyDatasMapCid,
 		TrackedExperts: emptyTrackedExpertsSetCid,
 
 		DataStoreThreshold: DefaultDataStoreThreshold,
 	}, nil
 }
 
-// MustPutAbsentData returns error if data already exists.
-func (st *State) MustPutAbsentData(store adt.Store, pieceID string, expert addr.Address) error {
-	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
+// Returns err if not found
+func (st *State) GetDataInfos(store adt.Store, pieceIDs ...cid.Cid) ([]*DataInfo, error) {
+	dbp, err := adt.AsMap(store, st.DataByPiece, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	absent, err := datas.PutIfAbsent(adt.StringKey(pieceID), &expert)
-	if err != nil {
-		return xerrors.Errorf("failed to put data %s from expert %s: %w", pieceID, expert, err)
+
+	ret := make([]*DataInfo, 0, len(pieceIDs))
+	for _, pieceID := range pieceIDs {
+		var out DataInfo
+		found, err := dbp.Get(abi.CidKey(pieceID), &out)
+		if err != nil {
+			return nil, err
+		}
+		if !found {
+			return nil, xerrors.Errorf("DataInfo not found: %s", pieceID)
+		}
+		ret = append(ret, &out)
 	}
-	if !absent {
-		return xerrors.Errorf("put duplicate data %s from expert %s", pieceID, expert)
-	}
-	st.Datas, err = datas.Root()
-	return err
+	return ret, nil
 }
 
-func (st *State) GetData(store adt.Store, pieceID string) (addr.Address, bool, error) {
-	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return addr.Undef, false, err
-	}
-
-	var expert addr.Address
-	found, err := datas.Get(adt.StringKey(pieceID), &expert)
-	if err != nil {
-		return addr.Undef, false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
-	}
-	return expert, found, nil
-}
-
-// Deposit deposit expert data to fund.
-func (st *State) Deposit(rt Runtime, fromAddr address.Address, originSize abi.PaddedPieceSize) error {
-	// Note: Considering that audio files are larger than text files, it is not fair to text files, so take the square root of size
-	sqrtSize := big.Zero().Sqrt(big.NewIntUnsigned(uint64(originSize)).Int)
-	fixedSize := abi.PaddedPieceSize(sqrtSize.Uint64())
+// !!!Only called by BatchStoreData.
+func (st *State) Deposit(rt Runtime, expToSize map[addr.Address]abi.PaddedPieceSize) error {
 
 	store := adt.AsStore(rt)
 
@@ -123,31 +120,39 @@ func (st *State) Deposit(rt Runtime, fromAddr address.Address, originSize abi.Pa
 		return err
 	}
 
-	// update ExpertInfo
-	out, err := st.GetExpert(store, fromAddr)
-	if err != nil {
-		return err
-	}
-	if err := st.updateVestingFunds(rt, pool, out); err != nil {
-		return err
+	for exp, size := range expToSize {
+		deltaSize := adjustSize(size)
+		// update ExpertInfo
+		out, err := st.GetExpert(store, exp)
+		if err != nil {
+			return err
+		}
+		if !out.Active {
+			return xerrors.Errorf("unexpected inactive expert in Deposit: %s", exp)
+		}
+		if err := st.updateVestingFunds(rt, pool, out); err != nil {
+			return err
+		}
+
+		out.DataSize += deltaSize
+		out.RewardDebt = big.Div(
+			big.Mul(
+				big.NewIntUnsigned(uint64(out.DataSize)),
+				pool.AccPerShare),
+			AccumulatedMultiplier)
+		err = st.SetExpert(store, exp, out, false)
+		if err != nil {
+			return err
+		}
+
+		pool.TotalExpertDataSize += deltaSize
 	}
 
-	pool.TotalExpertDataSize += fixedSize
-	if err = st.SavePool(store, pool); err != nil {
-		return err
-	}
-
-	out.DataSize += fixedSize
-	out.RewardDebt = big.Div(
-		big.Mul(
-			big.NewIntUnsigned(uint64(out.DataSize)),
-			pool.AccPerShare),
-		AccumulatedMultiplier)
-	return st.SetExpert(store, fromAddr, out, false)
+	return st.SavePool(store, pool)
 }
 
 // Claim claim expert fund.
-func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
+func (st *State) Claim(rt Runtime, expertAddr address.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
 
 	pool, err := st.UpdatePool(rt)
 	if err != nil {
@@ -156,27 +161,32 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 
 	store := adt.AsStore(rt)
 
-	out, err := st.GetExpert(store, fromAddr)
+	out, err := st.GetExpert(store, expertAddr)
 	if err != nil {
 		return big.Zero(), err
 	}
-	if err := st.updateVestingFunds(rt, pool, out); err != nil {
-		return big.Zero(), err
+
+	if out.Active {
+		if err := st.updateVestingFunds(rt, pool, out); err != nil {
+			return big.Zero(), err
+		}
+		out.RewardDebt = big.Div(
+			big.Mul(
+				big.NewIntUnsigned(uint64(out.DataSize)),
+				pool.AccPerShare),
+			AccumulatedMultiplier)
 	}
 
-	// save expert
 	actual := big.Min(out.UnlockedFunds, amount)
 	out.UnlockedFunds = big.Sub(out.UnlockedFunds, actual)
-	out.RewardDebt = big.Div(
-		big.Mul(
-			big.NewIntUnsigned(uint64(out.DataSize)),
-			pool.AccPerShare),
-		AccumulatedMultiplier)
-	if err = st.SetExpert(store, fromAddr, out, false); err != nil {
+	if err = st.SetExpert(store, expertAddr, out, false); err != nil {
 		return big.Zero(), err
 	}
 
 	// save pool
+	if pool.LastRewardBalance.LessThan(actual) {
+		return big.Zero(), xerrors.Errorf("LastRewardBalance less than expected amount: %s, %s, %s", expertAddr, pool.LastRewardBalance, actual)
+	}
 	pool.LastRewardBalance = big.Sub(pool.LastRewardBalance, actual)
 	if err = st.SavePool(store, pool); err != nil {
 		return big.Zero(), err
@@ -185,8 +195,42 @@ func (st *State) Claim(rt Runtime, fromAddr address.Address, amount abi.TokenAmo
 	return actual, nil
 }
 
-// Reset expert's contributions.
-func (st *State) Reset(rt Runtime, expert addr.Address) (abi.TokenAmount, error) {
+func (st *State) ActivateExpert(rt Runtime, expertAddr address.Address) error {
+
+	pool, err := st.UpdatePool(rt)
+	if err != nil {
+		return err
+	}
+
+	store := adt.AsStore(rt)
+
+	out, err := st.GetExpert(store, expertAddr)
+	if err != nil {
+		return err
+	}
+	if out.Active {
+		return xerrors.Errorf("expert already activated: %s", expertAddr)
+	}
+	out.Active = true
+
+	out.RewardDebt = big.Div(
+		big.Mul(
+			big.NewIntUnsigned(uint64(out.DataSize)),
+			pool.AccPerShare),
+		AccumulatedMultiplier)
+	if err := st.SetExpert(store, expertAddr, out, false); err != nil {
+		return err
+	}
+
+	pool.TotalExpertDataSize += out.DataSize
+	return st.SavePool(store, pool)
+}
+
+// InactivateExperts
+// 1. Clears expert's debt.
+// 2. Burns locked funds.
+// 3. Removes data share.
+func (st *State) InactivateExperts(rt Runtime, experts []addr.Address) (abi.TokenAmount, error) {
 
 	pool, err := st.UpdatePool(rt)
 	if err != nil {
@@ -194,41 +238,54 @@ func (st *State) Reset(rt Runtime, expert addr.Address) (abi.TokenAmount, error)
 	}
 
 	store := adt.AsStore(rt)
+	burn := abi.NewTokenAmount(0)
+	for _, expert := range experts {
+		expertInfo, err := st.GetExpert(store, expert)
+		if err != nil {
+			return big.Zero(), err
+		}
+		if !expertInfo.Active {
+			return big.Zero(), xerrors.Errorf("expert already inactivated: %s", expert)
+		}
+		if err := st.updateVestingFunds(rt, pool, expertInfo); err != nil {
+			return big.Zero(), err
+		}
 
-	out, err := st.GetExpert(store, expert)
-	if err != nil {
-		return big.Zero(), err
-	}
-	if err := st.updateVestingFunds(rt, pool, out); err != nil {
-		return big.Zero(), err
+		burn = big.Add(burn, expertInfo.LockedFunds)
+		pool.TotalExpertDataSize -= expertInfo.DataSize
+
+		expertInfo.Active = false
+		expertInfo.RewardDebt = abi.NewTokenAmount(0)
+		expertInfo.LockedFunds = abi.NewTokenAmount(0)
+		emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+		if err != nil {
+			return big.Zero(), err
+		}
+		expertInfo.VestingFunds = emptyMapCid
+		if err = st.SetExpert(store, expert, expertInfo, false); err != nil {
+			return big.Zero(), err
+		}
 	}
 
-	pool.TotalExpertDataSize -= out.DataSize
+	if pool.LastRewardBalance.LessThan(burn) {
+		return big.Zero(), xerrors.Errorf("LastRewardBalance less than burn: %s, %s", pool.LastRewardBalance, burn)
+	}
+	pool.LastRewardBalance = big.Sub(pool.LastRewardBalance, burn)
 	if err = st.SavePool(store, pool); err != nil {
 		return big.Zero(), err
 	}
-
-	toBurn := out.LockedFunds
-	out.DataSize = 0
-	out.RewardDebt = abi.NewTokenAmount(0)
-	out.LockedFunds = abi.NewTokenAmount(0)
-	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return big.Zero(), err
-	}
-	out.VestingFunds = emptyMapCid
-	if err = st.SetExpert(store, expert, out, false); err != nil {
-		return big.Zero(), err
-	}
-
-	return toBurn, nil
+	return burn, nil
 }
 
 func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo) error {
+	if !out.Active {
+		return xerrors.Errorf("expert is inactive in updateVestingFunds")
+	}
+
 	pending := big.Mul(big.NewIntUnsigned(uint64(out.DataSize)), pool.AccPerShare)
 	pending = big.Div(pending, AccumulatedMultiplier)
 	if pending.LessThan(out.RewardDebt) {
-		return xerrors.Errorf("unexpect: RewardDebt %s greater than pending %s", out.RewardDebt, pending)
+		return xerrors.Errorf("debt greater than pending: %s, %s", out.RewardDebt, pending)
 	}
 	pending = big.Sub(pending, out.RewardDebt)
 	out.LockedFunds = big.Add(out.LockedFunds, pending)
@@ -408,34 +465,24 @@ func (st *State) DeleteTrackedExperts(s adt.Store, addrs []addr.Address) error {
 	return nil
 }
 
-func (st *State) ForEachExpert(store adt.Store, f func(*ExpertInfo)) error {
+func (st *State) ForEachExpert(store adt.Store, f func(addr.Address, *ExpertInfo)) error {
 	experts, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 	var info ExpertInfo
 	return experts.ForEach(&info, func(key string) error {
-		f(&info)
+		expertAddr, err := addr.NewFromBytes([]byte(key))
+		if err != nil {
+			return err
+		}
+		f(expertAddr, &info)
 		return nil
 	})
 }
 
-func (st *State) expertActors(store adt.Store) ([]addr.Address, error) {
-	experts, err := adt.AsMap(store, st.Experts, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, err
-	}
-	addrs, err := experts.CollectKeys()
-	if err != nil {
-		return nil, err
-	}
-	var actors []addr.Address
-	for _, a := range addrs {
-		addr, err := addr.NewFromBytes([]byte(a))
-		if err != nil {
-			return nil, err
-		}
-		actors = append(actors, addr)
-	}
-	return actors, nil
+// Note: Considering that audio files are larger than text files, it is not fair to text files, so take the square root of size
+func adjustSize(originSize abi.PaddedPieceSize) abi.PaddedPieceSize {
+	sqrtSize := big.Zero().Sqrt(big.NewIntUnsigned(uint64(originSize)).Int)
+	return abi.PaddedPieceSize(sqrtSize.Uint64())
 }
