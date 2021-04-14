@@ -22,6 +22,9 @@ var GovernedActors = map[cid.Cid]map[abi.MethodNum]struct{}{
 		builtin.MethodsMarket.ResetQuotas:     struct{}{},
 		builtin.MethodsMarket.SetInitialQuota: struct{}{},
 	},
+	builtin.StoragePowerActorCodeID: {
+		builtin.MethodsPower.ChangeWdPoStRatio: struct{}{},
+	},
 }
 
 var GovernedCallerTypes = func() []cid.Cid {

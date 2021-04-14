@@ -177,12 +177,16 @@ func main() {
 		power.State{},
 		power.Claim{},
 		power.CronEvent{},
+		power.WdPoStRatio{},
 		// method params and returns
 		power.CreateMinerParams{},
 		power.CreateMinerReturn{},
 		power.EnrollCronEventParams{},
 		power.UpdateClaimedPowerParams{},
 		power.CurrentTotalPowerReturn{},
+		power.AllowNoWindowPoStParams{},
+		power.AllowNoWindowPoStReturn{},
+		power.ChangeWdPoStRatioParams{},
 		// other types
 		power.MinerConstructorParams{},
 	); err != nil {

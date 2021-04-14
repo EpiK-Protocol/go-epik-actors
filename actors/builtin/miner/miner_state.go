@@ -1192,18 +1192,18 @@ type AdvanceDeadlineResult struct {
 // - Processes expired sectors.
 // - Handles missed proofs.
 // - Returns the changes to power & pledge, and faulty power (both declared and undeclared).
-func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*AdvanceDeadlineResult, error) {
+func (st *State) AdvanceDeadline(store adt.Store, dlInfo *dline.Info, allowNoPoSt bool) (*AdvanceDeadlineResult, error) {
 	/* pledgeDelta := abi.NewTokenAmount(0) */
 	powerDelta := NewPowerPairZero()
 
 	var totalFaultyPower PowerPair
 	detectedFaultyPower := NewPowerPairZero()
 
-	// Note: Use dlInfo.Last() rather than rt.CurrEpoch unless certain
-	// of the desired semantics. In the past, this method would sometimes be
-	// invoked late due to skipped blocks. This is no longer the case, but
-	// we still use dlInfo.Last().
-	dlInfo := st.DeadlineInfo(currEpoch)
+	// // Note: Use dlInfo.Last() rather than rt.CurrEpoch unless certain
+	// // of the desired semantics. In the past, this method would sometimes be
+	// // invoked late due to skipped blocks. This is no longer the case, but
+	// // we still use dlInfo.Last().
+	// dlInfo := st.DeadlineInfo(currEpoch)
 
 	// Return early if the proving period hasn't started. While actors v2
 	// sets the proving period start into the past so this case can never
@@ -1256,11 +1256,20 @@ func (st *State) AdvanceDeadline(store adt.Store, currEpoch abi.ChainEpoch) (*Ad
 
 	quant := QuantSpecForDeadline(dlInfo)
 	{
+		sectors, err := LoadSectors(store, st.Sectors)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to load sectors: %w", err)
+		}
+		info, err := st.GetInfo(store)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to get miner info: %w", err)
+		}
+
 		// Detect and penalize missing proofs.
 		faultExpiration := dlInfo.Last() + FaultMaxAge
 
 		// detectedFaultyPower is new faults and failed recoveries
-		powerDelta, detectedFaultyPower, err = deadline.ProcessDeadlineEnd(store, quant, faultExpiration)
+		powerDelta, detectedFaultyPower, err = deadline.ProcessDeadlineEnd(store, quant, faultExpiration, sectors, info.SectorSize, allowNoPoSt)
 		if err != nil {
 			return nil, xerrors.Errorf("failed to process end of deadline %d: %w", dlInfo.Index, err)
 		}

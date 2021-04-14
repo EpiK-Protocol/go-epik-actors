@@ -64,6 +64,8 @@ type State struct {
 	Claims cid.Cid // Map, HAMT[address]Claim
 
 	ProofValidationBatch *cid.Cid // Multimap, (HAMT[Address]AMT[SealVerifyInfo])
+
+	WdPoStRatios cid.Cid // AMT[WdPoStRatio], DO NOT DELETE
 }
 
 type Claim struct {
@@ -84,6 +86,11 @@ type CronEvent struct {
 	CallbackPayload []byte
 }
 
+type WdPoStRatio struct {
+	EffectiveEpoch abi.ChainEpoch // next after added
+	Ratio          uint64         // [MinWindowPoStRatio, MaxWindowPoStRatio]
+}
+
 func ConstructState(store adt.Store) (*State, error) {
 	emptyClaimsMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -92,6 +99,18 @@ func ConstructState(store adt.Store) (*State, error) {
 	emptyCronQueueMMapCid, err := adt.StoreEmptyMultimap(store, CronQueueHamtBitwidth, CronQueueAmtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty multimap: %w", err)
+	}
+
+	ratios, err := adt.MakeEmptyArray(store, builtin.DefaultAmtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty ratios array: %w", err)
+	}
+	if err = ratios.AppendContinuous(&WdPoStRatio{0, MaxWindowPoStRatio}); err != nil {
+		return nil, xerrors.Errorf("failed to input init ratio: %w", err)
+	}
+	emptyRatiosAMTCid, err := ratios.Root()
+	if err != nil {
+		return nil, xerrors.Errorf("failed to flush ratios: %w", err)
 	}
 
 	return &State{
@@ -108,6 +127,7 @@ func ConstructState(store adt.Store) (*State, error) {
 		Claims:                    emptyClaimsMapCid,
 		MinerCount:                0,
 		MinerAboveMinPowerCount:   0,
+		WdPoStRatios:              emptyRatiosAMTCid,
 	}, nil
 }
 

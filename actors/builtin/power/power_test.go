@@ -3,6 +3,7 @@ package power_test
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"strconv"
 	"strings"
@@ -622,6 +623,129 @@ func TestUpdatePledgeTotal(t *testing.T) {
 		rt.ExpectAbortContainsMessage(exitcode.ErrForbidden, "unknown miner", func() {
 			actor.updatePledgeTotal(rt, miner, abi.NewTokenAmount(1e6))
 		})
+	})
+}
+
+func TestChangeWdPoStRatio(t *testing.T) {
+	caller := tutil.NewIDAddr(t, 101)
+
+	setupFunc := func() (*mock.Runtime, *spActorHarness) {
+		builder := mock.NewBuilder(context.Background(), builtin.StoragePowerActorAddr).
+			WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+
+		rt := builder.Build(t)
+		actor := newHarness(t)
+		actor.constructAndVerify(rt)
+		return rt, actor
+	}
+
+	getRatios := func(rt *mock.Runtime) []power.WdPoStRatio {
+		st := getState(rt)
+		arr, err := adt.AsArray(adt.AsStore(rt), st.WdPoStRatios, builtin.DefaultAmtBitwidth)
+		require.NoError(t, err)
+
+		var ret []power.WdPoStRatio
+		var r power.WdPoStRatio
+		err = arr.ForEach(&r, func(i int64) error {
+			ret = append(ret, r)
+			return nil
+		})
+		require.NoError(t, err)
+
+		return ret
+	}
+
+	t.Run("invalid ratio", func(t *testing.T) {
+		rt, actor := setupFunc()
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "invalid ratio", func() {
+			actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{
+				Ratio: 1001,
+			})
+		})
+	})
+
+	t.Run("not granted", func(t *testing.T) {
+		rt, actor := setupFunc()
+		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+		rt.ExpectSend(builtin.GovernActorAddr,
+			builtin.MethodsGovern.ValidateGranted,
+			&builtin.ValidateGrantedParams{
+				Caller: caller,
+				Method: builtin.MethodsPower.ChangeWdPoStRatio,
+			}, big.Zero(), nil, exitcode.ErrForbidden,
+		)
+		rt.SetCaller(caller, builtin.AccountActorCodeID)
+		rt.ExpectAbortContainsMessage(exitcode.ErrForbidden, "method not granted", func() {
+			rt.Call(actor.Actor.ChangeWdPoStRatio, &power.ChangeWdPoStRatioParams{
+				Ratio: 1000,
+			})
+		})
+	})
+
+	t.Run("ok", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		ratios := getRatios(rt)
+		require.True(t, len(ratios) == 1 && ratios[0].EffectiveEpoch == 0 && ratios[0].Ratio == power.MaxWindowPoStRatio)
+
+		rt.SetEpoch(100)
+
+		// append
+		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 1000})
+		ratios = getRatios(rt)
+		require.True(t, len(ratios) == 2 &&
+			ratios[0].EffectiveEpoch == 0 && ratios[0].Ratio == power.MaxWindowPoStRatio &&
+			ratios[1].EffectiveEpoch == 101 && ratios[1].Ratio == 1000)
+
+		// override
+		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 200})
+		ratios = getRatios(rt)
+		require.True(t, len(ratios) == 2 &&
+			ratios[0].EffectiveEpoch == 0 && ratios[0].Ratio == power.MaxWindowPoStRatio &&
+			ratios[1].EffectiveEpoch == 101 && ratios[1].Ratio == 200)
+	})
+}
+
+func TestAllowNoWindowPoSt(t *testing.T) {
+	caller := tutil.NewIDAddr(t, 101)
+
+	setupFunc := func() (*mock.Runtime, *spActorHarness) {
+		builder := mock.NewBuilder(context.Background(), builtin.StoragePowerActorAddr).
+			WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+
+		rt := builder.Build(t)
+		actor := newHarness(t)
+		actor.constructAndVerify(rt)
+		return rt, actor
+	}
+
+	t.Run("ok", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		// Ratios: {0: 1000, 101: 200, 201: 400}
+		rt.SetEpoch(100)
+		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 200})
+
+		rt.SetEpoch(200)
+		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 400})
+
+		var buf [8]byte
+
+		// randomness == 200
+		binary.BigEndian.PutUint64(buf[:], 200)
+		ret := actor.allowNoWindowPoSt(rt, &power.AllowNoWindowPoStParams{DeadlineChallenge: 101, Randomness: buf[:]})
+		require.True(t, ret.Allowed)
+		ret = actor.allowNoWindowPoSt(rt, &power.AllowNoWindowPoStParams{DeadlineChallenge: 100, Randomness: buf[:]})
+		require.False(t, ret.Allowed)
+		ret = actor.allowNoWindowPoSt(rt, &power.AllowNoWindowPoStParams{DeadlineChallenge: 200, Randomness: buf[:]})
+		require.True(t, ret.Allowed)
+		ret = actor.allowNoWindowPoSt(rt, &power.AllowNoWindowPoStParams{DeadlineChallenge: 201, Randomness: buf[:]})
+		require.False(t, ret.Allowed)
+
+		// randomness == 199
+		binary.BigEndian.PutUint64(buf[:], 199)
+		ret = actor.allowNoWindowPoSt(rt, &power.AllowNoWindowPoStParams{DeadlineChallenge: 101, Randomness: buf[:]})
+		require.False(t, ret.Allowed)
 	})
 }
 
@@ -1482,6 +1606,29 @@ func (h *spActorHarness) expectMinersAboveMinPower(rt *mock.Runtime, count int64
 func (h *spActorHarness) expectTotalPledgeEager(rt *mock.Runtime, expectedPledge abi.TokenAmount) {
 	st := getState(rt)
 	assert.Equal(h.t, expectedPledge, st.TotalPledgeCollateral)
+}
+
+func (h *spActorHarness) changeWdPoStRatio(rt *mock.Runtime, caller addr.Address, params *power.ChangeWdPoStRatioParams) {
+	rt.SetCaller(caller, builtin.AccountActorCodeID)
+	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+	rt.ExpectSend(builtin.GovernActorAddr,
+		builtin.MethodsGovern.ValidateGranted,
+		&builtin.ValidateGrantedParams{
+			Caller: caller,
+			Method: builtin.MethodsPower.ChangeWdPoStRatio,
+		}, big.Zero(), nil, exitcode.Ok,
+	)
+	rt.Call(h.Actor.ChangeWdPoStRatio, params)
+	rt.Verify()
+}
+
+func (h *spActorHarness) allowNoWindowPoSt(rt *mock.Runtime, params *power.AllowNoWindowPoStParams) *power.AllowNoWindowPoStReturn {
+	w := tutil.NewIDAddr(h.t, 1000)
+	rt.SetCaller(w, builtin.StorageMinerActorCodeID)
+	rt.ExpectValidateCallerType(builtin.StorageMinerActorCodeID)
+	ret := (rt.Call(h.Actor.AllowNoWindowPoSt, params)).(*power.AllowNoWindowPoStReturn)
+	rt.Verify()
+	return ret
 }
 
 func (h *spActorHarness) checkState(rt *mock.Runtime) {

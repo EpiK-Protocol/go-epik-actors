@@ -6190,6 +6190,8 @@ type cronConfig struct {
 	continuedFaultsPenalty    abi.TokenAmount // Expected amount burnt to pay continued fault penalties. */
 	repaidFeeDebt       abi.TokenAmount // Expected amount burnt to repay fee debt.
 	penaltyFromUnlocked abi.TokenAmount // Expected reduction in unlocked balance from penalties exceeding vesting funds.
+
+	allowNoPoSt bool
 }
 
 func (h *actorHarness) onDeadlineCron(rt *mock.Runtime, config *cronConfig) {
@@ -6212,6 +6214,23 @@ func (h *actorHarness) onDeadlineCron(rt *mock.Runtime, config *cronConfig) {
 			QualityAdjPowerSmoothed: h.epochQAPowerSmooth,
 		},
 		exitcode.Ok) */
+
+	{
+		challengeRand := abi.Randomness([]byte{10, 11, 12, 13})
+
+		var buf bytes.Buffer
+		receiver := rt.Receiver()
+		require.NoError(h.t, receiver.MarshalCBOR(&buf))
+		dlInfo := st.DeadlineInfo(rt.Epoch())
+		rt.ExpectGetRandomnessBeacon(crypto.DomainSeparationTag_WindowedPoStChallengeSeed, dlInfo.Challenge, buf.Bytes(), challengeRand)
+
+		rt.ExpectSend(builtin.StoragePowerActorAddr, builtin.MethodsPower.AllowNoWindowPoSt,
+			&power.AllowNoWindowPoStParams{
+				DeadlineChallenge: dlInfo.Challenge,
+				Randomness:        challengeRand,
+			},
+			big.Zero(), &power.AllowNoWindowPoStReturn{Allowed: config.allowNoPoSt}, exitcode.Ok)
+	}
 
 	powerDelta := miner.NewPowerPairZero()
 	if config.detectedFaultsPowerDelta != nil {

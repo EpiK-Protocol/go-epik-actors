@@ -2,6 +2,7 @@ package power
 
 import (
 	"bytes"
+	"encoding/binary"
 
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -38,6 +39,8 @@ func (a Actor) Exports() []interface{} {
 		6:                         a.UpdatePledgeTotal,
 		7:                         a.SubmitPoRepForBulkVerify,
 		8:                         a.CurrentTotalPower,
+		9:                         a.AllowNoWindowPoSt,
+		10:                        a.ChangeWdPoStRatio,
 	}
 }
 
@@ -317,6 +320,87 @@ func (a Actor) CurrentTotalPower(rt Runtime, _ *abi.EmptyValue) *CurrentTotalPow
 		PledgeCollateral: st.ThisEpochPledgeCollateral,
 		/* QualityAdjPowerSmoothed: st.ThisEpochQAPowerSmoothed, */
 	}
+}
+
+type AllowNoWindowPoStParams struct {
+	DeadlineChallenge abi.ChainEpoch
+	Randomness        []byte
+}
+
+type AllowNoWindowPoStReturn struct {
+	Allowed bool
+}
+
+// Called by miner in handleProvingDeadline
+func (a Actor) AllowNoWindowPoSt(rt Runtime, params *AllowNoWindowPoStParams) *AllowNoWindowPoStReturn {
+	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
+
+	var st State
+	rt.StateReadonly(&st)
+
+	ratios, err := adt.AsArray(adt.AsStore(rt), st.WdPoStRatios, builtin.DefaultAmtBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load ratios")
+	builtin.RequireState(rt, ratios.Length() > 0, "no ratios")
+
+	var ret AllowNoWindowPoStReturn
+	for k := ratios.Length() - 1; k >= 0; k-- {
+		var ratio WdPoStRatio
+		found, err := ratios.Get(k, &ratio)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get ratio at index %d", k)
+		builtin.RequireState(rt, found, "ratio not found at index %d", k)
+
+		if params.DeadlineChallenge >= ratio.EffectiveEpoch {
+			var mod uint64
+			err = binary.Read(bytes.NewBuffer(params.Randomness), binary.BigEndian, &mod)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to interpret digest curr %d, challenge %d", rt.CurrEpoch(), params.DeadlineChallenge)
+
+			mod = mod % MaxWindowPoStRatio
+
+			ret.Allowed = mod >= ratio.Ratio
+			break
+		}
+	}
+	return &ret
+}
+
+type ChangeWdPoStRatioParams struct {
+	Ratio uint64
+}
+
+func (a Actor) ChangeWdPoStRatio(rt Runtime, params *ChangeWdPoStRatioParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsPower.ChangeWdPoStRatio)
+
+	builtin.RequireParam(rt, IsValidWdPoStRatio(params.Ratio), "invalid ratio")
+
+	effectEpoch := rt.CurrEpoch() + 1
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		ratios, err := adt.AsArray(adt.AsStore(rt), st.WdPoStRatios, builtin.DefaultAmtBitwidth)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load ratios")
+
+		var lastRatio WdPoStRatio
+		lastIdx := ratios.Length() - 1
+
+		found, err := ratios.Get(lastIdx, &lastRatio)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get ratio at last %d", lastIdx)
+		builtin.RequireState(rt, found && effectEpoch >= lastRatio.EffectiveEpoch, "failed to check ratio at last %d, found %t", lastIdx, found)
+
+		if lastRatio.EffectiveEpoch == effectEpoch { // override
+			lastRatio.Ratio = params.Ratio
+			err = ratios.Set(lastIdx, &lastRatio)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update ratio at last %d", lastIdx)
+		} else {
+			err = ratios.AppendContinuous(&WdPoStRatio{EffectiveEpoch: effectEpoch, Ratio: params.Ratio})
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to append ratio %d, effect at %d", params.Ratio, effectEpoch)
+		}
+
+		st.WdPoStRatios, err = ratios.Root()
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush ratios")
+	})
+
+	return nil
 }
 
 ////////////////////////////////////////////////////////////////////////////////

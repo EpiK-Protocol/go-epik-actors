@@ -308,6 +308,9 @@ func (p *Partition) RecoverFaults(store adt.Store, sectors Sectors, ssize abi.Se
 	if err != nil {
 		return NewPowerPairZero(), xerrors.Errorf("failed to load recovered sectors: %w", err)
 	}
+	if len(recoveredSectors) == 0 {
+		return NewPowerPairZero(), nil
+	}
 	// Load expiration queue
 	queue, err := LoadExpirationQueue(store, p.ExpirationsEpochs, quant, PartitionExpirationAmtBitwidth)
 	if err != nil {

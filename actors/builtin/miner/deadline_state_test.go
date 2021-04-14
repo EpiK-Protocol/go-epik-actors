@@ -72,7 +72,7 @@ func TestDeadlines(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, result.PowerDelta.IsZero())
 
-		faultyPower, recoveryPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 0)
+		faultyPower, recoveryPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 0, sectorArr, sectorSize, false)
 		require.NoError(t, err)
 		require.True(t, faultyPower.IsZero())
 		require.True(t, recoveryPower.IsZero())
@@ -114,7 +114,7 @@ func TestDeadlines(t *testing.T) {
 		unprovenPower := miner.PowerForSectors(sectorSize, sectors)
 		require.True(t, result.PowerDelta.Equals(unprovenPower))
 
-		faultyPower, recoveryPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 0)
+		faultyPower, recoveryPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 0, sectorArr, sectorSize, false)
 		require.NoError(t, err)
 		require.True(t, faultyPower.IsZero())
 		require.True(t, recoveryPower.IsZero())
@@ -611,7 +611,7 @@ func TestDeadlines(t *testing.T) {
 				bf(9, 10),
 			).assert(t, store, dl)
 
-		powerDelta, penalizedPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13)
+		powerDelta, penalizedPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13, sectorArr, sectorSize, false)
 		require.NoError(t, err)
 
 		// No power delta for successful post.
@@ -689,7 +689,7 @@ func TestDeadlines(t *testing.T) {
 				bf(9, 10),
 			).assert(t, store, dl)
 
-		powerDelta, penalizedPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13)
+		powerDelta, penalizedPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13, sectorArr, sectorSize, false)
 		require.NoError(t, err)
 
 		expFaultPower := sectorPower(t, 9, 10)
@@ -699,10 +699,55 @@ func TestDeadlines(t *testing.T) {
 		require.True(t, powerDelta.Equals(expPowerDelta))
 		// No new changes to recovering power.
 		require.True(t, penalizedPower.Equals(expFaultPower))
-
 		// Posts taken care of.
 		// Unproven now faulty.
 		dlState.withFaults(1, 5, 7, 9, 10).
+			withPartitions(
+				bf(1, 2, 3, 4),
+				bf(5, 6, 7, 8),
+				bf(9, 10),
+			).assert(t, store, dl)
+	})
+
+	t.Run("allow no post with unproven, faults, recoveries, and retracted recoveries", func(t *testing.T) {
+		store := ipld.NewADTStore(context.Background())
+		dl := emptyDeadline(t, store)
+
+		// Marks sectors 1 (partition 0), 5 & 6 (partition 1) as faulty.
+		addThenMarkFaulty(t, store, dl, false, true)
+
+		// add an inactive sector
+		unprovenPowerDelta, err := dl.AddSectors(store, partitionSize, false, extraSectors, sectorSize, quantSpec)
+		require.NoError(t, err)
+		require.True(t, unprovenPowerDelta.IsZero())
+
+		sectorArr := sectorsArr(t, store, allSectors)
+
+		// Declare sectors 1 & 6 recovered.
+		require.NoError(t, dl.DeclareFaultsRecovered(store, sectorArr, sectorSize, map[uint64]bitfield.BitField{
+			0: bf(1),
+			1: bf(6),
+		}))
+		// We're now recovering 1 & 6.
+		dlState.withRecovering(1, 6).
+			withFaults(1, 5, 6).
+			withUnproven(10).
+			withPartitions(
+				bf(1, 2, 3, 4),
+				bf(5, 6, 7, 8),
+				bf(9, 10),
+			).assert(t, store, dl)
+
+		powerDelta, penalizedPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13, sectorArr, sectorSize, true)
+		require.NoError(t, err)
+
+		// Sector 10 was activated, 1 and 6 were recovered.
+		require.True(t, powerDelta.Equals(sectorPower(t, 1, 6, 10)))
+		// No new faulty or retraction.
+		require.True(t, penalizedPower.IsZero())
+		// Posts taken care of.
+		// Unproven now faulty.
+		dlState.withFaults(5).
 			withPartitions(
 				bf(1, 2, 3, 4),
 				bf(5, 6, 7, 8),
@@ -747,7 +792,7 @@ func TestDeadlines(t *testing.T) {
 				bf(9, 10),
 			).assert(t, store, dl)
 
-		powerDelta, penalizedPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13)
+		powerDelta, penalizedPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13, sectorArr, sectorSize, false)
 		require.NoError(t, err)
 
 		// All posts submitted, no power delta, no extra penalties.
@@ -868,7 +913,7 @@ func TestDeadlines(t *testing.T) {
 				bf(9),
 			).assert(t, store, dl)
 
-		newFaultyPower, failedRecoveryPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13)
+		newFaultyPower, failedRecoveryPower, err := dl.ProcessDeadlineEnd(store, quantSpec, 13, sectorArr, sectorSize, false)
 		require.NoError(t, err)
 
 		// No power changes.

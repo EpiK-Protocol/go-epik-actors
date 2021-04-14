@@ -2076,6 +2076,16 @@ func handleProvingDeadline(rt Runtime) {
 	newlyVested := abi.NewTokenAmount(0)
 
 	var st State
+	rt.StateReadonly(&st)
+
+	currDeadline := st.DeadlineInfo(currEpoch)
+	var ret power.AllowNoWindowPoStReturn
+	code := rt.Send(builtin.StoragePowerActorAddr, builtin.MethodsPower.AllowNoWindowPoSt, &power.AllowNoWindowPoStParams{
+		DeadlineChallenge: currDeadline.Challenge,
+		Randomness:        getWindowPoStRandomness(rt, currDeadline.Challenge),
+	}, big.Zero(), &ret)
+	builtin.RequireSuccess(rt, code, "failed to check post ratio at %d, challenge %d", currEpoch, currDeadline.Challenge)
+
 	rt.StateTransaction(&st, func() {
 		{
 			var err error
@@ -2106,7 +2116,7 @@ func handleProvingDeadline(rt Runtime) {
 		hadEarlyTerminations = havePendingEarlyTerminations(rt, &st)
 
 		{
-			result, err := st.AdvanceDeadline(store, currEpoch)
+			result, err := st.AdvanceDeadline(store, currDeadline, ret.Allowed)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to advance deadline")
 
 			/* // Faults detected by this missed PoSt pay no penalty, but sectors that were already faulty
@@ -2280,12 +2290,7 @@ func verifyWindowedPost(rt Runtime, challengeEpoch abi.ChainEpoch, sectors []*Se
 	minerActorID, err := addr.IDFromAddress(rt.Receiver())
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "runtime provided bad receiver address %v", rt.Receiver())
 
-	// Regenerate challenge randomness, which must match that generated for the proof.
-	var addrBuf bytes.Buffer
-	receiver := rt.Receiver()
-	err = receiver.MarshalCBOR(&addrBuf)
-	builtin.RequireNoErr(rt, err, exitcode.ErrSerialization, "failed to marshal address for window post challenge")
-	postRandomness := rt.GetRandomnessFromBeacon(crypto.DomainSeparationTag_WindowedPoStChallengeSeed, challengeEpoch, addrBuf.Bytes())
+	postRandomness := getWindowPoStRandomness(rt, challengeEpoch)
 
 	sectorProofInfo := make([]proof.SectorInfo, len(sectors))
 	for i, s := range sectors {
@@ -2310,6 +2315,15 @@ func verifyWindowedPost(rt Runtime, challengeEpoch abi.ChainEpoch, sectors []*Se
 		return fmt.Errorf("invalid PoSt %+v: %w", pvInfo, err)
 	}
 	return nil
+}
+
+func getWindowPoStRandomness(rt Runtime, challengeEpoch abi.ChainEpoch) abi.Randomness {
+	// Regenerate challenge randomness, which must match that generated for the proof.
+	var addrBuf bytes.Buffer
+	receiver := rt.Receiver()
+	err := receiver.MarshalCBOR(&addrBuf)
+	builtin.RequireNoErr(rt, err, exitcode.ErrSerialization, "failed to marshal address for window post challenge")
+	return rt.GetRandomnessFromBeacon(crypto.DomainSeparationTag_WindowedPoStChallengeSeed, challengeEpoch, addrBuf.Bytes())
 }
 
 // SealVerifyParams is the structure of information that must be sent with a

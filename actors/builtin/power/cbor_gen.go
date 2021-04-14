@@ -14,7 +14,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{142}
+var lengthBufState = []byte{143}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -124,6 +124,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		}
 	}
 
+	// t.WdPoStRatios (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.WdPoStRatios); err != nil {
+		return xerrors.Errorf("failed to write cid field t.WdPoStRatios: %w", err)
+	}
+
 	return nil
 }
 
@@ -141,7 +147,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 14 {
+	if extra != 15 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -336,6 +342,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 			t.ProofValidationBatch = &c
 		}
+
+	}
+	// t.WdPoStRatios (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.WdPoStRatios: %w", err)
+		}
+
+		t.WdPoStRatios = c
 
 	}
 	return nil
@@ -535,6 +553,99 @@ func (t *CronEvent) UnmarshalCBOR(r io.Reader) error {
 
 	if _, err := io.ReadFull(br, t.CallbackPayload[:]); err != nil {
 		return err
+	}
+	return nil
+}
+
+var lengthBufWdPoStRatio = []byte{130}
+
+func (t *WdPoStRatio) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufWdPoStRatio); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.EffectiveEpoch (abi.ChainEpoch) (int64)
+	if t.EffectiveEpoch >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.EffectiveEpoch)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.EffectiveEpoch-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.Ratio (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Ratio)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *WdPoStRatio) UnmarshalCBOR(r io.Reader) error {
+	*t = WdPoStRatio{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.EffectiveEpoch (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.EffectiveEpoch = abi.ChainEpoch(extraI)
+	}
+	// t.Ratio (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Ratio = uint64(extra)
+
 	}
 	return nil
 }
@@ -1071,6 +1182,225 @@ func (t *CurrentTotalPowerReturn) UnmarshalCBOR(r io.Reader) error {
 		if err := t.PledgeCollateral.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.PledgeCollateral: %w", err)
 		}
+
+	}
+	return nil
+}
+
+var lengthBufAllowNoWindowPoStParams = []byte{130}
+
+func (t *AllowNoWindowPoStParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufAllowNoWindowPoStParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.DeadlineChallenge (abi.ChainEpoch) (int64)
+	if t.DeadlineChallenge >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DeadlineChallenge)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.DeadlineChallenge-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.Randomness ([]uint8) (slice)
+	if len(t.Randomness) > cbg.ByteArrayMaxLen {
+		return xerrors.Errorf("Byte array in field t.Randomness was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajByteString, uint64(len(t.Randomness))); err != nil {
+		return err
+	}
+
+	if _, err := w.Write(t.Randomness[:]); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *AllowNoWindowPoStParams) UnmarshalCBOR(r io.Reader) error {
+	*t = AllowNoWindowPoStParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.DeadlineChallenge (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.DeadlineChallenge = abi.ChainEpoch(extraI)
+	}
+	// t.Randomness ([]uint8) (slice)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+
+	if extra > cbg.ByteArrayMaxLen {
+		return fmt.Errorf("t.Randomness: byte array too large (%d)", extra)
+	}
+	if maj != cbg.MajByteString {
+		return fmt.Errorf("expected byte array")
+	}
+
+	if extra > 0 {
+		t.Randomness = make([]uint8, extra)
+	}
+
+	if _, err := io.ReadFull(br, t.Randomness[:]); err != nil {
+		return err
+	}
+	return nil
+}
+
+var lengthBufAllowNoWindowPoStReturn = []byte{129}
+
+func (t *AllowNoWindowPoStReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufAllowNoWindowPoStReturn); err != nil {
+		return err
+	}
+
+	// t.Allowed (bool) (bool)
+	if err := cbg.WriteBool(w, t.Allowed); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *AllowNoWindowPoStReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = AllowNoWindowPoStReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Allowed (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.Allowed = false
+	case 21:
+		t.Allowed = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	return nil
+}
+
+var lengthBufChangeWdPoStRatioParams = []byte{129}
+
+func (t *ChangeWdPoStRatioParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufChangeWdPoStRatioParams); err != nil {
+		return err
+	}
+
+	scratch := make([]byte, 9)
+
+	// t.Ratio (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Ratio)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *ChangeWdPoStRatioParams) UnmarshalCBOR(r io.Reader) error {
+	*t = ChangeWdPoStRatioParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Ratio (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Ratio = uint64(extra)
 
 	}
 	return nil

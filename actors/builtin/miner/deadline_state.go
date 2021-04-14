@@ -875,7 +875,8 @@ func (dl *Deadline) DeclareFaultsRecovered(
 // ProcessDeadlineEnd processes all PoSt submissions, marking unproven sectors as
 // faulty and clearing failed recoveries. It returns the power delta, and any
 // power that should be penalized (new faults and failed recoveries).
-func (dl *Deadline) ProcessDeadlineEnd(store adt.Store, quant QuantSpec, faultExpirationEpoch abi.ChainEpoch) (
+func (dl *Deadline) ProcessDeadlineEnd(store adt.Store, quant QuantSpec, faultExpirationEpoch abi.ChainEpoch,
+	sectors Sectors, ssize abi.SectorSize, allowNoPoSt bool) (
 	powerDelta, penalizedPower PowerPair, err error,
 ) {
 	powerDelta = NewPowerPairZero()
@@ -912,31 +913,51 @@ func (dl *Deadline) ProcessDeadlineEnd(store adt.Store, quant QuantSpec, faultEx
 			continue
 		}
 
-		// Ok, we actually need to process this partition. Make sure we save the partition state back.
-		detectedAny = true
+		if !allowNoPoSt {
+			// Ok, we actually need to process this partition. Make sure we save the partition state back.
+			detectedAny = true
 
-		partPowerDelta, partPenalizedPower, partNewFaultyPower, err := partition.RecordMissedPost(store, faultExpirationEpoch, quant)
-		if err != nil {
-			return powerDelta, penalizedPower, xerrors.Errorf("failed to record missed PoSt for partition %v: %w", partIdx, err)
+			partPowerDelta, partPenalizedPower, partNewFaultyPower, err := partition.RecordMissedPost(store, faultExpirationEpoch, quant)
+			if err != nil {
+				return powerDelta, penalizedPower, xerrors.Errorf("failed to record missed PoSt for partition %v: %w", partIdx, err)
+			}
+
+			// We marked some sectors faulty, we need to record the new
+			// expiration. We don't want to do this if we're just penalizing
+			// the miner for failing to recover power.
+			if !partNewFaultyPower.IsZero() {
+				rescheduledPartitions = append(rescheduledPartitions, partIdx)
+			}
+
+			// Save new partition state.
+			err = partitions.Set(partIdx, &partition)
+			if err != nil {
+				return powerDelta, penalizedPower, xerrors.Errorf("failed to update partition %v: %w", partIdx, err)
+			}
+
+			dl.FaultyPower = dl.FaultyPower.Add(partNewFaultyPower)
+
+			powerDelta = powerDelta.Add(partPowerDelta)
+			penalizedPower = penalizedPower.Add(partPenalizedPower)
+		} else {
+			activatedPower := partition.ActivateUnproven()
+
+			recoveredPower, err := partition.RecoverFaults(store, sectors, ssize, quant)
+			if err != nil {
+				return powerDelta, penalizedPower, xerrors.Errorf("failed to recover faulty sectors for partition %d: %w", partIdx, err)
+			}
+
+			dl.FaultyPower = dl.FaultyPower.Sub(recoveredPower)
+			powerDelta = powerDelta.Add(activatedPower).Add(recoveredPower)
+
+			if !recoveredPower.IsZero() || !activatedPower.IsZero() {
+				detectedAny = true
+				err = partitions.Set(partIdx, &partition)
+				if err != nil {
+					return powerDelta, penalizedPower, xerrors.Errorf("failed to update partition without post %v: %w", partIdx, err)
+				}
+			}
 		}
-
-		// We marked some sectors faulty, we need to record the new
-		// expiration. We don't want to do this if we're just penalizing
-		// the miner for failing to recover power.
-		if !partNewFaultyPower.IsZero() {
-			rescheduledPartitions = append(rescheduledPartitions, partIdx)
-		}
-
-		// Save new partition state.
-		err = partitions.Set(partIdx, &partition)
-		if err != nil {
-			return powerDelta, penalizedPower, xerrors.Errorf("failed to update partition %v: %w", partIdx, err)
-		}
-
-		dl.FaultyPower = dl.FaultyPower.Add(partNewFaultyPower)
-
-		powerDelta = powerDelta.Add(partPowerDelta)
-		penalizedPower = penalizedPower.Add(partPenalizedPower)
 	}
 
 	// Save modified deadline state.
