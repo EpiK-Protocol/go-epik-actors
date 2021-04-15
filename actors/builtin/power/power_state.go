@@ -1,6 +1,8 @@
 package power
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"reflect"
 
@@ -321,10 +323,39 @@ func (st *State) appendCronEvent(events *adt.Multimap, epoch abi.ChainEpoch, eve
 	return nil
 }
 
-/* func (st *State) updateSmoothedEstimate(delta abi.ChainEpoch) {
-	filterQAPower := smoothing.LoadFilter(st.ThisEpochQAPowerSmoothed, smoothing.DefaultAlpha, smoothing.DefaultBeta)
-	st.ThisEpochQAPowerSmoothed = filterQAPower.NextEstimate(st.ThisEpochQualityAdjPower, delta)
-} */
+func (st *State) AllowNoPoSt(store adt.Store, challenge abi.ChainEpoch, rand abi.Randomness) (bool, error) {
+	ratios, err := adt.AsArray(store, st.WdPoStRatios, builtin.DefaultAmtBitwidth)
+	if err != nil {
+		return false, xerrors.Errorf("failed to load ratios: %w", err)
+	}
+	if ratios.Length() == 0 {
+		return false, xerrors.New("unexpected no ratios")
+	}
+
+	for k := ratios.Length() - 1; k >= 0; k-- {
+		var ratio WdPoStRatio
+		found, err := ratios.Get(k, &ratio)
+		if err != nil {
+			return false, xerrors.Errorf("failed to get ratio at index %d (%d): %w", k, ratios.Length(), err)
+		}
+		if !found {
+			return false, xerrors.Errorf("ratio not found at index %d (%d)", k, ratios.Length())
+		}
+
+		if challenge >= ratio.EffectiveEpoch {
+			var mod uint64
+			err = binary.Read(bytes.NewBuffer(rand), binary.BigEndian, &mod)
+			if err != nil {
+				return false, xerrors.Errorf("failed to interpret digest, challenge %d: %w", challenge, err)
+			}
+
+			mod = mod % MaxWindowPoStRatio
+
+			return mod >= ratio.Ratio, nil
+		}
+	}
+	return false, xerrors.Errorf("unexpected code reached")
+}
 
 func loadCronEvents(mmap *adt.Multimap, epoch abi.ChainEpoch) ([]CronEvent, error) {
 	var events []CronEvent

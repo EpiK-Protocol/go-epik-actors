@@ -2,7 +2,6 @@ package power
 
 import (
 	"bytes"
-	"encoding/binary"
 
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -338,29 +337,10 @@ func (a Actor) AllowNoWindowPoSt(rt Runtime, params *AllowNoWindowPoStParams) *A
 	var st State
 	rt.StateReadonly(&st)
 
-	ratios, err := adt.AsArray(adt.AsStore(rt), st.WdPoStRatios, builtin.DefaultAmtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load ratios")
-	builtin.RequireState(rt, ratios.Length() > 0, "no ratios")
+	allow, err := st.AllowNoPoSt(adt.AsStore(rt), params.DeadlineChallenge, params.Randomness)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to check allow no post")
 
-	var ret AllowNoWindowPoStReturn
-	for k := ratios.Length() - 1; k >= 0; k-- {
-		var ratio WdPoStRatio
-		found, err := ratios.Get(k, &ratio)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get ratio at index %d", k)
-		builtin.RequireState(rt, found, "ratio not found at index %d", k)
-
-		if params.DeadlineChallenge >= ratio.EffectiveEpoch {
-			var mod uint64
-			err = binary.Read(bytes.NewBuffer(params.Randomness), binary.BigEndian, &mod)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to interpret digest curr %d, challenge %d", rt.CurrEpoch(), params.DeadlineChallenge)
-
-			mod = mod % MaxWindowPoStRatio
-
-			ret.Allowed = mod >= ratio.Ratio
-			break
-		}
-	}
-	return &ret
+	return &AllowNoWindowPoStReturn{Allowed: allow}
 }
 
 type ChangeWdPoStRatioParams struct {
