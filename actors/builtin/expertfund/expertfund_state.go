@@ -88,23 +88,23 @@ func ConstructState(store adt.Store, pool cid.Cid) (*State, error) {
 }
 
 // Returns err if not found
-func (st *State) GetDataInfos(store adt.Store, pieceIDs ...cid.Cid) ([]*DataInfo, error) {
+func (st *State) GetDataInfos(store adt.Store, pieceCIDs ...cid.Cid) (map[cid.Cid]DataInfo, error) {
 	dbp, err := adt.AsMap(store, st.DataByPiece, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}
 
-	ret := make([]*DataInfo, 0, len(pieceIDs))
-	for _, pieceID := range pieceIDs {
+	ret := make(map[cid.Cid]DataInfo)
+	for _, pieceCID := range pieceCIDs {
 		var out DataInfo
-		found, err := dbp.Get(abi.CidKey(pieceID), &out)
+		found, err := dbp.Get(abi.CidKey(pieceCID), &out)
 		if err != nil {
 			return nil, err
 		}
 		if !found {
-			return nil, xerrors.Errorf("DataInfo not found: %s", pieceID)
+			return nil, xerrors.Errorf("DataInfo not found: %s", pieceCID)
 		}
-		ret = append(ret, &out)
+		ret[pieceCID] = out
 	}
 	return ret, nil
 }

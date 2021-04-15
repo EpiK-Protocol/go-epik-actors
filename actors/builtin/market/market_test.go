@@ -20,6 +20,7 @@ import (
 	cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v2/support/mock"
@@ -496,7 +497,12 @@ func TestPublishStorageDeals(t *testing.T) {
 		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
 		expectGetControlAddresses(rt, providerResolved, mAddr.owner, mAddr.worker, mAddr.coinbase)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: deal.PieceCID}}}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+			&expertfund.BatchCheckDataParams{
+				CheckedPieces: []expertfund.CheckedPiece{
+					{PieceCID: deal.PieceCID, PieceSize: deal.PieceSize},
+				},
+			}, big.Zero(), nil, exitcode.Ok)
 		rt.ExpectSend(providerResolved, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		// expectQueryNetworkInfo(rt, actor)
 		//  create a client proposal with a valid signature
@@ -508,13 +514,6 @@ func TestPublishStorageDeals(t *testing.T) {
 		params.Deals = append(params.Deals, clientProposal)
 		// expect a call to verify the above signature
 		rt.ExpectVerifySignature(sig, deal.Client, buf.Bytes(), nil)
-
-		/* // request is sent to the VerigReg actor using the resolved address
-		param := &verifreg.UseBytesParams{
-			Address:  clientResolved,
-			DealSize: big.NewIntUnsigned(uint64(deal.PieceSize)),
-		}
-		rt.ExpectSend(builtin.VerifiedRegistryActorAddr, builtin.MethodsVerifiedRegistry.UseBytes, param, abi.NewTokenAmount(0), nil, exitcode.Ok) */
 
 		deal2 := deal
 		deal2.Client = clientResolved
@@ -871,7 +870,13 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 				rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 
 				batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: dealProposal.PieceCID}}}
-				rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+				rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+					&expertfund.BatchCheckDataParams{
+						CheckedPieces: []expertfund.CheckedPiece{{
+							PieceCID:  dealProposal.PieceCID,
+							PieceSize: dealProposal.PieceSize,
+						}},
+					}, big.Zero(), nil, exitcode.Ok)
 				rt.ExpectSend(provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 				/* expectQueryNetworkInfo(rt, actor) */
 				rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -951,7 +956,13 @@ func TestPublishStorageDealsFailures(t *testing.T) {
 				{CID: deal1.PieceCID},
 				{CID: deal2.PieceCID},
 			}}
-			rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+			rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+				&expertfund.BatchCheckDataParams{
+					CheckedPieces: []expertfund.CheckedPiece{
+						{PieceCID: deal1.PieceCID, PieceSize: deal1.PieceSize},
+						{PieceCID: deal2.PieceCID, PieceSize: deal2.PieceSize},
+					},
+				}, big.Zero(), nil, exitcode.Ok)
 			rt.ExpectSend(deal1.Provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 
 			rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -1638,7 +1649,12 @@ func TestCronTick(t *testing.T) {
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: d2.PieceCID}}}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+			&expertfund.BatchCheckDataParams{
+				CheckedPieces: []expertfund.CheckedPiece{
+					{PieceCID: d2.PieceCID, PieceSize: d2.PieceSize},
+				},
+			}, big.Zero(), nil, exitcode.Ok)
 		rt.ExpectSend(d2.Provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 		/* expectQueryNetworkInfo(rt, actor) */
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
@@ -1942,7 +1958,12 @@ func TestCronTickTimedoutDeals(t *testing.T) {
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: d2.PieceCID}}}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+			&expertfund.BatchCheckDataParams{
+				CheckedPieces: []expertfund.CheckedPiece{
+					{PieceCID: d2.PieceCID, PieceSize: d2.PieceSize},
+				},
+			}, big.Zero(), nil, exitcode.Ok)
 		rt.ExpectSend(d2.Provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 
 		/* expectQueryNetworkInfo(rt, actor) */
@@ -2361,7 +2382,12 @@ func TestMarketActorDeals(t *testing.T) {
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: dealProposal.PieceCID}}}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+			&expertfund.BatchCheckDataParams{
+				CheckedPieces: []expertfund.CheckedPiece{
+					{PieceCID: dealProposal.PieceCID, PieceSize: dealProposal.PieceSize},
+				},
+			}, big.Zero(), nil, exitcode.Ok)
 		rt.ExpectSend(provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 
 		/* expectQueryNetworkInfo(rt, actor) */
@@ -2380,7 +2406,12 @@ func TestMarketActorDeals(t *testing.T) {
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: dealProposal.PieceCID}}}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+			&expertfund.BatchCheckDataParams{
+				CheckedPieces: []expertfund.CheckedPiece{
+					{PieceCID: dealProposal.PieceCID, PieceSize: dealProposal.PieceSize},
+				},
+			}, big.Zero(), nil, exitcode.Ok)
 		rt.ExpectSend(provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 
 		rt.ExpectVerifySignature(crypto.Signature{}, client, mustCbor(&params.Deals[0].Proposal), nil)
@@ -2429,7 +2460,12 @@ func TestMaxDealLabelSize(t *testing.T) {
 		rt.ExpectValidateCallerType(builtin.AccountActorCodeID, builtin.MultisigActorCodeID)
 		rt.ExpectSend(provider, builtin.MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &builtin.GetControlAddressesReturn{Worker: worker, Owner: owner, Coinbase: coinbase}, 0)
 		batchPids := builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: dealProposal.PieceCID}}}
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData,
+			&expertfund.BatchCheckDataParams{
+				CheckedPieces: []expertfund.CheckedPiece{
+					{PieceCID: dealProposal.PieceCID, PieceSize: dealProposal.PieceSize},
+				},
+			}, big.Zero(), nil, exitcode.Ok)
 		rt.ExpectSend(provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 
 		/* expectQueryNetworkInfo(rt, actor) */
@@ -3091,11 +3127,17 @@ func (h *marketActorTestHarness) publishDeals(rt *mock.Runtime, minerAddrs *mine
 		&builtin.GetControlAddressesReturn{Owner: minerAddrs.owner, Worker: minerAddrs.worker, Coinbase: minerAddrs.coinbase, ControlAddrs: minerAddrs.control},
 		exitcode.Ok,
 	)
+
+	var bcps expertfund.BatchCheckDataParams
 	batchPids := builtin.BatchPieceCIDParams{}
 	for _, dr := range publishDealReqs {
+		bcps.CheckedPieces = append(bcps.CheckedPieces, expertfund.CheckedPiece{
+			PieceCID:  dr.deal.PieceCID,
+			PieceSize: dr.deal.PieceSize,
+		})
 		batchPids.PieceCIDs = append(batchPids.PieceCIDs, builtin.CheckedCID{CID: dr.deal.PieceCID})
 	}
-	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchPids, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &bcps, big.Zero(), nil, exitcode.Ok)
 	rt.ExpectSend(minerAddrs.provider, builtin.MethodsMiner.StoredAny, &batchPids, big.Zero(), &cbgFalse, exitcode.Ok)
 	/* expectQueryNetworkInfo(rt, h) */
 

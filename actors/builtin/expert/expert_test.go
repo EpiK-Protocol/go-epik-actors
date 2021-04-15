@@ -188,11 +188,11 @@ func TestImportData(t *testing.T) {
 		rt.Verify()
 
 		st := getState(rt)
-		info := actor.getData(rt, &checkedID)
-		require.True(t, st.DataCount == 1 &&
-			info.PieceID == params.PieceID.String() &&
-			info.RootID == params.RootID &&
-			info.PieceSize == params.PieceSize)
+		ret := actor.getDatas(rt, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{checkedID}})
+		require.True(t, st.DataCount == 1 && len(ret.Infos) == 1 &&
+			ret.Infos[0].PieceID == params.PieceID.String() &&
+			ret.Infos[0].RootID == params.RootID &&
+			ret.Infos[0].PieceSize == params.PieceSize)
 
 		// second
 		params2 := newExpertDataParams()
@@ -200,11 +200,11 @@ func TestImportData(t *testing.T) {
 
 		actor.importData(rt, params2)
 		st = getState(rt)
-		info = actor.getData(rt, &checkedID2)
-		require.True(t, st.DataCount == 2 &&
-			info.PieceID == params2.PieceID.String() &&
-			info.RootID == params2.RootID &&
-			info.PieceSize == params2.PieceSize)
+		ret = actor.getDatas(rt, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{checkedID, checkedID2}})
+		require.True(t, st.DataCount == 2 && len(ret.Infos) == 2 &&
+			ret.Infos[1].PieceID == params2.PieceID.String() &&
+			ret.Infos[1].RootID == params2.RootID &&
+			ret.Infos[1].PieceSize == params2.PieceSize)
 	})
 
 	t.Run("fail when import duplicate data", func(t *testing.T) {
@@ -1050,10 +1050,10 @@ func (h *actorHarness) storeData(rt *mock.Runtime, params *builtin.BatchPieceCID
 	return ret
 }
 
-func (h *actorHarness) getData(rt *mock.Runtime, params *builtin.CheckedCID) *expert.DataOnChainInfo {
+func (h *actorHarness) getDatas(rt *mock.Runtime, params *builtin.BatchPieceCIDParams) *expert.GetDatasReturn {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
-	ret := rt.Call(h.GetData, params).(*expert.DataOnChainInfo)
+	ret := rt.Call(h.GetDatas, params).(*expert.GetDatasReturn)
 	rt.Verify()
 	return ret
 }

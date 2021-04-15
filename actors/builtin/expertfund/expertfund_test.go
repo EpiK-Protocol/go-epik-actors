@@ -134,17 +134,17 @@ func TestOnExpertImport(t *testing.T) {
 		pieceID1 := tutil.MakeCID("1", &miner.SealedCIDPrefix)
 		actor.onExpertImport(rt, expert1, &builtin.CheckedCID{CID: pieceID1})
 		st := getState(rt)
-		dataInfo, err := st.GetDataInfos(adt.AsStore(rt), pieceID1)
+		pieceToInfo, err := st.GetDataInfos(adt.AsStore(rt), pieceID1)
 		require.NoError(t, err)
-		require.True(t, dataInfo[0].Expert == expert1)
+		require.True(t, pieceToInfo[pieceID1].Expert == expert1)
 
 		// piece 2
 		pieceID2 := tutil.MakeCID("2", &miner.SealedCIDPrefix)
 		actor.onExpertImport(rt, expert2, &builtin.CheckedCID{CID: pieceID2})
 		st = getState(rt)
-		dataInfo2, err := st.GetDataInfos(adt.AsStore(rt), pieceID2)
+		pieceToInfo2, err := st.GetDataInfos(adt.AsStore(rt), pieceID2)
 		require.NoError(t, err)
-		require.True(t, dataInfo2[0].Expert == expert2)
+		require.True(t, pieceToInfo2[pieceID2].Expert == expert2)
 
 		// not found
 		_, err = st.GetDataInfos(adt.AsStore(rt), tutil.MakeCID("3", &miner.SealedCIDPrefix))
@@ -199,7 +199,11 @@ func TestGetData(t *testing.T) {
 
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAny()
-		rt.ExpectSend(expert1, builtin.MethodsExpert.GetData, &builtin.CheckedCID{CID: pieceID}, abi.NewTokenAmount(0), &expert.DataOnChainInfo{PieceID: pieceID.String()}, exitcode.ErrForbidden)
+		params := &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: pieceID}}}
+		expRet := &expert.GetDatasReturn{
+			Infos: []expert.DataOnChainInfo{{PieceID: pieceID.String()}},
+		}
+		rt.ExpectSend(expert1, builtin.MethodsExpert.GetDatas, params, abi.NewTokenAmount(0), expRet, exitcode.ErrForbidden)
 
 		rt.ExpectAbort(exitcode.ErrForbidden, func() {
 			rt.Call(actor.GetData, &builtin.CheckedCID{CID: pieceID})
@@ -359,7 +363,12 @@ func (h *actorHarness) getData(rt *mock.Runtime, expertAddr address.Address,
 	params *builtin.CheckedCID, expectDataInfo *expert.DataOnChainInfo) *expertfund.GetDataReturn {
 	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 	rt.ExpectValidateCallerAny()
-	rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetData, &builtin.CheckedCID{CID: params.CID}, abi.NewTokenAmount(0), expectDataInfo, exitcode.Ok)
+	rt.ExpectSend(expertAddr, builtin.MethodsExpert.GetDatas,
+		&builtin.BatchPieceCIDParams{
+			PieceCIDs: []builtin.CheckedCID{*params},
+		}, abi.NewTokenAmount(0), &expert.GetDatasReturn{
+			Infos: []expert.DataOnChainInfo{*expectDataInfo},
+		}, exitcode.Ok)
 	ret := rt.Call(h.GetData, params).(*expertfund.GetDataReturn)
 	rt.Verify()
 	return ret

@@ -83,6 +83,7 @@ func main() {
 		expert.OnTrackUpdateParams{},
 		expert.OnTrackUpdateReturn{},
 		expert.StoreDataReturn{},
+		expert.GetDatasReturn{},
 		// other types
 	); err != nil {
 		panic(err)
@@ -100,6 +101,8 @@ func main() {
 		expertfund.ChangeThresholdParams{},
 		expertfund.ApplyForExpertParams{},
 		expertfund.ApplyForExpertReturn{},
+		expertfund.CheckedPiece{},
+		expertfund.BatchCheckDataParams{},
 		// other types
 	); err != nil {
 		panic(err)

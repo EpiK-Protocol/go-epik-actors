@@ -121,7 +121,7 @@ var MethodsExpert = struct {
 	ControlAddress abi.MethodNum
 	ChangeOwner    abi.MethodNum
 	ImportData     abi.MethodNum
-	GetData        abi.MethodNum
+	GetDatas       abi.MethodNum
 	StoreData      abi.MethodNum
 	Nominate       abi.MethodNum
 	OnNominated    abi.MethodNum

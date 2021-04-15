@@ -17,6 +17,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -186,12 +187,17 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 		rt.Abortf(exitcode.ErrForbidden, "caller %v is not worker or control address of provider %v", caller, provider)
 	}
 
+	var batchCheckParams expertfund.BatchCheckDataParams
 	pids := make([]builtin.CheckedCID, 0, len(params.Deals))
 	for _, deal := range params.Deals {
 		pids = append(pids, builtin.CheckedCID{CID: deal.Proposal.PieceCID})
+		batchCheckParams.CheckedPieces = append(batchCheckParams.CheckedPieces, expertfund.CheckedPiece{
+			PieceCID:  deal.Proposal.PieceCID,
+			PieceSize: deal.Proposal.PieceSize,
+		})
 	}
 
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &builtin.BatchPieceCIDParams{PieceCIDs: pids}, abi.NewTokenAmount(0), &builtin.Discard{})
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.BatchCheckData, &batchCheckParams, abi.NewTokenAmount(0), &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to batch check expert data")
 
 	stored, err := builtin.CheckMinerStoredAnyPiece(rt, provider, pids)

@@ -141,30 +141,58 @@ func (a Actor) ChangeThreshold(rt Runtime, params *ChangeThresholdParams) *abi.E
 	return nil
 }
 
+type BatchCheckDataParams struct {
+	CheckedPieces []CheckedPiece
+}
+
+type CheckedPiece struct {
+	PieceCID  cid.Cid `checked:"true"`
+	PieceSize abi.PaddedPieceSize
+}
+
 // BatchCheckData batch check data imported
-func (a Actor) BatchCheckData(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
+func (a Actor) BatchCheckData(rt Runtime, params *BatchCheckDataParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
 	rt.StateReadonly(&st)
 
-	ids := make([]cid.Cid, 0, len(params.PieceCIDs))
-	for _, checked := range params.PieceCIDs {
-		ids = append(ids, checked.CID)
+	checkedPieces := make([]cid.Cid, 0, len(params.CheckedPieces))
+	checkedPieceSizes := make(map[cid.Cid]abi.PaddedPieceSize)
+	for _, cp := range params.CheckedPieces {
+		checkedPieces = append(checkedPieces, cp.PieceCID)
+		checkedPieceSizes[cp.PieceCID] = cp.PieceSize
 	}
-	dataInfos, err := st.GetDataInfos(adt.AsStore(rt), ids...)
+	pieceToInfo, err := st.GetDataInfos(adt.AsStore(rt), checkedPieces...)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
 
-	qualifiedExpert := make(map[address.Address]bool)
-	for _, dataInfo := range dataInfos {
-		_, ok := qualifiedExpert[dataInfo.Expert]
+	expertPieces := make(map[address.Address]*builtin.BatchPieceCIDParams)
+	// Check expert status
+	for pieceCID, dataInfo := range pieceToInfo {
+		batch, ok := expertPieces[dataInfo.Expert]
 		if !ok {
 			var out expert.CheckStateReturn
 			code := rt.Send(dataInfo.Expert, builtin.MethodsExpert.CheckState, nil, abi.NewTokenAmount(0), &out)
 			builtin.RequireSuccess(rt, code, "failed to check expert state: %s", dataInfo.Expert)
 			builtin.RequireState(rt, out.Qualified, "unqualified expert: %s", dataInfo.Expert)
 
-			qualifiedExpert[dataInfo.Expert] = out.Qualified
+			batch = &builtin.BatchPieceCIDParams{}
+			expertPieces[dataInfo.Expert] = batch
+		}
+		batch.PieceCIDs = append(batch.PieceCIDs, builtin.CheckedCID{CID: pieceCID})
+	}
+
+	// Check piece size
+	for expertAddr, pieces := range expertPieces {
+		var out expert.GetDatasReturn
+		code := rt.Send(expertAddr, builtin.MethodsExpert.GetDatas, pieces, big.Zero(), &out)
+		builtin.RequireSuccess(rt, code, "failed to get datas from expert: %s", expertAddr)
+
+		for _, info := range out.Infos {
+			pieceCID, err := cid.Decode(info.PieceID)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed decode piece CID %s", info.PieceID)
+			builtin.RequireState(rt, checkedPieceSizes[pieceCID] == info.PieceSize,
+				"piece size mismatched, checked %d, registered %d", checkedPieceSizes[pieceCID], info.PieceSize)
 		}
 	}
 	return nil
@@ -255,17 +283,20 @@ func (a Actor) GetData(rt Runtime, params *builtin.CheckedCID) *GetDataReturn {
 	var st State
 	rt.StateReadonly(&st)
 
-	dataInfos, err := st.GetDataInfos(adt.AsStore(rt), params.CID)
+	pieceToInfo, err := st.GetDataInfos(adt.AsStore(rt), params.CID)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
 
-	var out expert.DataOnChainInfo
-	code := rt.Send(dataInfos[0].Expert, builtin.MethodsExpert.GetData, params, abi.NewTokenAmount(0), &out)
-	builtin.RequireSuccess(rt, code, "failed to get data in expert record")
+	for _, info := range pieceToInfo {
+		var out expert.GetDatasReturn
+		code := rt.Send(info.Expert, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{*params}}, abi.NewTokenAmount(0), &out)
+		builtin.RequireSuccess(rt, code, "failed to get data in expert record")
 
-	return &GetDataReturn{
-		Expert: dataInfos[0].Expert,
-		Data:   &out,
+		return &GetDataReturn{
+			Expert: info.Expert,
+			Data:   &out.Infos[0],
+		}
 	}
+	return nil
 }
 
 type ApplyForExpertParams struct {

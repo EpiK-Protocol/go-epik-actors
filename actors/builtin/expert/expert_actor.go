@@ -26,7 +26,7 @@ func (a Actor) Exports() []interface{} {
 		2:                         a.ControlAddress,
 		3:                         a.ChangeOwner,
 		4:                         a.ImportData,
-		5:                         a.GetData,
+		5:                         a.GetDatas,
 		6:                         a.StoreData,
 		7:                         a.Nominate,
 		8:                         a.OnNominated,
@@ -196,16 +196,29 @@ func (a Actor) ImportData(rt Runtime, params *ExpertDataParams) *abi.EmptyValue 
 	return nil
 }
 
-func (a Actor) GetData(rt Runtime, params *builtin.CheckedCID) *DataOnChainInfo {
+type GetDatasReturn struct {
+	Infos []DataOnChainInfo
+}
+
+func (a Actor) GetDatas(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDatasReturn {
 	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
 	rt.StateReadonly(&st)
 
-	data, found, err := st.GetData(adt.AsStore(rt), params.CID.String())
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load expert data: %s", params.CID)
-	builtin.RequireParam(rt, found, "data not imported: %s", params.CID)
-	return data
+	datas, err := adt.AsMap(adt.AsStore(rt), st.Datas, builtin.DefaultHamtBitwidth)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load datas")
+
+	var out GetDatasReturn
+	for _, checked := range params.PieceCIDs {
+		var info DataOnChainInfo
+		found, err := datas.Get(adt.StringKey(checked.CID.String()), &info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data %s", checked.CID)
+		builtin.RequireState(rt, found, "data not registered %s", checked.CID)
+
+		out.Infos = append(out.Infos, info)
+	}
+	return &out
 }
 
 type StoreDataReturn struct {
