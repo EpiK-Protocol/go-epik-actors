@@ -21,13 +21,10 @@ type State struct {
 
 	DataCount uint64
 
-	// LostEpoch record expert votes <  epoch or blocked epoch
-	LostEpoch abi.ChainEpoch
-
-	// Status of expert
-	Status ExpertState
+	ExpertState ExpertState
 
 	ImplicatedTimes uint64
+	CurrentVotes    abi.TokenAmount // Valid votes
 }
 
 // ExpertInfo expert info
@@ -52,8 +49,8 @@ type ExpertInfo struct {
 }
 
 type DataOnChainInfo struct {
-	RootID     string
-	PieceID    string
+	RootID     cid.Cid `checked:"true"`
+	PieceID    cid.Cid `checked:"true"`
 	PieceSize  abi.PaddedPieceSize
 	Redundancy uint64
 }
@@ -67,9 +64,9 @@ func ConstructState(store adt.Store, info cid.Cid, state ExpertState) (*State, e
 	return &State{
 		Info:            info,
 		Datas:           emptyMapCid,
-		LostEpoch:       NoLostEpoch,
-		Status:          state,
+		ExpertState:     state,
 		ImplicatedTimes: 0,
+		CurrentVotes:    abi.NewTokenAmount(0),
 	}, nil
 }
 
@@ -90,58 +87,64 @@ func (st *State) SaveInfo(store adt.Store, info *ExpertInfo) error {
 	return nil
 }
 
-func (st *State) PutData(store adt.Store, data *DataOnChainInfo) error {
+func (st *State) PutDatas(store adt.Store, infos ...*DataOnChainInfo) error {
+	if len(infos) == 0 {
+		return nil
+	}
+
 	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 
-	if err := datas.Put(adt.StringKey(data.PieceID), data); err != nil {
-		return xerrors.Errorf("failed to put data %v: %w", data, err)
+	for _, info := range infos {
+		if err := datas.Put(abi.CidKey(info.PieceID), info); err != nil {
+			return xerrors.Errorf("failed to put data %s: %w", info.PieceID, err)
+		}
 	}
 	st.Datas, err = datas.Root()
 	return err
 }
 
-func (st *State) GetData(store adt.Store, pieceID string) (*DataOnChainInfo, bool, error) {
+func (st *State) GetDatas(store adt.Store, mustPresent bool, pieceIDs ...cid.Cid) ([]*DataOnChainInfo, error) {
 	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	var info DataOnChainInfo
-	found, err := datas.Get(adt.StringKey(pieceID), &info)
-	if err != nil {
-		return nil, false, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
+	ret := make([]*DataOnChainInfo, 0, len(pieceIDs))
+	for _, pieceID := range pieceIDs {
+		var info DataOnChainInfo
+		found, err := datas.Get(abi.CidKey(pieceID), &info)
+		if err != nil {
+			return nil, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
+		}
+		if mustPresent && !found {
+			return nil, xerrors.Errorf("data not found %s", pieceID)
+		}
+		if found {
+			ret = append(ret, &info)
+		}
 	}
-	return &info, found, nil
+	return ret, nil
 }
 
 // !! not used
-func (st *State) DeleteData(store adt.Store, pieceID string) error {
+func (st *State) DeleteData(store adt.Store, pieceID cid.Cid) error {
 	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
-	err = datas.Delete(adt.StringKey(pieceID))
+	present, err := datas.TryDelete(abi.CidKey(pieceID))
 	if err != nil {
-		return xerrors.Errorf("failed to delete data for %s: %w", pieceID, err)
+		return xerrors.Errorf("failed to delete data %s: %w", pieceID, err)
 	}
-	st.DataCount--
-	st.Datas, err = datas.Root()
-	return err
-}
-
-func (st *State) ForEachData(store adt.Store, f func(*DataOnChainInfo)) error {
-	datas, err := adt.AsMap(store, st.Datas, builtin.DefaultHamtBitwidth)
-	if err != nil {
+	if present {
+		st.DataCount--
+		st.Datas, err = datas.Root()
 		return err
 	}
-	var info DataOnChainInfo
-	return datas.ForEach(&info, func(key string) error {
-		f(&info)
-		return nil
-	})
+	return nil
 }
 
 func (st *State) VoteThreshold() abi.TokenAmount {

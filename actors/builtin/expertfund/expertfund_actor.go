@@ -13,7 +13,6 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	initact "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -25,16 +24,15 @@ type Runtime = runtime.Runtime
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
-		2:                         a.ApplyRewards,
-		3:                         a.Claim,
-		4:                         a.OnExpertImport,
-		5:                         a.ChangeThreshold,
-		6:                         a.BatchCheckData,
-		7:                         a.BatchStoreData,
-		8:                         a.GetData,
-		9:                         a.ApplyForExpert,
-		10:                        a.OnEpochTickEnd,
-		11:                        a.OnExpertNominated,
+		2:                         a.ApplyForExpert,
+		3:                         a.OnExpertImport,
+		4:                         a.GetData,
+		5:                         a.BatchCheckData,
+		6:                         a.BatchStoreData,
+		7:                         a.ChangeThreshold,
+		8:                         a.Claim,
+		9:                         a.BlockExpert,
+		10:                        a.OnExpertVotesUpdated,
 	}
 }
 
@@ -60,20 +58,12 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.SystemActorAddr)
 
 	pool := rt.StorePut(&PoolInfo{
-		TotalExpertDataSize: 0,
-		AccPerShare:         abi.NewTokenAmount(0),
-		LastRewardBalance:   abi.NewTokenAmount(0),
+		AccPerShare:       abi.NewTokenAmount(0),
+		LastRewardBalance: abi.NewTokenAmount(0),
 	})
 	st, err := ConstructState(adt.AsStore(rt), pool)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to construct state")
 	rt.StateCreate(st)
-	return nil
-}
-
-// ApplyRewards apply the received value into the fund balance.
-func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
-	builtin.RequireParam(rt, rt.ValueReceived().GreaterThan(big.Zero()), "balance to add must be greater than zero")
 	return nil
 }
 
@@ -85,18 +75,18 @@ type ClaimFundParams struct {
 
 // Claim claim the received value into the balance.
 func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.TokenAmount {
-	builtin.RequireParam(rt, params.Amount.GreaterThan(big.Zero()), "non-positive amount")
+	builtin.RequireParam(rt, params.Amount.GreaterThanEqual(big.Zero()), "negative amount requested: %s", params.Amount)
+
+	rt.ValidateImmediateCallerIs(builtin.RequestExpertControlAddr(rt, params.Expert))
 
 	var actual abi.TokenAmount
 	var st State
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerIs(builtin.RequestExpertControlAddr(rt, params.Expert))
-
 		var err error
 		actual, err = st.Claim(rt, params.Expert, params.Amount)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to claim expert fund: %s, %s", params.Expert, params.Amount)
 	})
-	if !actual.IsZero() {
+	if actual.GreaterThan(big.Zero()) {
 		code := rt.Send(rt.Caller(), builtin.MethodSend, nil, actual, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send claimed fund")
 	}
@@ -107,20 +97,15 @@ func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.TokenAmount {
 func (a Actor) OnExpertImport(rt Runtime, params *builtin.CheckedCID) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
+	builtin.RequireParam(rt, params.CID != cid.Undef, "undefined cid")
+
 	var st State
 	rt.StateTransaction(&st, func() {
-		dataByPiece, err := adt.AsMap(adt.AsStore(rt), st.DataByPiece, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load DataByPiece")
-
-		absent, err := dataByPiece.PutIfAbsent(abi.CidKey(params.CID), &DataInfo{
-			Expert:    rt.Caller(),
-			Deposited: false,
+		// global unique
+		err := st.PutPieceInfos(adt.AsStore(rt), true, map[cid.Cid]*PieceInfo{
+			params.CID: {rt.Caller(), st.DataStoreThreshold},
 		})
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put absent data: %s %s", params.CID, rt.Caller())
-		builtin.RequireParam(rt, absent, "duplicate imported data: %s, %s", params.CID, rt.Caller())
-
-		st.DataByPiece, err = dataByPiece.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush DataByPiece")
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put data info: %s, %s", rt.Caller(), params.CID)
 	})
 	return nil
 }
@@ -157,42 +142,30 @@ func (a Actor) BatchCheckData(rt Runtime, params *BatchCheckDataParams) *abi.Emp
 	var st State
 	rt.StateReadonly(&st)
 
-	checkedPieces := make([]cid.Cid, 0, len(params.CheckedPieces))
+	pieceCIDs := make([]cid.Cid, 0, len(params.CheckedPieces))
 	checkedPieceSizes := make(map[cid.Cid]abi.PaddedPieceSize)
 	for _, cp := range params.CheckedPieces {
-		checkedPieces = append(checkedPieces, cp.PieceCID)
+		pieceCIDs = append(pieceCIDs, cp.PieceCID)
 		checkedPieceSizes[cp.PieceCID] = cp.PieceSize
 	}
-	pieceToInfo, err := st.GetDataInfos(adt.AsStore(rt), checkedPieces...)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
+	pieceToExpert, _, err := st.GetPieceInfos(adt.AsStore(rt), pieceCIDs...)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get piece info")
+	builtin.RequireParam(rt, len(pieceToExpert) == len(pieceCIDs), "duplicate piece")
 
-	expertPieces := make(map[address.Address]*builtin.BatchPieceCIDParams)
-	// Check expert status
-	for pieceCID, dataInfo := range pieceToInfo {
-		batch, ok := expertPieces[dataInfo.Expert]
-		if !ok {
-			var out expert.CheckStateReturn
-			code := rt.Send(dataInfo.Expert, builtin.MethodsExpert.CheckState, nil, abi.NewTokenAmount(0), &out)
-			builtin.RequireSuccess(rt, code, "failed to check expert state: %s", dataInfo.Expert)
-			builtin.RequireState(rt, out.Qualified, "unqualified expert: %s", dataInfo.Expert)
-
-			batch = &builtin.BatchPieceCIDParams{}
-			expertPieces[dataInfo.Expert] = batch
-		}
-		batch.PieceCIDs = append(batch.PieceCIDs, builtin.CheckedCID{CID: pieceCID})
+	expertPieces := make(map[address.Address][]builtin.CheckedCID)
+	for pieceCID, expertAddr := range pieceToExpert {
+		expertPieces[expertAddr] = append(expertPieces[expertAddr], builtin.CheckedCID{CID: pieceCID})
 	}
 
 	// Check piece size
-	for expertAddr, pieces := range expertPieces {
+	for expertAddr, pieceCIDs := range expertPieces {
 		var out expert.GetDatasReturn
-		code := rt.Send(expertAddr, builtin.MethodsExpert.GetDatas, pieces, big.Zero(), &out)
+		code := rt.Send(expertAddr, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: pieceCIDs}, big.Zero(), &out)
 		builtin.RequireSuccess(rt, code, "failed to get datas from expert: %s", expertAddr)
 
 		for _, info := range out.Infos {
-			pieceCID, err := cid.Decode(info.PieceID)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed decode piece CID %s", info.PieceID)
-			builtin.RequireState(rt, checkedPieceSizes[pieceCID] == info.PieceSize,
-				"piece size mismatched, checked %d, registered %d", checkedPieceSizes[pieceCID], info.PieceSize)
+			builtin.RequireState(rt, checkedPieceSizes[info.PieceID] == info.PieceSize,
+				"piece size mismatched, checked %d, registered %d", checkedPieceSizes[info.PieceID], info.PieceSize)
 		}
 	}
 	return nil
@@ -210,63 +183,53 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	rt.StateReadonly(&st)
 	store := adt.AsStore(rt)
 
-	dbp, err := adt.AsMap(store, st.DataByPiece, builtin.DefaultHamtBitwidth)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load DataByPiece")
-
-	pieceToDataInfo := make(map[string]DataInfo)
-	expertToPieces := make(map[address.Address][]builtin.CheckedCID)
-
+	pieceCIDs := make([]cid.Cid, 0, len(params.PieceCIDs))
 	for _, checked := range params.PieceCIDs {
+		pieceCIDs = append(pieceCIDs, checked.CID)
+	}
 
-		var dataInfo DataInfo
-		found, err := dbp.Get(abi.CidKey(checked.CID), &dataInfo)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get DataInfo %s", checked.CID)
-		builtin.RequireParam(rt, found, "DataInfo not found %s", checked.CID)
+	pieceToExpert, pieceToThreshold, err := st.GetPieceInfos(store, pieceCIDs...)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data infos")
+	builtin.RequireParam(rt, len(pieceToExpert) == len(pieceCIDs), "duplicate piece")
 
-		expertToPieces[dataInfo.Expert] = append(expertToPieces[dataInfo.Expert], checked)
-
-		_, exist := pieceToDataInfo[checked.CID.String()]
-		builtin.RequireParam(rt, !exist, "duplicated data %s", checked.CID)
-		pieceToDataInfo[checked.CID.String()] = dataInfo
+	expertToPieces := make(map[address.Address][]builtin.CheckedCID)
+	for piece, expertAddr := range pieceToExpert {
+		expertToPieces[expertAddr] = append(expertToPieces[expertAddr], builtin.CheckedCID{CID: piece})
 	}
 
 	var onchainInfos []*expert.DataOnChainInfo
-	for exp, pieces := range expertToPieces {
-		var out expert.StoreDataReturn
-		code := rt.Send(exp, builtin.MethodsExpert.StoreData, &builtin.BatchPieceCIDParams{PieceCIDs: pieces}, abi.NewTokenAmount(0), &out)
-		builtin.RequireSuccess(rt, code, "failed to store data of %s", exp)
+	expertToInfo := make(map[address.Address]*ExpertInfo)
+	for expertAddr, pieces := range expertToPieces {
+		var out expert.GetDatasReturn
+		code := rt.Send(expertAddr, builtin.MethodsExpert.StoreData, &builtin.BatchPieceCIDParams{PieceCIDs: pieces}, abi.NewTokenAmount(0), &out)
+		builtin.RequireSuccess(rt, code, "failed to store data of %s", expertAddr)
 
 		onchainInfos = append(onchainInfos, out.Infos...)
+
+		expertToInfo[expertAddr], err = st.GetExpert(store, expertAddr)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get expert info")
 	}
 
-	rt.StateTransaction(&st, func() {
-		expertDepositSize := make(map[address.Address]abi.PaddedPieceSize)
+	expertDepositSize := make(map[address.Address]abi.PaddedPieceSize)
+	for _, info := range onchainInfos {
+		if info.Redundancy == pieceToThreshold[info.PieceID] {
+			expertAddr := pieceToExpert[info.PieceID]
+			eInfo, ok := expertToInfo[expertAddr]
+			builtin.RequireState(rt, ok, "expert of piece %s not found", info.PieceID)
 
-		for _, onchainInfo := range onchainInfos {
-			di, ok := pieceToDataInfo[onchainInfo.PieceID]
-			builtin.RequireParam(rt, ok, "data info not exist: %s", onchainInfo.PieceID)
-
-			if di.Deposited {
+			if !eInfo.Active {
 				continue
 			}
-
-			if onchainInfo.Redundancy >= st.DataStoreThreshold {
-				expertDepositSize[di.Expert] += onchainInfo.PieceSize
-
-				di.Deposited = true
-				pcid, err := cid.Decode(onchainInfo.PieceID)
-				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed decode piece CID %s", onchainInfo.PieceID)
-				err = dbp.Put(abi.CidKey(pcid), &di)
-				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put DataInfo for %s", onchainInfo.PieceID)
-			}
+			expertDepositSize[expertAddr] += info.PieceSize
 		}
+	}
 
-		err := st.Deposit(rt, expertDepositSize)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
-
-		st.DataByPiece, err = dbp.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush DataByPiece")
-	})
+	if len(expertDepositSize) > 0 {
+		rt.StateTransaction(&st, func() {
+			err := st.Deposit(rt, expertDepositSize)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
+		})
+	}
 
 	return nil
 }
@@ -283,20 +246,18 @@ func (a Actor) GetData(rt Runtime, params *builtin.CheckedCID) *GetDataReturn {
 	var st State
 	rt.StateReadonly(&st)
 
-	pieceToInfo, err := st.GetDataInfos(adt.AsStore(rt), params.CID)
+	pieceToExpert, _, err := st.GetPieceInfos(adt.AsStore(rt), params.CID)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data in fund record")
 
-	for _, info := range pieceToInfo {
-		var out expert.GetDatasReturn
-		code := rt.Send(info.Expert, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{*params}}, abi.NewTokenAmount(0), &out)
-		builtin.RequireSuccess(rt, code, "failed to get data in expert record")
+	expertAddr := pieceToExpert[params.CID]
+	var out expert.GetDatasReturn
+	code := rt.Send(expertAddr, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{*params}}, abi.NewTokenAmount(0), &out)
+	builtin.RequireSuccess(rt, code, "failed to get data in expert record")
 
-		return &GetDataReturn{
-			Expert: info.Expert,
-			Data:   &out.Infos[0],
-		}
+	return &GetDataReturn{
+		Expert: expertAddr,
+		Data:   out.Infos[0],
 	}
-	return nil
 }
 
 type ApplyForExpertParams struct {
@@ -313,11 +274,14 @@ type ApplyForExpertReturn struct {
 func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyForExpertReturn {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
+	store := adt.AsStore(rt)
 	var st State
 	rt.StateReadonly(&st)
 
 	expertType := builtin.ExpertFoundation
-	if st.ExpertsCount > 0 {
+	experts, err := st.ListExperts(store)
+	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to list experts")
+	if len(experts) > 0 {
 		expertType = builtin.ExpertNormal
 	}
 
@@ -329,7 +293,7 @@ func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyFo
 		Type:            expertType,
 	}
 	ctorParamBuf := new(bytes.Buffer)
-	err := ctorParams.MarshalCBOR(ctorParamBuf)
+	err = ctorParams.MarshalCBOR(ctorParamBuf)
 	if err != nil {
 		rt.Abortf(exitcode.ErrSerialization, "failed to serialize expert constructor params %v: %v", ctorParams, err)
 	}
@@ -347,19 +311,17 @@ func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyFo
 	builtin.RequireSuccess(rt, code, "failed to init new expert actor")
 
 	rt.StateTransaction(&st, func() {
-		emptyMapCid, err := adt.StoreEmptyMap(adt.AsStore(rt), builtin.DefaultHamtBitwidth)
+		emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to create empty vestingFunds")
 		ei := ExpertInfo{
 			RewardDebt:    abi.NewTokenAmount(0),
 			LockedFunds:   abi.NewTokenAmount(0),
 			UnlockedFunds: abi.NewTokenAmount(0),
 			VestingFunds:  emptyMapCid,
-			Active:        false,
+			Active:        expertType == builtin.ExpertFoundation,
 		}
-		err = st.SetExpert(adt.AsStore(rt), addresses.IDAddress, &ei, true)
+		err = st.SetExpert(store, addresses.IDAddress, &ei, true)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set new expert: %v", err)
-
-		st.ExpertsCount++
 	})
 	return &ApplyForExpertReturn{
 		IDAddress:     addresses.IDAddress,
@@ -367,76 +329,72 @@ func (a Actor) ApplyForExpert(rt Runtime, params *ApplyForExpertParams) *ApplyFo
 	}
 }
 
-// Called by Expert.OnNominate
-func (a Actor) OnExpertNominated(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
+func (a Actor) BlockExpert(rt Runtime, expertAddr *address.Address) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpertFunds.BlockExpert)
+
+	blockedExpert, ok := rt.ResolveAddress(*expertAddr)
+	builtin.RequireParam(rt, ok, "failed to resolve address %s", *expertAddr)
+
+	expertCode, ok := rt.GetActorCodeCID(blockedExpert)
+	builtin.RequireParam(rt, ok, "failed to get actor code id of %s", *expertAddr)
+	builtin.RequireParam(rt, expertCode == builtin.ExpertActorCodeID, "not an expert actor")
+
+	var blockRet expert.OnBlockedReturn
+	code := rt.Send(blockedExpert, builtin.MethodsExpert.OnBlocked, nil, abi.NewTokenAmount(0), &blockRet)
+	builtin.RequireSuccess(rt, code, "failed to block expert %s", *expertAddr)
+
+	code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.OnCandidateBlocked, &blockedExpert, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to notify vote expert blocked")
+
+	var burned abi.TokenAmount
 
 	var st State
+	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
-		err := st.ActivateExpert(rt, rt.Caller())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to activate expert %s", rt.Caller())
-
-		trackedExperts, err := adt.AsSet(adt.AsStore(rt), st.TrackedExperts, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load TrackedExperts")
-
-		absent, err := trackedExperts.PutIfAbsent(abi.AddrKey(rt.Caller()))
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add tracked expert %s", rt.Caller())
-		builtin.RequireParam(rt, absent, "expert already on track %s", rt.Caller())
-
-		st.TrackedExperts, err = trackedExperts.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush TrackedExperts")
+		var err error
+		if !blockRet.ImplicatedExpertVotesEnough {
+			burned, err = st.DeactivateExperts(rt, map[address.Address]bool{
+				blockRet.ImplicatedExpert: false,
+				blockedExpert:             true,
+			})
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deactivate experts")
+		} else {
+			burned, err = st.DeactivateExperts(rt, map[address.Address]bool{
+				blockedExpert: true,
+			})
+			// should never happen
+			err = st.DeleteDisqualifiedExpertInfo(store, blockRet.ImplicatedExpert)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete disqualified for implication")
+		}
 	})
+	if burned.GreaterThan(big.Zero()) {
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, burned, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to burn funds")
+	}
+
 	return nil
 }
 
-// Called by Cron.
-// 	1. track experts' votes and update their status
-func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.CronActorAddr)
+func (a Actor) OnExpertVotesUpdated(rt Runtime, params *builtin.OnExpertVotesUpdatedParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerIs(builtin.VoteFundActorAddr)
+
+	var out expert.OnVotesUpdatedReturn
+	code := rt.Send(params.Expert, builtin.MethodsExpert.OnVotesUpdated, params, abi.NewTokenAmount(0), &out)
+	builtin.RequireSuccess(rt, code, "failed to check expert state")
 
 	var st State
-	rt.StateReadonly(&st)
-
-	experts, err := st.ListTrackedExperts(adt.AsStore(rt))
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load TrackedExperts")
-
-	if len(experts) == 0 {
-		return nil
-	}
-
-	var out vote.GetCandidatesReturn
-	code := rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.GetCandidates, &vote.GetCandidatesParams{Addresses: experts}, abi.NewTokenAmount(0), &out)
-	builtin.RequireSuccess(rt, code, "failed to call GetCandidates")
-
-	resetExperts := make([]address.Address, 0, len(experts))
-	untrackExperts := make([]address.Address, 0, len(experts))
-	for i, expertAddr := range experts {
-		var ret expert.OnTrackUpdateReturn
-		code := rt.Send(expertAddr, builtin.MethodsExpert.OnTrackUpdate, &expert.OnTrackUpdateParams{Votes: out.Votes[i]}, abi.NewTokenAmount(0), &ret)
-		builtin.RequireSuccess(rt, code, "failed to call OnTrackUpdate")
-
-		if ret.ResetMe {
-			resetExperts = append(resetExperts, expertAddr)
-		}
-		if ret.UntrackMe {
-			untrackExperts = append(untrackExperts, expertAddr)
-		}
-	}
-	if len(resetExperts) == 0 && len(untrackExperts) == 0 {
-		return nil
-	}
-
-	burn := abi.NewTokenAmount(0)
 	rt.StateTransaction(&st, func() {
-		burn, err = st.InactivateExperts(rt, resetExperts)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to inactivate experts")
-
-		err := st.DeleteTrackedExperts(adt.AsStore(rt), untrackExperts)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete tracked experts")
+		if !out.VotesEnough {
+			_, err := st.DeactivateExperts(rt, map[address.Address]bool{
+				params.Expert: false,
+			})
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deactivate expert for votes changed")
+		} else {
+			err := st.ActivateExpert(rt, params.Expert)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to activate expert")
+		}
 	})
-	if burn.GreaterThan(big.Zero()) {
-		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, burn, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to burn funds")
-	}
+
 	return nil
 }

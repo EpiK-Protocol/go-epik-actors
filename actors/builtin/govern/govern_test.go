@@ -172,11 +172,11 @@ func TestGrant(t *testing.T) {
 		rt.SetAddressActorType(governor, builtin.AccountActorCodeID)
 		rt.SetCaller(super, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(super)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, fmt.Sprintf("method %d of actor code %s not found", builtin.MethodsExpertFunds.ApplyRewards, builtin.ExpertFundActorCodeID), func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, fmt.Sprintf("method %d of actor code %s not found", builtin.MethodsVote.ApplyRewards, builtin.ExpertFundActorCodeID), func() {
 			rt.Call(actor.Grant, &govern.GrantOrRevokeParams{
 				Governor: governor,
 				Authorities: []govern.Authority{
-					{ActorCodeID: builtin.ExpertFundActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpertFunds.ApplyRewards}},
+					{ActorCodeID: builtin.ExpertFundActorCodeID, Methods: []abi.MethodNum{builtin.MethodsVote.ApplyRewards}},
 				}})
 		})
 	})
@@ -193,10 +193,11 @@ func TestGrant(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID:        {builtin.MethodsExpert.GovChangeOwner, builtin.MethodsExpert.GovBlock},
-					builtin.ExpertFundActorCodeID:    {builtin.MethodsExpertFunds.ChangeThreshold},
+					builtin.ExpertActorCodeID:        {builtin.MethodsExpert.GovChangeOwner},
+					builtin.ExpertFundActorCodeID:    {builtin.MethodsExpertFunds.ChangeThreshold, builtin.MethodsExpertFunds.BlockExpert},
 					builtin.KnowledgeFundActorCodeID: {builtin.MethodsKnowledge.ChangePayee},
 					builtin.StorageMarketActorCodeID: {builtin.MethodsMarket.ResetQuotas, builtin.MethodsMarket.SetInitialQuota},
+					builtin.StoragePowerActorCodeID:  {builtin.MethodsPower.ChangeWdPoStRatio},
 				},
 			},
 		})
@@ -219,7 +220,7 @@ func TestGrant(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovChangeOwner, builtin.MethodsExpert.GovBlock},
+					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovChangeOwner},
 				},
 			},
 		})
@@ -245,7 +246,7 @@ func TestGrant(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovChangeOwner, builtin.MethodsExpert.GovBlock},
+					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovChangeOwner},
 				},
 			},
 		})
@@ -269,10 +270,11 @@ func TestGrant(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID:        {builtin.MethodsExpert.GovChangeOwner, builtin.MethodsExpert.GovBlock},
-					builtin.ExpertFundActorCodeID:    {builtin.MethodsExpertFunds.ChangeThreshold},
+					builtin.ExpertActorCodeID:        {builtin.MethodsExpert.GovChangeOwner},
+					builtin.ExpertFundActorCodeID:    {builtin.MethodsExpertFunds.ChangeThreshold, builtin.MethodsExpertFunds.BlockExpert},
 					builtin.KnowledgeFundActorCodeID: {builtin.MethodsKnowledge.ChangePayee},
 					builtin.StorageMarketActorCodeID: {builtin.MethodsMarket.ResetQuotas, builtin.MethodsMarket.SetInitialQuota},
+					builtin.StoragePowerActorCodeID:  {builtin.MethodsPower.ChangeWdPoStRatio},
 				},
 			},
 		})
@@ -287,7 +289,7 @@ func TestGrant(t *testing.T) {
 		rt.Call(actor.Grant, &govern.GrantOrRevokeParams{
 			Governor: governor,
 			Authorities: []govern.Authority{
-				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovBlock}},
+				{ActorCodeID: builtin.ExpertFundActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpertFunds.BlockExpert}},
 				{ActorCodeID: builtin.KnowledgeFundActorCodeID, All: true},
 			},
 		})
@@ -296,7 +298,7 @@ func TestGrant(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID:        {builtin.MethodsExpert.GovBlock},
+					builtin.ExpertFundActorCodeID:    {builtin.MethodsExpertFunds.BlockExpert},
 					builtin.KnowledgeFundActorCodeID: {builtin.MethodsKnowledge.ChangePayee},
 				},
 			},
@@ -313,7 +315,7 @@ func TestGrant(t *testing.T) {
 		actor.grant(rt, &govern.GrantOrRevokeParams{
 			Governor: governor,
 			Authorities: []govern.Authority{
-				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovBlock}},
+				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovChangeOwner}},
 			},
 		})
 		actor.grant(rt, &govern.GrantOrRevokeParams{
@@ -326,7 +328,7 @@ func TestGrant(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovBlock},
+					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovChangeOwner},
 				},
 				governor2: {
 					builtin.KnowledgeFundActorCodeID: {builtin.MethodsKnowledge.ChangePayee},
@@ -358,7 +360,7 @@ func TestRevoke(t *testing.T) {
 		actor.grant(rt, &govern.GrantOrRevokeParams{
 			Governor: governor,
 			Authorities: []govern.Authority{
-				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovBlock}},
+				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovChangeOwner}},
 				{ActorCodeID: builtin.KnowledgeFundActorCodeID, All: true},
 			},
 		})
@@ -386,7 +388,7 @@ func TestRevoke(t *testing.T) {
 		actor.grant(rt, &govern.GrantOrRevokeParams{
 			Governor: governor,
 			Authorities: []govern.Authority{
-				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovBlock}},
+				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovChangeOwner}},
 				{ActorCodeID: builtin.KnowledgeFundActorCodeID, All: true},
 			},
 		})
@@ -397,7 +399,7 @@ func TestRevoke(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovBlock},
+					builtin.ExpertActorCodeID: {builtin.MethodsExpert.GovChangeOwner},
 				},
 			},
 		})
@@ -409,7 +411,7 @@ func TestRevoke(t *testing.T) {
 		actor.grant(rt, &govern.GrantOrRevokeParams{
 			Governor: governor,
 			Authorities: []govern.Authority{
-				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovBlock}},
+				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovChangeOwner}},
 				{ActorCodeID: builtin.KnowledgeFundActorCodeID, All: true},
 			},
 		})
@@ -423,7 +425,7 @@ func TestRevoke(t *testing.T) {
 		actor.checkAuthorities(rt, authConf{
 			expectAuthorities: map[address.Address]map[cid.Cid][]abi.MethodNum{
 				governor: {
-					builtin.ExpertActorCodeID:        {builtin.MethodsExpert.GovBlock},
+					builtin.ExpertActorCodeID:        {builtin.MethodsExpert.GovChangeOwner},
 					builtin.KnowledgeFundActorCodeID: {builtin.MethodsKnowledge.ChangePayee},
 				},
 			},
@@ -433,7 +435,7 @@ func TestRevoke(t *testing.T) {
 		actor.revoke(rt, &govern.GrantOrRevokeParams{
 			Governor: governor,
 			Authorities: []govern.Authority{
-				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovBlock}},
+				{ActorCodeID: builtin.ExpertActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpert.GovChangeOwner}},
 				{ActorCodeID: builtin.ExpertFundActorCodeID, Methods: []abi.MethodNum{builtin.MethodsExpertFunds.ChangeThreshold}},
 			},
 		})

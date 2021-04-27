@@ -28,16 +28,10 @@ func NotifyExpertImport(rt runtime.Runtime, pieceID cid.Cid) {
 	RequireSuccess(rt, code, "failed to notify expert import")
 }
 
-type ExpertControlAddressReturn struct {
-	Owner addr.Address
-}
-
 func RequestExpertControlAddr(rt runtime.Runtime, expertAddr addr.Address) (ownerAddr addr.Address) {
-	var addr ExpertControlAddressReturn
-	code := rt.Send(expertAddr, MethodsExpert.ControlAddress, nil, abi.NewTokenAmount(0), &addr)
+	code := rt.Send(expertAddr, MethodsExpert.ControlAddress, nil, abi.NewTokenAmount(0), &ownerAddr)
 	RequireSuccess(rt, code, "failed fetching expert control address")
-
-	return addr.Owner
+	return
 }
 
 // ============== govern ============
@@ -59,4 +53,21 @@ func ValidateCallerGranted(rt runtime.Runtime, caller addr.Address, method abi.M
 		errMsg = "method not granted"
 	}
 	RequireSuccess(rt, code, errMsg)
+}
+
+type CheckExpertStateReturn struct {
+	AllowVote bool
+	Qualified bool
+}
+
+func CheckVoteAllowed(rt runtime.Runtime, expertAddr addr.Address) bool {
+	var out CheckExpertStateReturn
+	code := rt.Send(expertAddr, MethodsExpert.CheckState, nil, abi.NewTokenAmount(0), &out)
+	RequireSuccess(rt, code, "failed to get expert state %s", expertAddr)
+	return out.AllowVote
+}
+
+type OnExpertVotesUpdatedParams struct {
+	Expert address.Address
+	Votes  abi.TokenAmount
 }

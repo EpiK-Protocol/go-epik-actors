@@ -38,13 +38,14 @@ func main() {
 
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/cbor_gen.go", "builtin",
 		builtin.GetControlAddressesReturn{},
-		builtin.ExpertControlAddressReturn{},
 		builtin.ConfirmSectorProofsParams{},
 		builtin.ApplyRewardParams{},
 		builtin.BoolValue{},
 		builtin.ValidateGrantedParams{},
 		builtin.BatchPieceCIDParams{},
 		builtin.CheckedCID{},
+		builtin.CheckExpertStateReturn{},
+		builtin.OnExpertVotesUpdatedParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -74,16 +75,13 @@ func main() {
 		// actor state
 		expert.State{},
 		expert.ExpertInfo{},
+		expert.DataOnChainInfo{},
 		// method params
 		expert.ConstructorParams{},
-		expert.ExpertDataParams{},
-		expert.DataOnChainInfo{},
-		expert.NominateExpertParams{},
-		expert.CheckStateReturn{},
-		expert.OnTrackUpdateParams{},
-		expert.OnTrackUpdateReturn{},
-		expert.StoreDataReturn{},
+		expert.ImportDataParams{},
 		expert.GetDatasReturn{},
+		expert.OnBlockedReturn{},
+		expert.OnVotesUpdatedReturn{},
 		// other types
 	); err != nil {
 		panic(err)
@@ -92,9 +90,9 @@ func main() {
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/expertfund/cbor_gen.go", "expertfund",
 		// actor state
 		expertfund.State{},
-		expertfund.DataInfo{},
 		expertfund.PoolInfo{},
 		expertfund.ExpertInfo{},
+		expertfund.PieceInfo{},
 		// method params and returns
 		expertfund.ClaimFundParams{},
 		expertfund.GetDataReturn{},
@@ -103,6 +101,7 @@ func main() {
 		expertfund.ApplyForExpertReturn{},
 		expertfund.CheckedPiece{},
 		expertfund.BatchCheckDataParams{},
+		expertfund.DisqualifiedExpertInfo{},
 		// other types
 	); err != nil {
 		panic(err)

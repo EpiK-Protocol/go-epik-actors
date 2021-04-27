@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/ipfs/go-cid"
@@ -57,12 +56,11 @@ func (a Actor) Constructor(rt Runtime, fallback *addr.Address) *abi.EmptyValue {
 	return nil
 }
 
-// Called by Expert.GovBlock
-func (a Actor) OnCandidateBlocked(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
+func (a Actor) OnCandidateBlocked(rt Runtime, candAddr *addr.Address) *abi.EmptyValue {
+	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
 
 	candAddrs := map[addr.Address]struct{}{
-		rt.Caller(): {},
+		*candAddr: {},
 	}
 
 	var st State
@@ -87,10 +85,15 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 	builtin.RequireParam(rt, votes.GreaterThan(big.Zero()), "non positive votes to vote")
 
 	candAddr, ok := rt.ResolveAddress(*candidate)
-	builtin.RequireParam(rt, ok, "unable to resolve address %v", candidate)
+	builtin.RequireParam(rt, ok, "unable to resolve address %s", candidate)
+	actorCode, ok := rt.GetActorCodeCID(candAddr)
+	builtin.RequireParam(rt, ok, "no code for address %s", candidate)
+	builtin.RequireParam(rt, actorCode == builtin.ExpertActorCodeID, "not an expert %s", candidate)
 
-	allowed := checkVoteAllowed(rt, candAddr)
+	allowed := builtin.CheckVoteAllowed(rt, candAddr)
 	builtin.RequireParam(rt, allowed, "vote not allowed %s", candidate)
+
+	var afterVoted *Candidate
 
 	var st State
 	store := adt.AsStore(rt)
@@ -118,7 +121,7 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
 		}
 
-		_, err = st.addToCandidate(candidates, candAddr, votes)
+		afterVoted, err = st.addToCandidate(candidates, candAddr, votes)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add votes to candidate")
 
 		err = st.addToTally(store, voter, candAddr, votes)
@@ -134,6 +137,8 @@ func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
 
 		st.TotalVotes = big.Add(st.TotalVotes, votes)
 	})
+
+	notifyCandidateVotesUpdated(rt, candAddr, afterVoted.Votes)
 
 	return nil
 }
@@ -192,14 +197,11 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 		}
 	})
 
-	return nil
-}
+	if !afterRescind.IsBlocked() {
+		notifyCandidateVotesUpdated(rt, candAddr, afterRescind.Votes)
+	}
 
-func checkVoteAllowed(rt runtime.Runtime, expertAddr addr.Address) bool {
-	var out expert.CheckStateReturn
-	code := rt.Send(expertAddr, builtin.MethodsExpert.CheckState, nil, abi.NewTokenAmount(0), &out)
-	builtin.RequireSuccess(rt, code, "failed to check expert state")
-	return out.AllowVote
+	return nil
 }
 
 // Withdraws unlocked rescinding votes and rewards, returns actual sent amount
@@ -327,4 +329,12 @@ func (a Actor) GetCandidates(rt Runtime, params *GetCandidatesParams) *GetCandid
 	}
 
 	return &ret
+}
+
+func notifyCandidateVotesUpdated(rt Runtime, cand addr.Address, votes abi.TokenAmount) {
+	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertVotesUpdated, &builtin.OnExpertVotesUpdatedParams{
+		Expert: cand,
+		Votes:  votes,
+	}, abi.NewTokenAmount(0), &builtin.Discard{})
+	builtin.RequireSuccess(rt, code, "failed to notify expert votes updated")
 }

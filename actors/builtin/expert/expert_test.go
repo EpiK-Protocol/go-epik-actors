@@ -17,10 +17,12 @@ import (
 	"github.com/filecoin-project/go-state-types/exitcode"
 	builtin "github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	expert "github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	mock "github.com/filecoin-project/specs-actors/v2/support/mock"
 	tutil "github.com/filecoin-project/specs-actors/v2/support/testing"
 	"github.com/stretchr/testify/require"
+	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
 func getState(rt *mock.Runtime) *expert.State {
@@ -168,8 +170,8 @@ func TestImportData(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt, builtin.ExpertNormal)
 
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "expert is unqualified", func() {
-			rt.Call(actor.ImportData, newExpertDataParams())
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "unqualified expert "+actorAddr.String(), func() {
+			rt.Call(actor.ImportData, newImportDataParams())
 		})
 	})
 
@@ -178,7 +180,7 @@ func TestImportData(t *testing.T) {
 		actor.constructAndVerify(rt, builtin.ExpertFoundation)
 
 		// first
-		params := newExpertDataParams()
+		params := newImportDataParams()
 		checkedID := builtin.CheckedCID{CID: params.PieceID}
 
 		rt.SetCaller(owner, builtin.AccountActorCodeID)
@@ -190,19 +192,19 @@ func TestImportData(t *testing.T) {
 		st := getState(rt)
 		ret := actor.getDatas(rt, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{checkedID}})
 		require.True(t, st.DataCount == 1 && len(ret.Infos) == 1 &&
-			ret.Infos[0].PieceID == params.PieceID.String() &&
+			ret.Infos[0].PieceID == params.PieceID &&
 			ret.Infos[0].RootID == params.RootID &&
 			ret.Infos[0].PieceSize == params.PieceSize)
 
 		// second
-		params2 := newExpertDataParams()
+		params2 := newImportDataParams()
 		checkedID2 := builtin.CheckedCID{CID: params2.PieceID}
 
 		actor.importData(rt, params2)
 		st = getState(rt)
 		ret = actor.getDatas(rt, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{checkedID, checkedID2}})
 		require.True(t, st.DataCount == 2 && len(ret.Infos) == 2 &&
-			ret.Infos[1].PieceID == params2.PieceID.String() &&
+			ret.Infos[1].PieceID == params2.PieceID &&
 			ret.Infos[1].RootID == params2.RootID &&
 			ret.Infos[1].PieceSize == params2.PieceSize)
 	})
@@ -211,10 +213,10 @@ func TestImportData(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt, builtin.ExpertFoundation)
 
-		params := newExpertDataParams()
+		params := newImportDataParams()
 		actor.importData(rt, params)
 
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "duplicate expert import", func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "duplicate data "+params.PieceID.String(), func() {
 			actor.importData(rt, params)
 		})
 	})
@@ -231,35 +233,24 @@ func TestStoreData(t *testing.T) {
 		WithHasher(fixedHasher(0)).
 		WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
 
-	t.Run("fail when unqualified", func(t *testing.T) {
-		rt := builder.Build(t)
-		actor.constructAndVerify(rt, builtin.ExpertNormal)
-
-		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
-		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "expert is unqualified", func() {
-			rt.Call(actor.StoreData, newStoreDataParams(newExpertDataParams()))
-		})
-	})
-
 	t.Run("fail when data not imported", func(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt, builtin.ExpertFoundation)
 
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "data not imported", func() {
-			rt.Call(actor.StoreData, newStoreDataParams(newExpertDataParams()))
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "data not found", func() {
+			rt.Call(actor.StoreData, newStoreDataParams(newImportDataParams()))
 		})
 
 		// piece 1 imported but piece 2 not
-		params1 := newExpertDataParams()
-		params2 := newExpertDataParams()
+		params1 := newImportDataParams()
+		params2 := newImportDataParams()
 		actor.importData(rt, params1)
 
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "data not imported "+params2.PieceID.String(), func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "data not found "+params2.PieceID.String(), func() {
 			rt.Call(actor.StoreData, newStoreDataParams(params1, params2))
 		})
 	})
@@ -268,22 +259,22 @@ func TestStoreData(t *testing.T) {
 		rt := builder.Build(t)
 		actor.constructAndVerify(rt, builtin.ExpertFoundation)
 
-		params1 := newExpertDataParams()
+		params1 := newImportDataParams()
 		actor.importData(rt, params1)
 
 		// first time
 		ret := actor.storeData(rt, newStoreDataParams(params1))
 		require.True(t, ret.Infos[0].Redundancy == 1 &&
-			ret.Infos[0].PieceID == params1.PieceID.String() &&
+			ret.Infos[0].PieceID == params1.PieceID &&
 			ret.Infos[0].RootID == params1.RootID &&
 			ret.Infos[0].PieceSize == params1.PieceSize)
 
 		// second time
-		params2 := newExpertDataParams()
+		params2 := newImportDataParams()
 		actor.importData(rt, params2)
 		ret = actor.storeData(rt, newStoreDataParams(params1, params2))
 		require.True(t, ret.Infos[0].Redundancy == 2 && ret.Infos[1].Redundancy == 1 &&
-			ret.Infos[1].PieceID == params2.PieceID.String() &&
+			ret.Infos[1].PieceID == params2.PieceID &&
 			ret.Infos[1].RootID == params2.RootID &&
 			ret.Infos[1].PieceSize == params2.PieceSize)
 	})
@@ -309,32 +300,28 @@ func TestNominate(t *testing.T) {
 
 		// nominator is unqualified
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "nominator is unqualified", func() {
-			rt.Call(actor.Nominate, &expert.NominateExpertParams{
-				Expert: nominatedAddr,
-			})
+			rt.Call(actor.Nominate, &nominatedAddr)
 		})
 
 		// caller not owner
 		st := getState(rt)
-		st.Status = expert.ExpertStateNormal
+		st.ExpertState = expert.ExpertStateQualified
 		rt.ReplaceState(st)
 
 		caller := tutil.NewIDAddr(t, 200)
 		rt.SetCaller(caller, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(owner)
+		rt.SetAddressActorType(nominatedAddr, builtin.ExpertActorCodeID)
 		rt.ExpectAbort(exitcode.SysErrForbidden, func() {
-			rt.Call(actor.Nominate, &expert.NominateExpertParams{
-				Expert: nominatedAddr,
-			})
+			rt.Call(actor.Nominate, &nominatedAddr)
 		})
 
 		// normal
 		rt.SetCaller(owner, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(owner)
+		rt.SetAddressActorType(nominatedAddr, builtin.ExpertActorCodeID)
 		rt.ExpectSend(nominatedAddr, builtin.MethodsExpert.OnNominated, nil, abi.NewTokenAmount(0), &builtin.Discard{}, exitcode.Ok)
-		rt.Call(actor.Nominate, &expert.NominateExpertParams{
-			Expert: nominatedAddr,
-		})
+		rt.Call(actor.Nominate, &nominatedAddr)
 	})
 
 	t.Run("nominate with owner change(gov)", func(t *testing.T) {
@@ -344,14 +331,12 @@ func TestNominate(t *testing.T) {
 		rt.SetEpoch(100)
 		actor.govChangeOwner(rt, governor, newowner)
 
-		rt.SetEpoch(100 + expert.NewOwnerActivateDelay)
+		rt.SetEpoch(100 + expert.ActivateNewOwnerDelay)
 
 		rt.SetCaller(newowner, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(newowner)
 		rt.ExpectSend(nominatedAddr, builtin.MethodsExpert.OnNominated, nil, abi.NewTokenAmount(0), &builtin.Discard{}, exitcode.Ok)
-		rt.Call(actor.Nominate, &expert.NominateExpertParams{
-			Expert: nominatedAddr,
-		})
+		rt.Call(actor.Nominate, &nominatedAddr)
 
 		st := getState(rt)
 		info, err := st.GetInfo(adt.AsStore(rt))
@@ -407,9 +392,9 @@ func TestOnNominated(t *testing.T) {
 	t.Run("nominate expert with unexpected status", func(t *testing.T) {
 		rt, actor := setupFunc()
 
-		for _, state := range []expert.ExpertState{expert.ExpertStateBlocked, expert.ExpertStateNominated, expert.ExpertStateNormal} {
+		for _, state := range []expert.ExpertState{expert.ExpertStateBlocked, expert.ExpertStateQualified, expert.ExpertStateUnqualified} {
 			st := getState(rt)
-			st.Status = state
+			st.ExpertState = state
 			rt.ReplaceState(st)
 
 			rt.SetCaller(expertAddr, builtin.ExpertActorCodeID)
@@ -423,33 +408,32 @@ func TestOnNominated(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		rt, actor := setupFunc()
 		st := getState(rt)
-		st.Status = expert.ExpertStateDisqualified
+		st.ExpertState = expert.ExpertStateRegistered
 		rt.ReplaceState(st)
 
 		rt.SetCaller(expertAddr, builtin.ExpertActorCodeID)
 		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertNominated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
 		rt.Call(actor.OnNominated, nil)
 		rt.Verify()
 
 		st = getState(rt)
-		require.True(t, st.LostEpoch == expert.NoLostEpoch && st.Status == expert.ExpertStateNominated)
+		require.True(t, st.ExpertState == expert.ExpertStateUnqualified)
 		info, err := st.GetInfo(adt.AsStore(rt))
 		require.NoError(t, err)
 		require.True(t, info.Proposer == expertAddr)
 	})
 }
 
-func TestGovBlock(t *testing.T) {
+func TestOnBlocked(t *testing.T) {
 	owner := tutil.NewIDAddr(t, 100)
-	governor := tutil.NewIDAddr(t, 101)
 	proposer := tutil.NewIDAddr(t, 1000)
 	expertAddr := tutil.NewIDAddr(t, 1001)
 	nominatedAddr := tutil.NewIDAddr(t, 1002)
 
-	setupFunc := func(governor addr.Address) (*mock.Runtime, *actorHarness) {
+	setupFunc := func() (*mock.Runtime, *actorHarness) {
 		builder := mock.NewBuilder(context.Background(), expertAddr).
 			WithActorType(owner, builtin.AccountActorCodeID).
+			WithActorType(proposer, builtin.ExpertActorCodeID).
 			WithHasher(fixedHasher(0)).
 			WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
 
@@ -457,11 +441,6 @@ func TestGovBlock(t *testing.T) {
 		actor := newHarness(t, expertAddr, owner, proposer)
 		actor.constructAndVerify(rt, builtin.ExpertNormal)
 
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(builtin.GovernActorAddr, builtin.MethodsGovern.ValidateGranted, &builtin.ValidateGrantedParams{
-			Caller: governor,
-			Method: builtin.MethodsExpert.GovBlock,
-		}, big.Zero(), nil, exitcode.Ok)
 		return rt, actor
 	}
 
@@ -475,46 +454,31 @@ func TestGovBlock(t *testing.T) {
 		actor := newHarness(t, expertAddr, owner, proposer)
 		actor.constructAndVerify(rt, builtin.ExpertFoundation)
 
-		rt.SetCaller(governor, builtin.AccountActorCodeID)
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(builtin.GovernActorAddr, builtin.MethodsGovern.ValidateGranted, &builtin.ValidateGrantedParams{
-			Caller: governor,
-			Method: builtin.MethodsExpert.GovBlock,
-		}, big.Zero(), nil, exitcode.Ok)
-
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "foundation expert cannot be blocked", func() {
-			rt.Call(actor.GovBlock, nil)
+			actor.onBlocked(rt, proposer, true)
 		})
 	})
 
 	t.Run("block expert with unexpected status", func(t *testing.T) {
-		rt, actor := setupFunc(governor)
+		rt, actor := setupFunc()
 
 		st := getState(rt)
-		st.Status = expert.ExpertStateBlocked
+		st.ExpertState = expert.ExpertStateBlocked
 		rt.ReplaceState(st)
-		rt.SetCaller(governor, builtin.AccountActorCodeID)
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "expert already blocked", func() {
-			rt.Call(actor.GovBlock, nil)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "try to block expert with invalid state", func() {
+			actor.onBlocked(rt, proposer, true)
 		})
 
 		st = getState(rt)
-		st.Status = expert.ExpertStateRegistered
+		st.ExpertState = expert.ExpertStateRegistered
 		rt.ReplaceState(st)
-		rt.SetCaller(governor, builtin.AccountActorCodeID)
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(builtin.GovernActorAddr, builtin.MethodsGovern.ValidateGranted, &builtin.ValidateGrantedParams{
-			Caller: governor,
-			Method: builtin.MethodsExpert.GovBlock,
-		}, big.Zero(), nil, exitcode.Ok)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "expert not nominated", func() {
-			rt.Call(actor.GovBlock, nil)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "try to block expert with invalid state", func() {
+			actor.onBlocked(rt, proposer, true)
 		})
 	})
 
 	t.Run("ok", func(t *testing.T) {
-		rt, actor := setupFunc(governor)
+		rt, actor := setupFunc()
 
 		st := getState(rt)
 		info, err := st.GetInfo(adt.AsStore(rt))
@@ -522,26 +486,23 @@ func TestGovBlock(t *testing.T) {
 		info.Proposer = proposer
 		err = st.SaveInfo(adt.AsStore(rt), info)
 		require.NoError(t, err)
-		st.Status = expert.ExpertStateNormal
+		st.ExpertState = expert.ExpertStateQualified
+		st.CurrentVotes = abi.NewTokenAmount(1000)
 		rt.ReplaceState(st)
 
+		// nominate will success
+		rt.SetAddressActorType(nominatedAddr, builtin.ExpertActorCodeID)
+		actor.nominate(rt, nominatedAddr)
+
 		rt.SetEpoch(101)
-
-		rt.SetCaller(governor, builtin.AccountActorCodeID)
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
-		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.OnCandidateBlocked, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
-		rt.Call(actor.GovBlock, nil)
-		rt.Verify()
-
+		ret := actor.onBlocked(rt, proposer, true)
+		require.True(t, ret.ImplicatedExpert == proposer && ret.ImplicatedExpertVotesEnough)
 		st = getState(rt)
-		require.True(t, st.LostEpoch == 101 && st.Status == expert.ExpertStateBlocked)
+		require.True(t, st.ExpertState == expert.ExpertStateBlocked && st.CurrentVotes.IsZero())
 
 		// try nominate will failed
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "nominator is unqualified", func() {
-			rt.Call(actor.Nominate, &expert.NominateExpertParams{
-				Expert: nominatedAddr,
-			})
+			rt.Call(actor.Nominate, &nominatedAddr)
 		})
 	})
 }
@@ -575,25 +536,46 @@ func TestOnImplicated(t *testing.T) {
 		require.NoError(t, err)
 		rt.ReplaceState(st)
 
-		rt.SetCaller(nominatedAddr, builtin.ExpertActorCodeID)
-		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-		rt.Call(actor.OnImplicated, nil)
-		rt.Verify()
-
+		votesEnough := actor.onImplicated(rt, nominatedAddr)
 		st = getState(rt)
-		require.True(t, st.ImplicatedTimes == 0)
+		require.True(t, st.ImplicatedTimes == 0 && votesEnough)
+	})
+
+	t.Run("no effect on already blocked expert", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		st := getState(rt)
+		st.ExpertState = expert.ExpertStateBlocked
+		rt.ReplaceState(st)
+
+		votesEnough := actor.onImplicated(rt, nominatedAddr)
+		st = getState(rt)
+		require.True(t, st.ImplicatedTimes == 0 && votesEnough)
 	})
 
 	t.Run("ok", func(t *testing.T) {
 		rt, actor := setupFunc()
 
-		rt.SetCaller(nominatedAddr, builtin.ExpertActorCodeID)
-		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-		rt.Call(actor.OnImplicated, nil)
-		rt.Verify()
-
 		st := getState(rt)
-		require.True(t, st.ImplicatedTimes == 1)
+		st.ExpertState = expert.ExpertStateQualified
+		st.CurrentVotes = big.Sub(big.Mul(big.NewInt(150000), builtin.TokenPrecision), big.NewInt(1))
+		rt.ReplaceState(st)
+
+		// first implication
+		votesEnough := actor.onImplicated(rt, nominatedAddr)
+		st = getState(rt)
+		require.True(t, st.ImplicatedTimes == 1 &&
+			st.ExpertState == expert.ExpertStateQualified &&
+			votesEnough == true &&
+			st.VoteThreshold().Equals(big.Mul(big.NewInt(125000), builtin.TokenPrecision)))
+
+		// second implication
+		votesEnough = actor.onImplicated(rt, nominatedAddr)
+		st = getState(rt)
+		require.True(t, st.ImplicatedTimes == 2 &&
+			st.ExpertState == expert.ExpertStateUnqualified &&
+			votesEnough == false &&
+			st.VoteThreshold().Equals(big.Mul(big.NewInt(150000), builtin.TokenPrecision)))
 	})
 }
 
@@ -629,7 +611,7 @@ func TestChangeOwner(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, owner == info.Owner && govnewowner == info.ApplyNewOwner && 100 == info.ApplyNewOwnerEpoch)
 
-		rt.SetEpoch(100 + expert.NewOwnerActivateDelay)
+		rt.SetEpoch(100 + expert.ActivateNewOwnerDelay)
 		rt.SetCaller(owner, builtin.MultisigActorCodeID)
 		rt.ExpectValidateCallerAddr(govnewowner)
 		rt.ExpectAbort(exitcode.SysErrForbidden, func() {
@@ -648,7 +630,7 @@ func TestChangeOwner(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, owner == info.Owner && govnewowner == info.ApplyNewOwner && 100 == info.ApplyNewOwnerEpoch)
 
-		rt.SetEpoch(100 + expert.NewOwnerActivateDelay - 1)
+		rt.SetEpoch(100 + expert.ActivateNewOwnerDelay - 1)
 		rt.SetCaller(owner, builtin.MultisigActorCodeID)
 		rt.ExpectValidateCallerAddr(owner)
 		rt.Call(actor.ChangeOwner, &newowner)
@@ -671,7 +653,7 @@ func TestChangeOwner(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, owner == info.Owner && govnewowner == info.ApplyNewOwner && 100 == info.ApplyNewOwnerEpoch)
 
-		rt.SetEpoch(100 + expert.NewOwnerActivateDelay)
+		rt.SetEpoch(100 + expert.ActivateNewOwnerDelay)
 		rt.SetCaller(govnewowner, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(govnewowner)
 		rt.Call(actor.ChangeOwner, &newowner)
@@ -739,197 +721,21 @@ func TestGovChangeOwner(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, owner == info.Owner && newowner == info.ApplyNewOwner && 100 == info.ApplyNewOwnerEpoch)
 
-		// at NewOwnerActivateDelay-1
-		rt.SetEpoch(100 + expert.NewOwnerActivateDelay - 1)
+		// at ActivateNewOwnerDelay-1
+		rt.SetEpoch(100 + expert.ActivateNewOwnerDelay - 1)
 		actor.controlAddress(rt)
 		st = getState(rt)
 		info, err = st.GetInfo(adt.AsStore(rt))
 		require.NoError(t, err)
 		require.True(t, owner == info.Owner && newowner == info.ApplyNewOwner && 100 == info.ApplyNewOwnerEpoch)
 
-		// at NewOwnerActivateDelay
-		rt.SetEpoch(100 + expert.NewOwnerActivateDelay)
+		// at ActivateNewOwnerDelay
+		rt.SetEpoch(100 + expert.ActivateNewOwnerDelay)
 		actor.controlAddress(rt)
 		st = getState(rt)
 		info, err = st.GetInfo(adt.AsStore(rt))
 		require.NoError(t, err)
 		require.True(t, newowner == info.Owner && newowner == info.ApplyNewOwner && -1 == info.ApplyNewOwnerEpoch)
-	})
-}
-
-func TestOnTrackUpdate(t *testing.T) {
-	owner := tutil.NewIDAddr(t, 100)
-	governor := tutil.NewIDAddr(t, 101)
-	actorProposer := tutil.NewIDAddr(t, 1000)
-	actorAddr := tutil.NewIDAddr(t, 1001)
-
-	setupFunc := func() (*mock.Runtime, *actorHarness) {
-		builder := mock.NewBuilder(context.Background(), actorAddr).
-			WithActorType(owner, builtin.AccountActorCodeID).
-			WithHasher(fixedHasher(0)).
-			WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
-
-		rt := builder.Build(t)
-		actor := newHarness(t, actorAddr, owner, actorProposer)
-		actor.constructAndVerify(rt, builtin.ExpertNormal)
-		return rt, actor
-	}
-
-	t.Run("unexpected type (foundation)", func(t *testing.T) {
-		builder := mock.NewBuilder(context.Background(), actorAddr).
-			WithActorType(owner, builtin.AccountActorCodeID).
-			WithHasher(fixedHasher(0)).
-			WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
-
-		rt := builder.Build(t)
-		actor := newHarness(t, actorAddr, owner, actorProposer)
-		actor.constructAndVerify(rt, builtin.ExpertFoundation)
-
-		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
-		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-		ret := rt.Call(actor.OnTrackUpdate, &expert.OnTrackUpdateParams{Votes: big.Zero()}).(*expert.OnTrackUpdateReturn)
-		require.True(t, ret.UntrackMe == true && ret.ResetMe == false)
-	})
-
-	t.Run("unexpected status", func(t *testing.T) {
-		rt, actor := setupFunc()
-
-		for _, state := range []expert.ExpertState{expert.ExpertStateDisqualified, expert.ExpertStateRegistered} {
-			st := getState(rt)
-			st.Status = state
-			rt.ReplaceState(st)
-
-			rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
-			rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-			ret := rt.Call(actor.OnTrackUpdate, &expert.OnTrackUpdateParams{Votes: big.Zero()}).(*expert.OnTrackUpdateReturn)
-			require.True(t, ret.UntrackMe == true && ret.ResetMe == false)
-		}
-	})
-
-	t.Run("expert is blocked", func(t *testing.T) {
-		rt, actor := setupFunc()
-		st := getState(rt)
-		st.Status = expert.ExpertStateBlocked
-		rt.ReplaceState(st)
-
-		ret := actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Zero()})
-		require.True(t, ret.ResetMe == true && ret.UntrackMe == true)
-	})
-
-	t.Run("nominate without enough votes for 3 days", func(t *testing.T) {
-		rt, actor := setupFunc()
-
-		st := getState(rt)
-		require.True(t, st.Status == expert.ExpertStateRegistered && st.LostEpoch == expert.NoLostEpoch)
-
-		rt.SetEpoch(100)
-		actor.onNominate(rt)
-		st = getState(rt)
-		require.True(t, st.Status == expert.ExpertStateNominated && st.LostEpoch == expert.NoLostEpoch)
-
-		ret := actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Sub(expert.ExpertVoteThreshold, big.NewInt(1))})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false)
-		require.True(t, st.Status == expert.ExpertStateNominated && st.LostEpoch == 100)
-
-		// status changes to disqualified
-		rt.SetEpoch(100 + expert.ExpertVoteCheckPeriod)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Sub(expert.ExpertVoteThreshold, big.NewInt(1))})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == true && ret.UntrackMe == true &&
-			st.Status == expert.ExpertStateDisqualified && st.LostEpoch == 100)
-
-		// nominate again
-		rt.SetEpoch(200 + expert.ExpertVoteCheckPeriod)
-		actor.onNominate(rt)
-		st = getState(rt)
-		require.True(t, st.Status == expert.ExpertStateNominated && st.LostEpoch == expert.NoLostEpoch)
-	})
-
-	t.Run("nominate with enough votes", func(t *testing.T) {
-		rt, actor := setupFunc()
-
-		rt.SetEpoch(100)
-		actor.onNominate(rt)
-
-		rt.SetEpoch(120)
-		ret := actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: expert.ExpertVoteThreshold})
-		st := getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false)
-		require.True(t, st.Status == expert.ExpertStateNormal && st.LostEpoch == expert.NoLostEpoch)
-
-		rt.SetEpoch(130)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Sub(expert.ExpertVoteThreshold, big.NewInt(1))})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false)
-		require.True(t, st.Status == expert.ExpertStateNormal && st.LostEpoch == 130)
-
-		rt.SetEpoch(129 + expert.ExpertVoteCheckPeriod)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.NewInt(1)})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false &&
-			st.Status == expert.ExpertStateNormal && st.LostEpoch == 130)
-
-		rt.SetEpoch(130 + expert.ExpertVoteCheckPeriod)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Zero()})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == true && ret.UntrackMe == true &&
-			st.Status == expert.ExpertStateDisqualified && st.LostEpoch == 130)
-
-		actor.govBlock(rt, governor)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Zero()})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == true && ret.UntrackMe == true && st.Status == expert.ExpertStateBlocked)
-	})
-
-	t.Run("lose qualification for implication", func(t *testing.T) {
-		rt, actor := setupFunc()
-		nominatedExpert := tutil.NewIDAddr(t, 2000)
-
-		rt.SetEpoch(100)
-		actor.onNominate(rt) // nominated
-
-		rt.SetEpoch(120)
-		ret := actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: expert.ExpertVoteThreshold}) // normal, NoLostEpoch
-
-		rt.SetEpoch(130)
-		actor.onImplicated(rt, nominatedExpert)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: expert.ExpertVoteThreshold})
-		st := getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false &&
-			st.Status == expert.ExpertStateNormal && st.LostEpoch == 130)
-
-		rt.SetEpoch(129 + expert.ExpertVoteCheckPeriod)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Sub(big.Add(expert.ExpertVoteThreshold, expert.ExpertVoteThresholdAddition), big.NewInt(1))})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false && st.Status == expert.ExpertStateNormal && st.LostEpoch == 130)
-
-		// rt.SetEpoch(130 + expert.ExpertVoteCheckPeriod)
-		// ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Add(expert.ExpertVoteThreshold, expert.ExpertVoteThresholdAddition)})
-		// st = getState(rt)
-		// require.True(t, ret.ResetMe == false && ret.UntrackMe == false && st.Status == expert.ExpertStateNormal && st.LostEpoch == expert.NoLostEpoch)
-
-		rt.SetEpoch(130 + expert.ExpertVoteCheckPeriod)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Sub(big.Add(expert.ExpertVoteThreshold, expert.ExpertVoteThresholdAddition), big.NewInt(1))})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == true && ret.UntrackMe == true && st.Status == expert.ExpertStateDisqualified && st.LostEpoch == 130)
-	})
-
-	t.Run("not enought to enough", func(t *testing.T) {
-		rt, actor := setupFunc()
-
-		st := getState(rt)
-
-		rt.SetEpoch(100)
-		actor.onNominate(rt) // nominated, NoLostEpoch
-		ret := actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: big.Sub(expert.ExpertVoteThreshold, big.NewInt(1))})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false && st.Status == expert.ExpertStateNominated && st.LostEpoch == 100)
-
-		rt.SetEpoch(120)
-		ret = actor.onTrackUpdate(rt, &expert.OnTrackUpdateParams{Votes: expert.ExpertVoteThreshold})
-		st = getState(rt)
-		require.True(t, ret.ResetMe == false && ret.UntrackMe == false && st.Status == expert.ExpertStateNormal && st.LostEpoch == expert.NoLostEpoch)
 	})
 }
 
@@ -951,10 +757,9 @@ func TestCheckState(t *testing.T) {
 		expectQualified bool
 	}{
 		{"ExpertStateRegistered", expert.ExpertStateRegistered, false, false},
-		{"ExpertStateNominated", expert.ExpertStateNominated, true, false},
-		{"ExpertStateNormal", expert.ExpertStateNormal, true, true},
+		{"ExpertStateQualified", expert.ExpertStateQualified, true, true},
+		{"ExpertStateUnqualified", expert.ExpertStateUnqualified, true, false},
 		{"ExpertStateBlocked", expert.ExpertStateBlocked, false, false},
-		{"ExpertStateDisqualified", expert.ExpertStateDisqualified, false, false},
 	}
 
 	for _, ts := range testcases {
@@ -963,19 +768,95 @@ func TestCheckState(t *testing.T) {
 			actor.constructAndVerify(rt, builtin.ExpertNormal)
 
 			st := getState(rt)
-			st.Status = ts.status
+			st.ExpertState = ts.status
 			rt.ReplaceState(st)
 
 			rt.SetCaller(owner, builtin.AccountActorCodeID)
 			rt.ExpectValidateCallerAny()
-			ret := rt.Call(actor.CheckState, nil).(*expert.CheckStateReturn)
+			ret := rt.Call(actor.CheckState, nil).(*builtin.CheckExpertStateReturn)
 			rt.Verify()
 			require.True(t, ret.AllowVote == ts.expectAllowVote && ret.Qualified == ts.expectQualified)
 		})
 	}
 }
 
-func newStoreDataParams(expertDataParams ...*expert.ExpertDataParams) *builtin.BatchPieceCIDParams {
+func TestOnVotesUpdated(t *testing.T) {
+	owner := tutil.NewIDAddr(t, 100)
+	actorProposer := tutil.NewIDAddr(t, 1000)
+	actorAddr := tutil.NewIDAddr(t, 1001)
+
+	setupFunc := func() (*mock.Runtime, *actorHarness) {
+		actor := newHarness(t, actorAddr, owner, actorProposer)
+		builder := mock.NewBuilder(context.Background(), actorAddr).
+			WithActorType(owner, builtin.AccountActorCodeID).
+			WithHasher(fixedHasher(0)).
+			WithCaller(builtin.InitActorAddr, builtin.InitActorCodeID)
+
+		rt := builder.Build(t)
+		actor.constructAndVerify(rt, builtin.ExpertNormal)
+		return rt, actor
+	}
+
+	t.Run("foundation", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		st := getState(rt)
+		info, err := st.GetInfo(adt.AsStore(rt))
+		require.NoError(t, err)
+		info.Type = builtin.ExpertFoundation
+		err = st.SaveInfo(adt.AsStore(rt), info)
+		require.NoError(t, err)
+		rt.ReplaceState(st)
+
+		ret := actor.onVotesUpdated(rt, &builtin.OnExpertVotesUpdatedParams{
+			Expert: actorAddr,
+			Votes:  abi.NewTokenAmount(0),
+		})
+		require.True(t, ret.VotesEnough)
+	})
+
+	t.Run("unexpected expert states", func(t *testing.T) {
+		rt, actor := setupFunc()
+
+		for _, eState := range []expert.ExpertState{expert.ExpertStateBlocked, expert.ExpertStateRegistered} {
+			st := getState(rt)
+			st.ExpertState = eState
+			rt.ReplaceState(st)
+
+			rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "unexpected expert state", func() {
+				actor.onVotesUpdated(rt, &builtin.OnExpertVotesUpdatedParams{
+					Expert: actorAddr,
+					Votes:  abi.NewTokenAmount(0),
+				})
+			})
+		}
+	})
+
+	t.Run("other states", func(t *testing.T) {
+		for _, eState := range []expert.ExpertState{expert.ExpertStateQualified, expert.ExpertStateUnqualified} {
+			rt, actor := setupFunc()
+			st := getState(rt)
+			st.ExpertState = eState
+			rt.ReplaceState(st)
+
+			ret := actor.onVotesUpdated(rt, &builtin.OnExpertVotesUpdatedParams{
+				Expert: actorAddr,
+				Votes:  big.Sub(expert.ExpertVoteThreshold, abi.NewTokenAmount(1)),
+			})
+			st = getState(rt)
+			require.True(t, ret.VotesEnough == false && st.ExpertState == expert.ExpertStateUnqualified)
+
+			ret = actor.onVotesUpdated(rt, &builtin.OnExpertVotesUpdatedParams{
+				Expert: actorAddr,
+				Votes:  expert.ExpertVoteThreshold,
+			})
+			st = getState(rt)
+			require.True(t, ret.VotesEnough == true && st.ExpertState == expert.ExpertStateQualified)
+		}
+	})
+}
+
+func newStoreDataParams(expertDataParams ...*expert.ImportDataParams) *builtin.BatchPieceCIDParams {
 	var ret builtin.BatchPieceCIDParams
 	for _, p := range expertDataParams {
 		ret.PieceCIDs = append(ret.PieceCIDs, builtin.CheckedCID{CID: p.PieceID})
@@ -983,11 +864,12 @@ func newStoreDataParams(expertDataParams ...*expert.ExpertDataParams) *builtin.B
 	return &ret
 }
 
-func newExpertDataParams() *expert.ExpertDataParams {
+func newImportDataParams() *expert.ImportDataParams {
 	rd := rand.Intn(100) + 100
-	pieceID := tutil.MakeCID(strconv.Itoa(rd), &miner.SealedCIDPrefix)
-	return &expert.ExpertDataParams{
-		RootID:    "root|" + pieceID.String(),
+	rootID := tutil.MakeCID(strconv.Itoa(rd), &miner.SealedCIDPrefix)
+	pieceID := tutil.MakeCID(strconv.Itoa(rd), &market.PieceCIDPrefix)
+	return &expert.ImportDataParams{
+		RootID:    rootID,
 		PieceID:   pieceID,
 		PieceSize: abi.PaddedPieceSize(rd) + abi.PaddedPieceSize(2<<10),
 	}
@@ -1024,15 +906,15 @@ func (h *actorHarness) constructAndVerify(rt *mock.Runtime, typ builtin.ExpertTy
 	rt.Verify()
 }
 
-func (h *actorHarness) controlAddress(rt *mock.Runtime) (owner addr.Address) {
+func (h *actorHarness) controlAddress(rt *mock.Runtime) addr.Address {
 	rt.ExpectValidateCallerAny()
-	ret := rt.Call(h.ControlAddress, nil).(*builtin.ExpertControlAddressReturn)
-	require.NotNil(h.t, ret)
+	owner := rt.Call(h.ControlAddress, nil).(*addr.Address)
+	require.NotNil(h.t, owner)
 	rt.Verify()
-	return ret.Owner
+	return *owner
 }
 
-func (h *actorHarness) importData(rt *mock.Runtime, params *expert.ExpertDataParams) {
+func (h *actorHarness) importData(rt *mock.Runtime, params *expert.ImportDataParams) {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAddr(h.owner)
 	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &builtin.CheckedCID{
@@ -1042,10 +924,10 @@ func (h *actorHarness) importData(rt *mock.Runtime, params *expert.ExpertDataPar
 	rt.Verify()
 }
 
-func (h *actorHarness) storeData(rt *mock.Runtime, params *builtin.BatchPieceCIDParams) *expert.StoreDataReturn {
+func (h *actorHarness) storeData(rt *mock.Runtime, params *builtin.BatchPieceCIDParams) *expert.GetDatasReturn {
 	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 	rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-	ret := rt.Call(h.StoreData, params).(*expert.StoreDataReturn)
+	ret := rt.Call(h.StoreData, params).(*expert.GetDatasReturn)
 	rt.Verify()
 	return ret
 }
@@ -1058,44 +940,59 @@ func (h *actorHarness) getDatas(rt *mock.Runtime, params *builtin.BatchPieceCIDP
 	return ret
 }
 
-func (h *actorHarness) nominate(rt *mock.Runtime, params *expert.NominateExpertParams) {
+func (h *actorHarness) nominate(rt *mock.Runtime, expertAddr addr.Address) {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAddr(h.owner)
-	rt.ExpectSend(params.Expert, builtin.MethodsExpert.OnNominated, nil, big.Zero(), nil, exitcode.Ok)
+	rt.ExpectSend(expertAddr, builtin.MethodsExpert.OnNominated, nil, big.Zero(), nil, exitcode.Ok)
 
-	rt.Call(h.Nominate, params)
+	rt.Call(h.Nominate, &expertAddr)
 	rt.Verify()
 }
 
 func (h *actorHarness) onNominate(rt *mock.Runtime) {
 	rt.SetCaller(h.proposer, builtin.ExpertActorCodeID)
 	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertNominated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
 	rt.Call(h.OnNominated, nil)
 	rt.Verify()
 }
 
-func (h *actorHarness) govBlock(rt *mock.Runtime, governor addr.Address) {
-	rt.SetCaller(governor, builtin.AccountActorCodeID)
-	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-	rt.ExpectSend(builtin.GovernActorAddr, builtin.MethodsGovern.ValidateGranted, &builtin.ValidateGrantedParams{
-		Caller: governor,
-		Method: builtin.MethodsExpert.GovBlock,
-	}, big.Zero(), nil, exitcode.Ok)
-	rt.ExpectSend(h.proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
-	rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.OnCandidateBlocked, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
-	rt.Call(h.GovBlock, nil)
+func (h *actorHarness) onBlocked(rt *mock.Runtime, proposer addr.Address, expectedVotesEnough bool) *expert.OnBlockedReturn {
+	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
+	rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
+	votesEnough := cbg.CborBool(expectedVotesEnough)
+	rt.ExpectSend(proposer, builtin.MethodsExpert.OnImplicated, nil, big.Zero(), &votesEnough, exitcode.Ok)
+	ret := rt.Call(h.OnBlocked, nil).(*expert.OnBlockedReturn)
 	rt.Verify()
+	return ret
 }
 
-func (h *actorHarness) onImplicated(rt *mock.Runtime, nominatedAddr addr.Address) {
-	st := getState(rt)
-	before := st.ImplicatedTimes
+// func (h *actorHarness) govBlock(rt *mock.Runtime, governor addr.Address) {
+// 	rt.SetCaller(governor, builtin.AccountActorCodeID)
+// 	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+// 	rt.ExpectSend(builtin.GovernActorAddr, builtin.MethodsGovern.ValidateGranted, &builtin.ValidateGrantedParams{
+// 		Caller: governor,
+// 		Method: builtin.MethodsExpert.GovBlock,
+// 	}, big.Zero(), nil, exitcode.Ok)
+// 	rt.ExpectSend(h.proposer, builtin.MethodsExpert.OnImplicated, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
+// 	rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.OnCandidateBlocked, nil, abi.NewTokenAmount(0), nil, exitcode.Ok)
+// 	rt.Call(h.GovBlock, nil)
+// 	rt.Verify()
+// }
+
+func (h *actorHarness) onImplicated(rt *mock.Runtime, nominatedAddr addr.Address) bool {
 	rt.SetCaller(nominatedAddr, builtin.ExpertActorCodeID)
 	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	rt.Call(h.OnImplicated, nil)
+	ret := rt.Call(h.OnImplicated, nil).(*cbg.CborBool)
 	rt.Verify()
-	require.True(h.t, getState(rt).ImplicatedTimes-before == 1)
+	return bool(*ret)
+}
+
+func (h *actorHarness) onVotesUpdated(rt *mock.Runtime, params *builtin.OnExpertVotesUpdatedParams) *expert.OnVotesUpdatedReturn {
+	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
+	rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
+	ret := rt.Call(h.OnVotesUpdated, params).(*expert.OnVotesUpdatedReturn)
+	rt.Verify()
+	return ret
 }
 
 func (h *actorHarness) changeOwner(rt *mock.Runtime, oldOwner, newOwner addr.Address) {
@@ -1116,18 +1013,10 @@ func (h *actorHarness) govChangeOwner(rt *mock.Runtime, governor, newOwner addr.
 	rt.Verify()
 }
 
-func (h *actorHarness) onTrackUpdate(rt *mock.Runtime, params *expert.OnTrackUpdateParams) *expert.OnTrackUpdateReturn {
-	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
-	rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-	ret := rt.Call(h.OnTrackUpdate, params).(*expert.OnTrackUpdateReturn)
-	rt.Verify()
-	return ret
-}
-
-func (h *actorHarness) checkState(rt *mock.Runtime) *expert.CheckStateReturn {
+func (h *actorHarness) checkState(rt *mock.Runtime) *builtin.CheckExpertStateReturn {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAny()
-	ret := rt.Call(h.CheckState, nil).(*expert.CheckStateReturn)
+	ret := rt.Call(h.CheckState, nil).(*builtin.CheckExpertStateReturn)
 	rt.Verify()
 	return ret
 }

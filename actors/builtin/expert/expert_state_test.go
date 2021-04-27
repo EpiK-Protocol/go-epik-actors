@@ -6,6 +6,7 @@ import (
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/miner"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v2/support/ipld"
@@ -36,26 +37,27 @@ func TestData(t *testing.T) {
 	t.Run("Put, get and delete", func(t *testing.T) {
 		harness := constructStateHarness(t)
 
-		pieceID := tutils.MakeCID("1", &miner.SealedCIDPrefix)
-		data := newDataOnChainInfo(pieceID)
-		harness.putData(data)
-		assert.Equal(t, data, harness.getData(pieceID))
+		rootID1 := tutils.MakeCID("1", &miner.SealedCIDPrefix)
+		pieceID1 := tutils.MakeCID("1", &market.PieceCIDPrefix)
+		data := newDataOnChainInfo(rootID1, pieceID1)
+		harness.putDatas(data)
+		assert.Equal(t, data, harness.getDatas(true, pieceID1)[0])
 
-		pieceID = tutils.MakeCID("2", &miner.SealedCIDPrefix)
-		data = newDataOnChainInfo(pieceID)
-		harness.putData(data)
-		assert.Equal(t, data, harness.getData(pieceID))
+		rootID2 := tutils.MakeCID("1", &miner.SealedCIDPrefix)
+		pieceID2 := tutils.MakeCID("2", &market.PieceCIDPrefix)
+		data = newDataOnChainInfo(rootID2, pieceID2)
+		harness.putDatas(data)
+		assert.Equal(t, data, harness.getDatas(true, pieceID2)[0])
 
-		harness.deleteData(pieceID)
-		assert.False(t, harness.hasData(pieceID))
+		harness.deleteData(pieceID2)
+		assert.False(t, harness.hasData(pieceID2))
 	})
 
 	t.Run("Delete nonexistent value returns an error", func(t *testing.T) {
 		harness := constructStateHarness(t)
 
 		pieceID := tutils.MakeCID("1", &miner.SealedCIDPrefix)
-		err := harness.s.DeleteData(harness.store, pieceID.String())
-		assert.Error(t, err)
+		harness.deleteData(pieceID)
 	})
 
 	t.Run("Get nonexistent value returns false", func(t *testing.T) {
@@ -73,26 +75,26 @@ type stateHarness struct {
 	store adt.Store
 }
 
-func (h *stateHarness) putData(data *expert.DataOnChainInfo) {
-	err := h.s.PutData(h.store, data)
+func (h *stateHarness) putDatas(infos ...*expert.DataOnChainInfo) {
+	err := h.s.PutDatas(h.store, infos...)
 	require.NoError(h.t, err)
 }
 
-func (h *stateHarness) getData(pieceID cid.Cid) *expert.DataOnChainInfo {
-	data, _, err := h.s.GetData(h.store, pieceID.String())
+func (h *stateHarness) getDatas(mustPresent bool, pieceIDs ...cid.Cid) []*expert.DataOnChainInfo {
+	datas, err := h.s.GetDatas(h.store, mustPresent, pieceIDs...)
 	require.NoError(h.t, err)
-	return data
+	return datas
 }
 
 func (h *stateHarness) deleteData(pieceID cid.Cid) {
-	err := h.s.DeleteData(h.store, pieceID.String())
+	err := h.s.DeleteData(h.store, pieceID)
 	require.NoError(h.t, err)
 }
 
 func (h *stateHarness) hasData(pieceID cid.Cid) bool {
-	_, found, err := h.s.GetData(h.store, pieceID.String())
+	datas, err := h.s.GetDatas(h.store, false, pieceID)
 	require.NoError(h.t, err)
-	return found
+	return len(datas) == 1
 }
 
 func constructStateHarness(t *testing.T) *stateHarness {
@@ -115,7 +117,7 @@ func constructStateHarness(t *testing.T) *stateHarness {
 
 	eState := expert.ExpertStateRegistered
 	if info.Type == builtin.ExpertFoundation {
-		eState = expert.ExpertStateNormal
+		eState = expert.ExpertStateQualified
 	}
 
 	state, err := expert.ConstructState(store, infoCid, eState)
@@ -128,8 +130,9 @@ func constructStateHarness(t *testing.T) *stateHarness {
 	}
 }
 
-func newDataOnChainInfo(pieceID cid.Cid) *expert.DataOnChainInfo {
+func newDataOnChainInfo(rootID, pieceID cid.Cid) *expert.DataOnChainInfo {
 	return &expert.DataOnChainInfo{
-		PieceID: pieceID.String(),
+		RootID:  rootID,
+		PieceID: pieceID,
 	}
 }

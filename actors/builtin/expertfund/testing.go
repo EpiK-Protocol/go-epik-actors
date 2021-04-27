@@ -33,18 +33,17 @@ func CheckStateInvariants(st *State, store adt.Store) (*StateSummary, *builtin.M
 		})
 		acc.RequireNoError(err, "failed to iterate experts")
 	}
-	acc.Require(st.ExpertsCount == uint64(sum.ExpertsCount), "experts count mismatch: %d, %d", st.ExpertsCount, sum.ExpertsCount)
 
 	var pool PoolInfo
 	if err := store.Get(context.Background(), st.PoolInfo, &pool); err != nil {
 		acc.Addf("failed to load Pool: %v", err)
 	} else {
-		acc.Require(pool.TotalExpertDataSize == sumDataSize, "total data size != sum of experts' data size")
+		acc.Require(pool.CurrentTotalDataSize == sumDataSize, "total data size != sum of experts' data size")
 		sum.LastRewardBalance = pool.LastRewardBalance
 	}
 
-	// TrackedExperts
-	if texperts, err := adt.AsSet(store, st.TrackedExperts, builtin.DefaultHamtBitwidth); err != nil {
+	// DisqualifiedExperts
+	if texperts, err := adt.AsSet(store, st.DisqualifiedExperts, builtin.DefaultHamtBitwidth); err != nil {
 		acc.Addf("failed to load tracked experts: %v", err)
 	} else {
 		err = texperts.ForEach(func(k string) error {
@@ -54,12 +53,11 @@ func CheckStateInvariants(st *State, store adt.Store) (*StateSummary, *builtin.M
 		acc.RequireNoError(err, "failed to iterate tracked experts")
 	}
 
-	// Datas
-	if datas, err := adt.AsMap(store, st.DataByPiece, builtin.DefaultHamtBitwidth); err != nil {
+	// PieceInfos
+	if eop, err := adt.AsMap(store, st.PieceInfos, builtin.DefaultHamtBitwidth); err != nil {
 		acc.Addf("failed to load datas: %v", err)
 	} else {
-		var out DataInfo
-		err = datas.ForEach(&out, func(k string) error {
+		err = eop.ForEach(nil, func(k string) error {
 			sum.DatasCount++
 			return nil
 		})

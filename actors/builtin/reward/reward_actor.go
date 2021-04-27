@@ -155,7 +155,7 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	}
 
 	if !expertReward.IsZero() {
-		code = rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.ApplyRewards, nil, expertReward, &builtin.Discard{})
+		code = rt.Send(builtin.ExpertFundActorAddr, builtin.MethodSend, nil, expertReward, &builtin.Discard{})
 		if !code.IsSuccess() {
 			rt.Log(rtt.ERROR, "failed to send ApplyRewards call to expert fund actor with funds: %v, code: %v", expertReward, code)
 			sendFailed = big.Add(sendFailed, expertReward)

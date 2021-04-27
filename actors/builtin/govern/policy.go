@@ -10,9 +10,9 @@ import (
 var GovernedActors = map[cid.Cid]map[abi.MethodNum]struct{}{
 	builtin.ExpertActorCodeID: {
 		builtin.MethodsExpert.GovChangeOwner: struct{}{},
-		builtin.MethodsExpert.GovBlock:       struct{}{},
 	},
 	builtin.ExpertFundActorCodeID: {
+		builtin.MethodsExpertFunds.BlockExpert:     struct{}{},
 		builtin.MethodsExpertFunds.ChangeThreshold: struct{}{},
 	},
 	builtin.KnowledgeFundActorCodeID: {

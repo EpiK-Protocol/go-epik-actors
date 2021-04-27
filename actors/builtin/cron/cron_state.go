@@ -35,9 +35,5 @@ func BuiltInEntries() []Entry {
 			Receiver:  builtin.VoteFundActorAddr,
 			MethodNum: builtin.MethodsVote.OnEpochTickEnd,
 		},
-		{
-			Receiver:  builtin.ExpertFundActorAddr,
-			MethodNum: builtin.MethodsExpertFunds.OnEpochTickEnd,
-		},
 	}
 }

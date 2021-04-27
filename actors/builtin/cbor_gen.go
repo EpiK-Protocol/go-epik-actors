@@ -135,54 +135,6 @@ func (t *GetControlAddressesReturn) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufExpertControlAddressReturn = []byte{129}
-
-func (t *ExpertControlAddressReturn) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufExpertControlAddressReturn); err != nil {
-		return err
-	}
-
-	// t.Owner (address.Address) (struct)
-	if err := t.Owner.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *ExpertControlAddressReturn) UnmarshalCBOR(r io.Reader) error {
-	*t = ExpertControlAddressReturn{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 1 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.Owner (address.Address) (struct)
-
-	{
-
-		if err := t.Owner.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Owner: %w", err)
-		}
-
-	}
-	return nil
-}
-
 var lengthBufConfirmSectorProofsParams = []byte{129}
 
 func (t *ConfirmSectorProofsParams) MarshalCBOR(w io.Writer) error {
@@ -584,6 +536,146 @@ func (t *CheckedCID) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.CID = c
+
+	}
+	return nil
+}
+
+var lengthBufCheckExpertStateReturn = []byte{130}
+
+func (t *CheckExpertStateReturn) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufCheckExpertStateReturn); err != nil {
+		return err
+	}
+
+	// t.AllowVote (bool) (bool)
+	if err := cbg.WriteBool(w, t.AllowVote); err != nil {
+		return err
+	}
+
+	// t.Qualified (bool) (bool)
+	if err := cbg.WriteBool(w, t.Qualified); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *CheckExpertStateReturn) UnmarshalCBOR(r io.Reader) error {
+	*t = CheckExpertStateReturn{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.AllowVote (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.AllowVote = false
+	case 21:
+		t.AllowVote = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	// t.Qualified (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.Qualified = false
+	case 21:
+		t.Qualified = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
+	return nil
+}
+
+var lengthBufOnExpertVotesUpdatedParams = []byte{130}
+
+func (t *OnExpertVotesUpdatedParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufOnExpertVotesUpdatedParams); err != nil {
+		return err
+	}
+
+	// t.Expert (address.Address) (struct)
+	if err := t.Expert.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Votes (big.Int) (struct)
+	if err := t.Votes.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *OnExpertVotesUpdatedParams) UnmarshalCBOR(r io.Reader) error {
+	*t = OnExpertVotesUpdatedParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 2 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Expert (address.Address) (struct)
+
+	{
+
+		if err := t.Expert.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Expert: %w", err)
+		}
+
+	}
+	// t.Votes (big.Int) (struct)
+
+	{
+
+		if err := t.Votes.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Votes: %w", err)
+		}
 
 	}
 	return nil

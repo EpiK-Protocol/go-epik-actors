@@ -10,7 +10,6 @@ import (
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v2/support/mock"
@@ -18,6 +17,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func getState(rt *mock.Runtime) *vote.State {
+	var st vote.State
+	rt.GetState(&st)
+	return &st
+}
 
 func TestExports(t *testing.T) {
 	mock.CheckActorExports(t, vote.Actor{})
@@ -98,12 +103,14 @@ func TestVote(t *testing.T) {
 
 	t.Run("fail when voting not allowed", func(t *testing.T) {
 		rt, actor := setupFunc()
-		rt.SetCaller(caller, builtin.AccountActorCodeID)
 
 		rt.SetReceived(big.NewInt(1))
 		rt.SetBalance(big.Zero())
+
+		rt.SetCaller(caller, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: false}, exitcode.Ok)
+		rt.SetAddressActorType(candidate1, builtin.ExpertActorCodeID)
+		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &builtin.CheckExpertStateReturn{AllowVote: false}, exitcode.Ok)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "vote not allowed", func() {
 			rt.Call(actor.Vote, &candidate1)
 		})
@@ -117,13 +124,8 @@ func TestVote(t *testing.T) {
 		require.True(t, sum.CandidatesCount == 0 && sum.VotersCount == 0)
 
 		// first voter
-		rt.SetCaller(caller, builtin.AccountActorCodeID)
 		rt.SetReceived(big.NewInt(1000))
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
-
-		rt.Call(actor.Vote, &candidate1)
-		rt.Verify()
+		actor.vote(rt, caller, candidate1, big.NewInt(1000))
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.CandidatesCount == 1 && sum.VotersCount == 1)
@@ -131,13 +133,8 @@ func TestVote(t *testing.T) {
 
 		// second voter
 		caller2 := tutil.NewIDAddr(t, 200)
-		rt.SetCaller(caller2, builtin.MultisigActorCodeID)
 		rt.SetReceived(big.NewInt(300))
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
-
-		rt.Call(actor.Vote, &candidate1)
-		rt.Verify()
+		actor.vote(rt, caller2, candidate1, big.NewInt(300))
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.CandidatesCount == 1 && sum.VotersCount == 2)
@@ -152,13 +149,8 @@ func TestVote(t *testing.T) {
 		require.True(t, sum.CandidatesCount == 0 && sum.VotersCount == 0)
 
 		// first
-		rt.SetCaller(caller, builtin.AccountActorCodeID)
 		rt.SetReceived(big.NewInt(1000))
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
-
-		rt.Call(actor.Vote, &candidate1)
-		rt.Verify()
+		actor.vote(rt, caller, candidate1, big.NewInt(1000))
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.CandidatesCount == 1 && sum.VotersCount == 1)
@@ -166,13 +158,9 @@ func TestVote(t *testing.T) {
 		require.True(t, sum.VoterTallyCount[caller] == 1)
 
 		// second
-		candidate2 := tutil.NewIDAddr(t, 200)
 		rt.SetReceived(big.NewInt(300))
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(candidate2, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
-
-		rt.Call(actor.Vote, &candidate2)
-		rt.Verify()
+		candidate2 := tutil.NewIDAddr(t, 200)
+		actor.vote(rt, caller, candidate2, big.NewInt(300))
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.CandidatesCount == 2 && sum.VotersCount == 1)
@@ -188,13 +176,8 @@ func TestVote(t *testing.T) {
 		require.True(t, sum.CandidatesCount == 0 && sum.VotersCount == 0)
 
 		// first
-		rt.SetCaller(caller, builtin.AccountActorCodeID)
 		rt.SetReceived(big.NewInt(1000))
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
-
-		rt.Call(actor.Vote, &candidate1)
-		rt.Verify()
+		actor.vote(rt, caller, candidate1, big.NewInt(1000))
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.CandidatesCount == 1 && sum.VotersCount == 1)
@@ -203,11 +186,7 @@ func TestVote(t *testing.T) {
 
 		// second
 		rt.SetReceived(big.NewInt(300))
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		rt.ExpectSend(candidate1, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
-
-		rt.Call(actor.Vote, &candidate1)
-		rt.Verify()
+		actor.vote(rt, caller, candidate1, big.NewInt(300))
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.CandidatesCount == 1 && sum.VotersCount == 1)
@@ -317,10 +296,10 @@ func TestOnCandidateBlocked(t *testing.T) {
 
 		actor.vote(rt, caller, candidate1, big.NewInt(1000))
 
-		rt.SetCaller(candidate2, builtin.ExpertActorCodeID)
-		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
+		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
+		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "candidate not found", func() {
-			rt.Call(actor.OnCandidateBlocked, nil)
+			rt.Call(actor.OnCandidateBlocked, &candidate2)
 		})
 	})
 
@@ -340,9 +319,9 @@ func TestOnCandidateBlocked(t *testing.T) {
 
 		// block candidate1
 		rt.SetEpoch(99)
-		rt.SetCaller(candidate1, builtin.ExpertActorCodeID)
-		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-		rt.Call(actor.OnCandidateBlocked, nil)
+		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
+		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
+		rt.Call(actor.OnCandidateBlocked, &candidate1)
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.TotalNonBlockedVotes.Equals(big.NewInt(500)))
@@ -353,9 +332,9 @@ func TestOnCandidateBlocked(t *testing.T) {
 
 		// block candidate2
 		rt.SetEpoch(100)
-		rt.SetCaller(candidate2, builtin.ExpertActorCodeID)
-		rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-		rt.Call(actor.OnCandidateBlocked, nil)
+		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
+		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
+		rt.Call(actor.OnCandidateBlocked, &candidate2)
 
 		sum = actor.checkState(rt)
 		require.True(t, sum.TotalNonBlockedVotes.Equals(big.NewInt(0)))
@@ -430,6 +409,7 @@ func TestRescind(t *testing.T) {
 			Votes:     big.NewInt(1),
 		}
 		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertVotesUpdated, &builtin.OnExpertVotesUpdatedParams{Expert: candidate1, Votes: big.NewInt(999)}, big.Zero(), nil, exitcode.Ok)
 		rt.Call(actor.Rescind, &params)
 
 		var st vote.State
@@ -814,29 +794,60 @@ func (h *actorHarness) constructAndVerify(rt *mock.Runtime) {
 }
 
 func (h *actorHarness) vote(rt *mock.Runtime, voter, candidate address.Address, votes abi.TokenAmount) {
+	st := getState(rt)
+	candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates, builtin.DefaultHamtBitwidth)
+	require.NoError(h.t, err)
+	var out vote.Candidate
+	found, err := candidates.Get(abi.AddrKey(candidate), &out)
+	require.NoError(h.t, err)
+	newVotes := votes
+	if found {
+		newVotes = big.Add(votes, out.Votes)
+	}
+
 	rt.SetReceived(votes)
 	rt.SetCaller(voter, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-	rt.ExpectSend(candidate, builtin.MethodsExpert.CheckState, nil, big.Zero(), &expert.CheckStateReturn{AllowVote: true}, exitcode.Ok)
+	rt.SetAddressActorType(candidate, builtin.ExpertActorCodeID)
+	rt.ExpectSend(candidate, builtin.MethodsExpert.CheckState, nil, big.Zero(), &builtin.CheckExpertStateReturn{AllowVote: true}, exitcode.Ok)
+	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertVotesUpdated, &builtin.OnExpertVotesUpdatedParams{
+		Expert: candidate,
+		Votes:  newVotes,
+	}, big.Zero(), nil, exitcode.Ok)
 	rt.Call(h.Vote, &candidate)
 	rt.Verify()
 }
 
-func (h *actorHarness) rescind(rt *mock.Runtime, voter, candidate address.Address, amount abi.TokenAmount) {
+func (h *actorHarness) rescind(rt *mock.Runtime, voter, candidate address.Address, votes abi.TokenAmount) {
+	st := getState(rt)
+	candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates, builtin.DefaultHamtBitwidth)
+	require.NoError(h.t, err)
+	var out vote.Candidate
+	found, err := candidates.Get(abi.AddrKey(candidate), &out)
+	require.NoError(h.t, err)
+	newVotes := big.Zero()
+	if found && out.Votes.GreaterThanEqual(votes) {
+		newVotes = big.Sub(out.Votes, votes)
+	}
+
 	params := vote.RescindParams{
 		Candidate: candidate,
-		Votes:     amount,
+		Votes:     votes,
 	}
 	rt.SetCaller(voter, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertVotesUpdated, &builtin.OnExpertVotesUpdatedParams{
+		Expert: candidate,
+		Votes:  newVotes,
+	}, big.Zero(), nil, exitcode.Ok)
 	rt.Call(h.Rescind, &params)
 	rt.Verify()
 }
 
 func (h *actorHarness) blockCandidate(rt *mock.Runtime, candidate address.Address) {
-	rt.SetCaller(candidate, builtin.ExpertActorCodeID)
-	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	ret := rt.Call(h.OnCandidateBlocked, nil)
+	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
+	rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
+	ret := rt.Call(h.OnCandidateBlocked, &candidate)
 	assert.Nil(h.t, ret)
 	rt.Verify()
 }
