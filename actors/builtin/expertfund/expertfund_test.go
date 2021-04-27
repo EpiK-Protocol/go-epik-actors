@@ -3,7 +3,6 @@ package expertfund_test
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -1582,7 +1581,6 @@ func (h *actorHarness) expectExpert(rt *mock.Runtime, expertAddr address.Address
 	st := getState(rt)
 	info, err := st.GetExpert(adt.AsStore(rt), expertAddr)
 	require.NoError(h.t, err)
-	fmt.Printf("%+v\n", info)
 	require.True(h.t,
 		info.Active == expect.Active &&
 			info.DataSize == expect.DataSize &&

@@ -162,6 +162,7 @@ func (a Actor) BatchCheckData(rt Runtime, params *BatchCheckDataParams) *abi.Emp
 		var out expert.GetDatasReturn
 		code := rt.Send(expertAddr, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: pieceCIDs}, big.Zero(), &out)
 		builtin.RequireSuccess(rt, code, "failed to get datas from expert: %s", expertAddr)
+		builtin.RequireState(rt, !out.ExpertBlocked, "expert blocked %s", expertAddr)
 
 		for _, info := range out.Infos {
 			builtin.RequireState(rt, checkedPieceSizes[info.PieceID] == info.PieceSize,
@@ -203,6 +204,7 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 		var out expert.GetDatasReturn
 		code := rt.Send(expertAddr, builtin.MethodsExpert.StoreData, &builtin.BatchPieceCIDParams{PieceCIDs: pieces}, abi.NewTokenAmount(0), &out)
 		builtin.RequireSuccess(rt, code, "failed to store data of %s", expertAddr)
+		builtin.RequireState(rt, !out.ExpertBlocked, "expert blocked %s", expertAddr)
 
 		onchainInfos = append(onchainInfos, out.Infos...)
 
@@ -253,6 +255,7 @@ func (a Actor) GetData(rt Runtime, params *builtin.CheckedCID) *GetDataReturn {
 	var out expert.GetDatasReturn
 	code := rt.Send(expertAddr, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{*params}}, abi.NewTokenAmount(0), &out)
 	builtin.RequireSuccess(rt, code, "failed to get data in expert record")
+	builtin.RequireState(rt, !out.ExpertBlocked, "expert blocked %s", expertAddr)
 
 	return &GetDataReturn{
 		Expert: expertAddr,

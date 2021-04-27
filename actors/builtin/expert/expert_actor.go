@@ -195,7 +195,8 @@ func (a Actor) ImportData(rt Runtime, params *ImportDataParams) *abi.EmptyValue 
 }
 
 type GetDatasReturn struct {
-	Infos []*DataOnChainInfo
+	Infos         []*DataOnChainInfo
+	ExpertBlocked bool
 }
 
 func (a Actor) GetDatas(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDatasReturn {
@@ -212,7 +213,10 @@ func (a Actor) GetDatas(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDat
 	infos, err := st.GetDatas(adt.AsStore(rt), true, pieceCIDs...)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get datas")
 
-	return &GetDatasReturn{Infos: infos}
+	return &GetDatasReturn{
+		Infos:         infos,
+		ExpertBlocked: st.ExpertState == ExpertStateBlocked,
+	}
 }
 
 func (a Actor) StoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDatasReturn {
@@ -239,6 +243,7 @@ func (a Actor) StoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDa
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put datas")
 
 		ret.Infos = infos
+		ret.ExpertBlocked = st.ExpertState == ExpertStateBlocked
 	})
 	return &ret
 }

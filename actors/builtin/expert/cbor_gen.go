@@ -629,7 +629,7 @@ func (t *ImportDataParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufGetDatasReturn = []byte{129}
+var lengthBufGetDatasReturn = []byte{130}
 
 func (t *GetDatasReturn) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -655,6 +655,11 @@ func (t *GetDatasReturn) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.ExpertBlocked (bool) (bool)
+	if err := cbg.WriteBool(w, t.ExpertBlocked); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -672,7 +677,7 @@ func (t *GetDatasReturn) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -705,6 +710,23 @@ func (t *GetDatasReturn) UnmarshalCBOR(r io.Reader) error {
 		t.Infos[i] = &v
 	}
 
+	// t.ExpertBlocked (bool) (bool)
+
+	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajOther {
+		return fmt.Errorf("booleans must be major type 7")
+	}
+	switch extra {
+	case 20:
+		t.ExpertBlocked = false
+	case 21:
+		t.ExpertBlocked = true
+	default:
+		return fmt.Errorf("booleans are either major type 7, value 20 or 21 (got %d)", extra)
+	}
 	return nil
 }
 
