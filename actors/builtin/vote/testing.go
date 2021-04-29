@@ -60,7 +60,7 @@ func CheckStateInvariants(st *State, store adt.Store) (*StateSummary, *builtin.M
 		acc.RequireNoError(err, "error iterating candidates")
 	}
 
-	acc.Require(sum.TotalNonBlockedVotes.Equals(st.TotalVotes), "st.TotalVotes != sum of non blocked candidates")
+	acc.Require(sum.TotalNonBlockedVotes.Equals(st.CurrEpochEffectiveVotes), "st.TotalVotes != sum of non blocked candidates")
 
 	//   Voters
 	blockedVotesByVoters := make(map[address.Address]abi.TokenAmount)    // key is candidate address

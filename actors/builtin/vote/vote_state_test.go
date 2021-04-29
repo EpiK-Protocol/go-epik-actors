@@ -6,7 +6,7 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
+	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 	"github.com/filecoin-project/specs-actors/v2/support/ipld"
@@ -17,9 +17,14 @@ import (
 
 func TestConstruct(t *testing.T) {
 	harness := constructStateHarness(t)
-	require.Equal(t, abi.NewTokenAmount(0), harness.s.CumEarningsPerVote)
+	require.Equal(t, abi.NewTokenAmount(0), harness.s.PrevEpochEarningsPerVote)
+	require.Equal(t, abi.NewTokenAmount(0), harness.s.CurrEpochEffectiveVotes)
+	require.Equal(t, abi.NewTokenAmount(0), harness.s.CurrEpochRewards)
+	require.Equal(t, abi.NewTokenAmount(0), harness.s.LastRewardBalance)
+	require.Equal(t, abi.NewTokenAmount(0), harness.s.FallbackDebt)
 	require.Equal(t, abi.NewTokenAmount(0), harness.s.TotalVotes)
-	require.Equal(t, abi.NewTokenAmount(0), harness.s.UnownedFunds)
+	require.Equal(t, abi.ChainEpoch(0), harness.s.PrevEpoch)
+	require.Equal(t, abi.ChainEpoch(0), harness.s.CurrEpoch)
 	require.True(t, harness.s.FallbackReceiver != address.Undef)
 }
 
@@ -28,12 +33,7 @@ func TestBlockCandidates(t *testing.T) {
 	harness.setCumEarningsPerVote(abi.NewTokenAmount(100))
 
 	t.Run("candidate not found", func(t *testing.T) {
-		candidates, err := adt.AsMap(harness.store, harness.s.Candidates, builtin.DefaultHamtBitwidth)
-		require.NoError(t, err)
-
-		_, err = harness.s.BlockCandidates(candidates, map[address.Address]struct{}{
-			tutils.NewBLSAddr(t, 2): {},
-		}, abi.ChainEpoch(1))
+		_, err := harness.s.BlockCandidates(harness.store, 1, big.Zero(), tutils.NewBLSAddr(t, 2))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "candidate not found")
 	})
@@ -49,23 +49,13 @@ type stateHarness struct {
 }
 
 func (h *stateHarness) setCumEarningsPerVote(val abi.TokenAmount) {
-	h.s.CumEarningsPerVote = val
+	h.s.PrevEpochEarningsPerVote = val
 }
 
-func (h *stateHarness) blockCandidates(curr abi.ChainEpoch, addrs ...address.Address) {
-	m := make(map[address.Address]struct{})
-	for _, addr := range addrs {
-		m[addr] = struct{}{}
-	}
-	candidates, err := adt.AsMap(h.store, h.s.Candidates, builtin.DefaultHamtBitwidth)
-	require.NoError(h.t, err)
-
-	n, err := h.s.BlockCandidates(candidates, m, curr)
+func (h *stateHarness) blockCandidates(curr abi.ChainEpoch, currBal abi.TokenAmount, addrs ...address.Address) {
+	n, err := h.s.BlockCandidates(h.store, curr, currBal, addrs...)
 	require.NoError(h.t, err)
 	require.True(h.t, n == len(addrs))
-
-	h.s.Candidates, err = candidates.Root()
-	require.NoError(h.t, err)
 }
 
 func constructStateHarness(t *testing.T) *stateHarness {

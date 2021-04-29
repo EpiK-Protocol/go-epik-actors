@@ -23,9 +23,7 @@ func (a Actor) Exports() []interface{} {
 		3:                         a.Vote,
 		4:                         a.Rescind,
 		5:                         a.Withdraw,
-		6:                         a.ApplyRewards,
-		7:                         a.OnEpochTickEnd,
-		8:                         a.GetCandidates,
+		6:                         a.GetCandidates,
 	}
 }
 
@@ -59,86 +57,69 @@ func (a Actor) Constructor(rt Runtime, fallback *addr.Address) *abi.EmptyValue {
 func (a Actor) OnCandidateBlocked(rt Runtime, candAddr *addr.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
 
-	candAddrs := map[addr.Address]struct{}{
-		*candAddr: {},
-	}
-
 	var st State
 	rt.StateTransaction(&st, func() {
-		candidates, err := adt.AsMap(adt.AsStore(rt), st.Candidates, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
-
-		_, err = st.BlockCandidates(candidates, candAddrs, rt.CurrEpoch())
+		rewardBalance := big.Sub(rt.CurrentBalance(), st.TotalVotes)
+		_, err := st.BlockCandidates(adt.AsStore(rt), rt.CurrEpoch(), rewardBalance, *candAddr)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to block candidates")
-
-		st.Candidates, err = candidates.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush candidates")
 	})
 
 	return nil
 }
 
-func (a Actor) Vote(rt Runtime, candidate *addr.Address) *abi.EmptyValue {
+func (a Actor) Vote(rt Runtime, unresolved *addr.Address) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
 	votes := rt.ValueReceived()
 	builtin.RequireParam(rt, votes.GreaterThan(big.Zero()), "non positive votes to vote")
 
-	candAddr, ok := rt.ResolveAddress(*candidate)
-	builtin.RequireParam(rt, ok, "unable to resolve address %s", candidate)
+	candAddr, ok := rt.ResolveAddress(*unresolved)
+	builtin.RequireParam(rt, ok, "unable to resolve address %s", unresolved)
 	actorCode, ok := rt.GetActorCodeCID(candAddr)
-	builtin.RequireParam(rt, ok, "no code for address %s", candidate)
-	builtin.RequireParam(rt, actorCode == builtin.ExpertActorCodeID, "not an expert %s", candidate)
+	builtin.RequireParam(rt, ok, "no code for address %s", unresolved)
+	builtin.RequireParam(rt, actorCode == builtin.ExpertActorCodeID, "not an expert %s", unresolved)
 
 	allowed := builtin.CheckVoteAllowed(rt, candAddr)
-	builtin.RequireParam(rt, allowed, "vote not allowed %s", candidate)
+	builtin.RequireParam(rt, allowed, "vote not allowed %s", unresolved)
 
-	var afterVoted *Candidate
-
-	var st State
 	store := adt.AsStore(rt)
+	currEpoch := rt.CurrEpoch()
+
+	var candidate *Candidate
+	var st State
 	rt.StateTransaction(&st, func() {
-		candidates, err := adt.AsMap(store, st.Candidates, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
+		st.TotalVotes = big.Add(st.TotalVotes, votes)
+		rewardBalance := big.Sub(rt.CurrentBalance(), st.TotalVotes)
 
-		voters, err := adt.AsMap(store, st.Voters, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
-
-		voter, found, err := getVoter(voters, rt.Caller())
+		voter, found, err := st.GetVoter(store, rt.Caller())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
 		if !found {
-			tally, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to make tally for voter")
-			voter = &Voter{
-				SettleEpoch:              rt.CurrEpoch(),
-				SettleCumEarningsPerVote: st.CumEarningsPerVote,
-				Withdrawable:             abi.NewTokenAmount(0),
-				Tally:                    tally,
-			}
-		} else {
-			// settle
-			err = st.settle(store, voter, candidates, rt.CurrEpoch())
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
+			voter, err = newVoter(store, currEpoch, st.PrevEpochEarningsPerVote)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to new voter")
 		}
 
-		afterVoted, err = st.addToCandidate(candidates, candAddr, votes)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add votes to candidate")
+		candidate, found, err = st.GetCandidate(store, candAddr)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get candidate")
+		if !found {
+			candidate = newCandidate()
+		}
+		builtin.RequireState(rt, !candidate.IsBlocked(), "candidate already blocked %s", candAddr)
 
-		err = st.addToTally(store, voter, candAddr, votes)
+		// update votes
+		candidate.Votes = big.Add(votes, candidate.Votes)
+		err = st.AddVotes(store, voter, candAddr, votes, currEpoch, rewardBalance)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add voting record")
 
-		st.Candidates, err = candidates.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush candidates")
+		err = st.PutVoter(store, rt.Caller(), voter)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put voter")
 
-		err = setVoter(voters, rt.Caller(), voter)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set voter")
-		st.Voters, err = voters.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
+		err = st.PutCandidate(store, candAddr, candidate)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put candidate")
 
-		st.TotalVotes = big.Add(st.TotalVotes, votes)
+		st.CurrEpochEffectiveVotes = big.Add(st.CurrEpochEffectiveVotes, votes)
 	})
 
-	notifyCandidateVotesUpdated(rt, candAddr, afterVoted.Votes)
+	notifyCandidateVotesUpdated(rt, candAddr, candidate.Votes)
 
 	return nil
 }
@@ -157,48 +138,44 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 	candAddr, ok := rt.ResolveAddress(params.Candidate)
 	builtin.RequireParam(rt, ok, "unable to resolve address %v", params.Candidate)
 
+	store := adt.AsStore(rt)
+	currEpoch := rt.CurrEpoch()
+	var candidate *Candidate
 	var st State
-	var afterRescind *Candidate
 	rt.StateTransaction(&st, func() {
-		store := adt.AsStore(rt)
+		rewardBalance := big.Sub(rt.CurrentBalance(), st.TotalVotes)
 
-		candidates, err := adt.AsMap(store, st.Candidates, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
-
-		voters, err := adt.AsMap(store, st.Voters, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
-
-		voter, found, err := getVoter(voters, rt.Caller())
+		voter, found, err := st.GetVoter(store, rt.Caller())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
 		builtin.RequireParam(rt, found, "voter not found")
 
-		// settle
-		err = st.settle(store, voter, candidates, rt.CurrEpoch())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
+		candidate, found, err = st.GetCandidate(store, candAddr)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get candidate")
+		builtin.RequireParam(rt, found, "candidate not found %s", candAddr)
 
-		rescindedVotes, err := st.subFromTally(store, voter, candAddr, params.Votes, rt.CurrEpoch())
+		// update votes
+		rescindedVotes, err := st.RescindVotes(store, voter, candAddr, params.Votes, currEpoch, rewardBalance)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract votes from tally")
 
-		afterRescind, err = st.subFromCandidate(candidates, candAddr, rescindedVotes)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract votes from candidate")
+		candidate.Votes = big.Sub(candidate.Votes, rescindedVotes)
+		builtin.RequireState(rt, candidate.Votes.GreaterThanEqual(big.Zero()), "unexpect negative votes after rescind")
 
-		st.Candidates, err = candidates.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush candidates")
+		// save
+		err = st.PutVoter(store, rt.Caller(), voter)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put voter")
 
-		err = setVoter(voters, rt.Caller(), voter)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to set voter")
-		st.Voters, err = voters.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
+		err = st.PutCandidate(store, candAddr, candidate)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put candidate")
 
-		// If blocked, TotalVotes has been subtracted in BlockCandidate.
-		if !afterRescind.IsBlocked() {
-			st.TotalVotes = big.Sub(st.TotalVotes, rescindedVotes)
-			builtin.RequireState(rt, st.TotalVotes.GreaterThanEqual(big.Zero()), "negative total votes %v after sub %v", st.TotalVotes, rescindedVotes)
+		// If blocked, CurrEpochEffectiveVotes has been subtracted in BlockCandidate.
+		if !candidate.IsBlocked() {
+			st.CurrEpochEffectiveVotes = big.Sub(st.CurrEpochEffectiveVotes, rescindedVotes)
+			builtin.RequireState(rt, st.CurrEpochEffectiveVotes.GreaterThanEqual(big.Zero()), "negative total votes %v after sub %v", st.CurrEpochEffectiveVotes, rescindedVotes)
 		}
 	})
 
-	if !afterRescind.IsBlocked() {
-		notifyCandidateVotesUpdated(rt, candAddr, afterRescind.Votes)
+	if !candidate.IsBlocked() {
+		notifyCandidateVotesUpdated(rt, candAddr, candidate.Votes)
 	}
 
 	return nil
@@ -208,95 +185,61 @@ func (a Actor) Rescind(rt Runtime, params *RescindParams) *abi.EmptyValue {
 func (a Actor) Withdraw(rt Runtime, _ *abi.EmptyValue) *abi.TokenAmount {
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	total := abi.NewTokenAmount(0)
+	fallbackDebt := abi.NewTokenAmount(0)
+	voterVotes := abi.NewTokenAmount(0)
+	voterRewards := abi.NewTokenAmount(0)
+
+	store := adt.AsStore(rt)
+	currEpoch := rt.CurrEpoch()
+	caller := rt.Caller()
 	var st State
 	rt.StateTransaction(&st, func() {
-		store := adt.AsStore(rt)
+		rewardBalance := big.Sub(rt.CurrentBalance(), st.TotalVotes)
 
-		candidates, err := adt.AsMap(store, st.Candidates, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load candidates")
-
-		voters, err := adt.AsMap(store, st.Voters, builtin.DefaultHamtBitwidth)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load voters")
-
-		voter, found, err := getVoter(voters, rt.Caller())
+		voter, found, err := st.GetVoter(store, caller)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get voter")
-		builtin.RequireParam(rt, found, "voter not found")
 
-		// settle
-		err = st.settle(store, voter, candidates, rt.CurrEpoch())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to settle")
+		if found {
+			var isVoterEmpty bool
+			voterVotes, isVoterEmpty, err = st.WithdrawUnlockedVotes(store, voter, currEpoch, rewardBalance)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to withdraws")
 
-		// unlock votes
-		unlockedVotes, isVoterEmpty, err := st.withdrawUnlockedVotes(store, voter, rt.CurrEpoch())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to claim unlocked votes")
+			voterRewards = voter.Withdrawable
+			if !isVoterEmpty {
+				voter.Withdrawable = abi.NewTokenAmount(0)
+				err = st.PutVoter(store, caller, voter)
+				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put voter")
+			} else {
+				err = st.DeleteVoter(store, caller)
+				builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to delete voter")
+			}
 
-		total = big.Add(voter.Withdrawable, unlockedVotes)
-
-		if !isVoterEmpty {
-			voter.Withdrawable = abi.NewTokenAmount(0)
-			err = setVoter(voters, rt.Caller(), voter)
+			st.TotalVotes = big.Sub(st.TotalVotes, voterVotes)
 		} else {
-			err = deleteVoter(voters, rt.Caller())
+			err := st.UpdatePool(store, currEpoch, rewardBalance)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update pool")
 		}
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to update voter")
 
-		st.Voters, err = voters.Root()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush voters")
+		// fallback
+		fallbackDebt = st.FallbackDebt
+		st.FallbackDebt = abi.NewTokenAmount(0)
+
+		st.LastRewardBalance = big.Sub(st.LastRewardBalance, voterRewards)
+		st.LastRewardBalance = big.Sub(st.LastRewardBalance, fallbackDebt)
+		builtin.RequireParam(rt, st.LastRewardBalance.GreaterThanEqual(big.Zero()), "unexpected negative LastRewardBalance after sub fallback %s", fallbackDebt)
 	})
-	builtin.RequireState(rt, total.LessThanEqual(rt.CurrentBalance()), "expected withdrawn amount %v exceeds balance %v", total, rt.CurrentBalance())
 
-	if total.GreaterThan(big.Zero()) {
-		code := rt.Send(rt.Caller(), builtin.MethodSend, nil, total, &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send funds")
+	voterFunds := big.Add(voterRewards, voterVotes)
+	if voterFunds.GreaterThan(big.Zero()) {
+		code := rt.Send(caller, builtin.MethodSend, nil, voterFunds, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds to voter")
 	}
-
-	return &total
-}
-
-func (a Actor) ApplyRewards(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
-	builtin.RequireParam(rt, rt.ValueReceived().GreaterThanEqual(big.Zero()), "negative amount to apply")
-
-	if rt.ValueReceived().Sign() == 0 {
-		return nil
-	}
-
-	var st State
-	rt.StateTransaction(&st, func() {
-		st.UnownedFunds = big.Add(st.UnownedFunds, rt.ValueReceived())
-	})
-	return nil
-}
-
-func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
-	rt.ValidateImmediateCallerIs(builtin.CronActorAddr)
-
-	toFallback := abi.NewTokenAmount(0)
-	var st State
-	rt.StateTransaction(&st, func() {
-		builtin.RequireParam(rt, st.UnownedFunds.GreaterThanEqual(big.Zero()), "non positive unowned funds")
-
-		if st.UnownedFunds.IsZero() {
-			return
-		}
-
-		if st.TotalVotes.IsZero() {
-			toFallback = st.UnownedFunds
-			st.UnownedFunds = big.Zero()
-			return
-		}
-		deltaPerVote := big.Div(big.Mul(st.UnownedFunds, Multiplier1E12), st.TotalVotes)
-		st.CumEarningsPerVote = big.Add(st.CumEarningsPerVote, deltaPerVote)
-		st.UnownedFunds = big.Sub(st.UnownedFunds, big.Div(big.Mul(deltaPerVote, st.TotalVotes), Multiplier1E12))
-	})
-
-	if !toFallback.IsZero() {
-		code := rt.Send(st.FallbackReceiver, builtin.MethodSend, nil, toFallback, &builtin.Discard{})
+	if fallbackDebt.GreaterThan(big.Zero()) {
+		code := rt.Send(st.FallbackReceiver, builtin.MethodSend, nil, fallbackDebt, &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send funds to fallback")
 	}
 
-	return nil
+	return &voterFunds
 }
 
 type GetCandidatesParams struct {

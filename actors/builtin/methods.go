@@ -151,10 +151,8 @@ var MethodsVote = struct {
 	Vote               abi.MethodNum
 	Rescind            abi.MethodNum
 	Withdraw           abi.MethodNum
-	ApplyRewards       abi.MethodNum
-	OnEpochTickEnd     abi.MethodNum
 	GetCandidates      abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8}
+}{MethodConstructor, 2, 3, 4, 5, 6}
 
 var MethodsRetrieval = struct {
 	Constructor      abi.MethodNum

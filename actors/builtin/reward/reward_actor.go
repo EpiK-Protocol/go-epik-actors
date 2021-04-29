@@ -146,7 +146,7 @@ func (a Actor) AwardBlockReward(rt runtime.Runtime, params *AwardBlockRewardPara
 	}
 
 	if !voteReward.IsZero() {
-		code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, voteReward, &builtin.Discard{})
+		code = rt.Send(builtin.VoteFundActorAddr, builtin.MethodSend, nil, voteReward, &builtin.Discard{})
 		if !code.IsSuccess() {
 			rt.Log(rtt.ERROR, "failed to send ApplyRewards call to vote fund actor with funds: %v, code: %v", voteReward, code)
 			sendFailed = big.Add(sendFailed, voteReward)

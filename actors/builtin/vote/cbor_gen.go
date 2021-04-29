@@ -15,7 +15,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{134}
+var lengthBufState = []byte{139}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -45,18 +45,55 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.UnownedFunds (big.Int) (struct)
-	if err := t.UnownedFunds.MarshalCBOR(w); err != nil {
+	// t.CurrEpoch (abi.ChainEpoch) (int64)
+	if t.CurrEpoch >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.CurrEpoch)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.CurrEpoch-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.CurrEpochEffectiveVotes (big.Int) (struct)
+	if err := t.CurrEpochEffectiveVotes.MarshalCBOR(w); err != nil {
 		return err
 	}
 
-	// t.CumEarningsPerVote (big.Int) (struct)
-	if err := t.CumEarningsPerVote.MarshalCBOR(w); err != nil {
+	// t.CurrEpochRewards (big.Int) (struct)
+	if err := t.CurrEpochRewards.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.PrevEpoch (abi.ChainEpoch) (int64)
+	if t.PrevEpoch >= 0 {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.PrevEpoch)); err != nil {
+			return err
+		}
+	} else {
+		if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajNegativeInt, uint64(-t.PrevEpoch-1)); err != nil {
+			return err
+		}
+	}
+
+	// t.PrevEpochEarningsPerVote (big.Int) (struct)
+	if err := t.PrevEpochEarningsPerVote.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.LastRewardBalance (big.Int) (struct)
+	if err := t.LastRewardBalance.MarshalCBOR(w); err != nil {
 		return err
 	}
 
 	// t.FallbackReceiver (address.Address) (struct)
 	if err := t.FallbackReceiver.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.FallbackDebt (big.Int) (struct)
+	if err := t.FallbackDebt.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
@@ -76,7 +113,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 11 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -113,21 +150,89 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.UnownedFunds (big.Int) (struct)
+	// t.CurrEpoch (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.CurrEpoch = abi.ChainEpoch(extraI)
+	}
+	// t.CurrEpochEffectiveVotes (big.Int) (struct)
 
 	{
 
-		if err := t.UnownedFunds.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.UnownedFunds: %w", err)
+		if err := t.CurrEpochEffectiveVotes.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.CurrEpochEffectiveVotes: %w", err)
 		}
 
 	}
-	// t.CumEarningsPerVote (big.Int) (struct)
+	// t.CurrEpochRewards (big.Int) (struct)
 
 	{
 
-		if err := t.CumEarningsPerVote.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.CumEarningsPerVote: %w", err)
+		if err := t.CurrEpochRewards.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.CurrEpochRewards: %w", err)
+		}
+
+	}
+	// t.PrevEpoch (abi.ChainEpoch) (int64)
+	{
+		maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+		var extraI int64
+		if err != nil {
+			return err
+		}
+		switch maj {
+		case cbg.MajUnsignedInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 positive overflow")
+			}
+		case cbg.MajNegativeInt:
+			extraI = int64(extra)
+			if extraI < 0 {
+				return fmt.Errorf("int64 negative oveflow")
+			}
+			extraI = -1 - extraI
+		default:
+			return fmt.Errorf("wrong type for int64 field: %d", maj)
+		}
+
+		t.PrevEpoch = abi.ChainEpoch(extraI)
+	}
+	// t.PrevEpochEarningsPerVote (big.Int) (struct)
+
+	{
+
+		if err := t.PrevEpochEarningsPerVote.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.PrevEpochEarningsPerVote: %w", err)
+		}
+
+	}
+	// t.LastRewardBalance (big.Int) (struct)
+
+	{
+
+		if err := t.LastRewardBalance.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.LastRewardBalance: %w", err)
 		}
 
 	}
@@ -137,6 +242,15 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.FallbackReceiver.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.FallbackReceiver: %w", err)
+		}
+
+	}
+	// t.FallbackDebt (big.Int) (struct)
+
+	{
+
+		if err := t.FallbackDebt.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.FallbackDebt: %w", err)
 		}
 
 	}
@@ -243,7 +357,7 @@ func (t *Candidate) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufVoter = []byte{132}
+var lengthBufVoter = []byte{133}
 
 func (t *Voter) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -283,6 +397,12 @@ func (t *Voter) MarshalCBOR(w io.Writer) error {
 		return xerrors.Errorf("failed to write cid field t.Tally: %w", err)
 	}
 
+	// t.PrevTally (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.PrevTally); err != nil {
+		return xerrors.Errorf("failed to write cid field t.PrevTally: %w", err)
+	}
+
 	return nil
 }
 
@@ -300,7 +420,7 @@ func (t *Voter) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 4 {
+	if extra != 5 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -357,6 +477,18 @@ func (t *Voter) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.Tally = c
+
+	}
+	// t.PrevTally (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.PrevTally: %w", err)
+		}
+
+		t.PrevTally = c
 
 	}
 	return nil

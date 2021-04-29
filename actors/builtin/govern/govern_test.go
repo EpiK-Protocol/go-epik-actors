@@ -172,11 +172,11 @@ func TestGrant(t *testing.T) {
 		rt.SetAddressActorType(governor, builtin.AccountActorCodeID)
 		rt.SetCaller(super, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(super)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, fmt.Sprintf("method %d of actor code %s not found", builtin.MethodsVote.ApplyRewards, builtin.ExpertFundActorCodeID), func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, fmt.Sprintf("method %d of actor code %s not found", builtin.MethodsVote.Vote, builtin.ExpertFundActorCodeID), func() {
 			rt.Call(actor.Grant, &govern.GrantOrRevokeParams{
 				Governor: governor,
 				Authorities: []govern.Authority{
-					{ActorCodeID: builtin.ExpertFundActorCodeID, Methods: []abi.MethodNum{builtin.MethodsVote.ApplyRewards}},
+					{ActorCodeID: builtin.ExpertFundActorCodeID, Methods: []abi.MethodNum{builtin.MethodsVote.Vote}},
 				}})
 		})
 	})

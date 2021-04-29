@@ -170,7 +170,7 @@ func TestAwardBlockReward(t *testing.T) {
 		expectedParams := builtin.ApplyRewardParams{Reward: big.NewInt(235), Penalty: minerPenalty}
 
 		rt.ExpectSend(winner, builtin.MethodsMiner.ApplyRewards, &expectedParams, big.NewInt(235), nil, 0)
-		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(3), &builtin.Discard{}, 0)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodSend, nil, big.NewInt(3), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodSend, nil, big.NewInt(27), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(46), &builtin.Discard{}, 0)
 
@@ -202,7 +202,7 @@ func TestAwardBlockReward(t *testing.T) {
 		expectedParams := builtin.ApplyRewardParams{Reward: big.NewInt(235), Penalty: minerPenalty}
 
 		rt.ExpectSend(winner, builtin.MethodsMiner.ApplyRewards, &expectedParams, big.NewInt(235), nil, 0)
-		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(3), &builtin.Discard{}, 0)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodSend, nil, big.NewInt(3), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodSend, nil, big.NewInt(27), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(39), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.RetrievalFundActorAddr, builtin.MethodsRetrieval.ApplyRewards, nil, big.NewInt(7), &builtin.Discard{}, 0)
@@ -263,7 +263,7 @@ func TestAwardBlockReward(t *testing.T) {
 		penalty := big.Zero()
 		expectedParams := builtin.ApplyRewardParams{Reward: expectedReward, Penalty: penalty}
 		rt.ExpectSend(miner, builtin.MethodsMiner.ApplyRewards, &expectedParams, expectedReward, nil, exitcode.ErrForbidden)
-		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(10), &builtin.Discard{}, 0)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodSend, nil, big.NewInt(10), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodSend, nil, big.NewInt(90), &builtin.Discard{}, 0)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, 0)
 
@@ -304,7 +304,7 @@ func TestAwardBlockReward(t *testing.T) {
 		penalty := big.Zero()
 		expectedParams := builtin.ApplyRewardParams{Reward: expectedReward, Penalty: penalty}
 		rt.ExpectSend(miner, builtin.MethodsMiner.ApplyRewards, &expectedParams, expectedReward, nil, exitcode.ErrForbidden)
-		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(10), &builtin.Discard{}, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodSend, nil, big.NewInt(10), &builtin.Discard{}, exitcode.ErrForbidden)
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodSend, nil, big.NewInt(90), &builtin.Discard{}, exitcode.ErrForbidden)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, exitcode.ErrForbidden)
 
@@ -346,7 +346,7 @@ func TestAwardBlockReward(t *testing.T) {
 		penalty := big.Zero()
 		expectedParams := builtin.ApplyRewardParams{Reward: expectedReward, Penalty: penalty}
 		rt.ExpectSend(miner, builtin.MethodsMiner.ApplyRewards, &expectedParams, expectedReward, nil, exitcode.ErrForbidden)
-		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, big.NewInt(10), &builtin.Discard{}, exitcode.ErrForbidden)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodSend, nil, big.NewInt(10), &builtin.Discard{}, exitcode.ErrForbidden)
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodSend, nil, big.NewInt(90), &builtin.Discard{}, exitcode.ErrForbidden)
 		rt.ExpectSend(builtin.KnowledgeFundActorAddr, builtin.MethodsKnowledge.ApplyRewards, nil, big.NewInt(150), &builtin.Discard{}, exitcode.ErrForbidden)
 
@@ -461,7 +461,7 @@ func (h *rewardHarness) awardBlockReward(
 	expectedParams := builtin.ApplyRewardParams{Reward: big.Add(detail.powerReward, detail.gasReward), Penalty: minerPenalty}
 	rt.ExpectSend(miner, builtin.MethodsMiner.ApplyRewards, &expectedParams, expectedParams.Reward, nil, 0)
 	if !detail.voteReward.IsZero() {
-		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodsVote.ApplyRewards, nil, detail.voteReward, &builtin.Discard{}, 0)
+		rt.ExpectSend(builtin.VoteFundActorAddr, builtin.MethodSend, nil, detail.voteReward, &builtin.Discard{}, 0)
 	}
 	if !detail.expertReward.IsZero() {
 		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodSend, nil, detail.expertReward, &builtin.Discard{}, 0)
