@@ -324,6 +324,9 @@ func (st *State) appendCronEvent(events *adt.Multimap, epoch abi.ChainEpoch, eve
 }
 
 func (st *State) AllowNoPoSt(store adt.Store, challenge abi.ChainEpoch, rand abi.Randomness) (bool, error) {
+	if challenge <= 0 {
+		return false, xerrors.Errorf("non-positive challenge not allowed %d", challenge)
+	}
 	ratios, err := adt.AsArray(store, st.WdPoStRatios, builtin.DefaultAmtBitwidth)
 	if err != nil {
 		return false, xerrors.Errorf("failed to load ratios: %w", err)
