@@ -680,3 +680,51 @@ func (t *OnExpertVotesUpdatedParams) UnmarshalCBOR(r io.Reader) error {
 	}
 	return nil
 }
+
+var lengthBufRetrievalDepositParams = []byte{129}
+
+func (t *RetrievalDepositParams) MarshalCBOR(w io.Writer) error {
+	if t == nil {
+		_, err := w.Write(cbg.CborNull)
+		return err
+	}
+	if _, err := w.Write(lengthBufRetrievalDepositParams); err != nil {
+		return err
+	}
+
+	// t.Depositor (address.Address) (struct)
+	if err := t.Depositor.MarshalCBOR(w); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (t *RetrievalDepositParams) UnmarshalCBOR(r io.Reader) error {
+	*t = RetrievalDepositParams{}
+
+	br := cbg.GetPeeker(r)
+	scratch := make([]byte, 8)
+
+	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
+	if err != nil {
+		return err
+	}
+	if maj != cbg.MajArray {
+		return fmt.Errorf("cbor input should be of type array")
+	}
+
+	if extra != 1 {
+		return fmt.Errorf("cbor input had wrong number of fields")
+	}
+
+	// t.Depositor (address.Address) (struct)
+
+	{
+
+		if err := t.Depositor.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Depositor: %w", err)
+		}
+
+	}
+	return nil
+}

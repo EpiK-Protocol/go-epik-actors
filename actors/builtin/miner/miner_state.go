@@ -129,6 +129,9 @@ type MinerInfo struct {
 	// A proposed new owner account for this miner.
 	// Must be confirmed by a message from the pending address itself.
 	PendingOwnerAddress *addr.Address
+
+	// RetrievalDepositor retrieval depositor
+	RetrievalDepositor *addr.Address
 }
 
 type WorkerKeyChange struct {
@@ -273,6 +276,7 @@ func ConstructMinerInfo(owner, worker, coinbase addr.Address, controlAddrs []add
 		WindowPoStPartitionSectors: partitionSectors,
 		ConsensusFaultElapsed:      abi.ChainEpoch(-1),
 		PendingOwnerAddress:        nil,
+		RetrievalDepositor:         nil,
 	}, nil
 }
 

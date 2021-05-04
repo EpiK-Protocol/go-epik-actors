@@ -26,6 +26,7 @@ var (
 	VoteFundActorCodeID       cid.Cid
 	KnowledgeFundActorCodeID  cid.Cid
 	RetrievalFundActorCodeID  cid.Cid
+	FlowChannelActorCodeID    cid.Cid
 )
 
 var builtinActors map[cid.Cid]*actorInfo
@@ -56,6 +57,7 @@ func init() {
 		&VoteFundActorCodeID:       {name: "epk/1/votefund"},
 		&KnowledgeFundActorCodeID:  {name: "epk/1/knowledgefund"},
 		&RetrievalFundActorCodeID:  {name: "epk/1/retrievalfund"},
+		&FlowChannelActorCodeID:    {name: "epk/1/flowchannel"},
 	} {
 		c, err := builder.Sum([]byte(info.name))
 		if err != nil {

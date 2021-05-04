@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/govern"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
@@ -46,6 +47,7 @@ func main() {
 		builtin.CheckedCID{},
 		builtin.CheckExpertStateReturn{},
 		builtin.OnExpertVotesUpdatedParams{},
+		builtin.RetrievalDepositParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -159,6 +161,22 @@ func main() {
 		panic(err)
 	}
 
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/flowch/cbor_gen.go", "flowch",
+		// actor state
+		flowch.State{},
+		flowch.LaneState{},
+		// method params and returns
+		flowch.ConstructorParams{},
+		flowch.UpdateChannelStateParams{},
+		flowch.SignedVoucher{},
+		flowch.ModVerifyParams{},
+		flowch.AddFundsParams{},
+		// other types
+		flowch.Merge{},
+	); err != nil {
+		panic(err)
+	}
+
 	if err := gen.WriteTupleEncodersToFile("./actors/builtin/paych/cbor_gen.go", "paych",
 		// actor state
 		paych.State{},
@@ -266,6 +284,7 @@ func main() {
 		/* miner.ExpirationExtension{},     */
 		miner.TerminationDeclaration{},
 		miner.PoStPartition{},
+		miner.RetrievalDepositParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -274,11 +293,15 @@ func main() {
 		// actor state
 		retrieval.State{},
 		// method params and returns
+		retrieval.DepositParams{},
 		retrieval.WithdrawBalanceParams{},
 		retrieval.RetrievalDataParams{},
 		retrieval.RetrievalState{},
+		retrieval.RetrievalData{},
+		retrieval.DepositState{},
 		retrieval.LockedState{},
 		retrieval.TotalCollateralReturn{},
+		retrieval.BindMinersParams{},
 		// other types
 	); err != nil {
 		panic(err)

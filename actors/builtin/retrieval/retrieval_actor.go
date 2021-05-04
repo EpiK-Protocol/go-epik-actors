@@ -9,7 +9,6 @@ import (
 	"github.com/ipfs/go-cid"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
-	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
 )
@@ -21,13 +20,16 @@ type Runtime = runtime.Runtime
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
-		2:                         a.AddBalance,
+		2:                         a.Deposit,
 		3:                         a.ApplyForWithdraw,
 		4:                         a.WithdrawBalance,
 		5:                         a.RetrievalData,
 		6:                         a.ConfirmData,
 		7:                         a.ApplyRewards,
 		8:                         a.TotalCollateral,
+		9:                         a.MinerRetrieval,
+		10:                        a.BindMiners,
+		11:                        a.UnbindMiners,
 	}
 }
 
@@ -58,21 +60,37 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-// Deposits the received value into the balance held in escrow.
-func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *abi.EmptyValue {
+type DepositParams struct {
+	Address addr.Address
+	Miner   addr.Address
+}
+
+// Deposit the received value into the balance held in escrow.
+func (a Actor) Deposit(rt Runtime, params *DepositParams) *abi.EmptyValue {
 	msgValue := rt.ValueReceived()
-	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "balance to add must be greater than zero")
+	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "balance to deposit must be greater than zero")
 
 	// only signing parties can add balance for client AND provider.
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	nominal, _, _ := escrowAddress(rt, *providerOrClientAddress)
+	depositor, _, _ := escrowAddress(rt, rt.Caller())
+	nominal, _, _ := escrowAddress(rt, params.Address)
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		err := st.AddBalance(rt, nominal, rt.ValueReceived())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add balance")
+		err := st.Deposit(adt.AsStore(rt), depositor, nominal, rt.ValueReceived())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
+
+		if params.Miner != addr.Undef {
+			err = st.BindMiners(adt.AsStore(rt), depositor, []addr.Address{params.Miner})
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
+		}
 	})
+
+	if params.Miner != addr.Undef {
+		code := rt.Send(params.Miner, builtin.MethodsMiner.BindRetrievalDepositor, &builtin.RetrievalDepositParams{Depositor: depositor}, abi.NewTokenAmount(0), &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send bind retrieval depositor")
+	}
 	return nil
 }
 
@@ -84,8 +102,8 @@ type WithdrawBalanceParams struct {
 // Attempt to withdraw the specified amount from the balance held in escrow.
 // If less than the specified amount is available, yields the entire available balance.
 func (a Actor) ApplyForWithdraw(rt Runtime, params *WithdrawBalanceParams) *abi.EmptyValue {
-	if params.Amount.LessThan(big.Zero()) {
-		rt.Abortf(exitcode.ErrIllegalArgument, "negative amount %v", params.Amount)
+	if params.Amount.LessThanEqual(big.Zero()) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "invalid amount %v", params.Amount)
 	}
 
 	nominal, _, approvedCallers := escrowAddress(rt, params.ProviderOrClientAddress)
@@ -95,8 +113,8 @@ func (a Actor) ApplyForWithdraw(rt Runtime, params *WithdrawBalanceParams) *abi.
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		code, err := st.ApplyForWithdraw(rt, nominal, params.Amount)
-		builtin.RequireNoErr(rt, err, code, "failed to withdraw")
+		code, err := st.ApplyForWithdraw(adt.AsStore(rt), rt.CurrEpoch(), nominal, params.Amount)
+		builtin.RequireNoErr(rt, err, code, "failed to apply withdraw")
 	})
 	return nil
 }
@@ -104,8 +122,8 @@ func (a Actor) ApplyForWithdraw(rt Runtime, params *WithdrawBalanceParams) *abi.
 // Attempt to withdraw the specified amount from the balance held in escrow.
 // If less than the specified amount is available, yields the entire available balance.
 func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.EmptyValue {
-	if params.Amount.LessThan(big.Zero()) {
-		rt.Abortf(exitcode.ErrIllegalArgument, "negative amount %v", params.Amount)
+	if params.Amount.LessThanEqual(big.Zero()) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "invalid amount %v", params.Amount)
 	}
 
 	nominal, _, approvedCallers := escrowAddress(rt, params.ProviderOrClientAddress)
@@ -115,7 +133,7 @@ func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.E
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		code, err := st.Withdraw(rt, nominal, params.Amount)
+		code, err := st.Withdraw(adt.AsStore(rt), rt.CurrEpoch(), nominal, params.Amount)
 		builtin.RequireNoErr(rt, err, code, "failed to withdraw")
 	})
 	code := rt.Send(params.ProviderOrClientAddress, builtin.MethodSend, nil, params.Amount, &builtin.Discard{})
@@ -148,35 +166,29 @@ func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, reci
 
 // RetrievalDataParams retrieval data params
 type RetrievalDataParams struct {
-	PieceID  cid.Cid
-	Size     uint64
-	Client   addr.Address
-	Provider addr.Address
+	PayloadId string
+	Size      uint64
+	Client    addr.Address
+	Provider  addr.Address
 }
 
 // RetrievalData retrieval data statistics
 func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, approvedCallers := escrowAddress(rt, params.Client)
+	nominal, _, _ := escrowAddress(rt, params.Client)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerIs(approvedCallers...)
-
-	var out expertfund.GetDataReturn
-	code := rt.Send(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.GetData, &builtin.CheckedCID{
-		CID: params.PieceID,
-	}, abi.NewTokenAmount(0), &out)
-	builtin.RequireSuccess(rt, code, "failed to load expert data.")
+	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		statistics := &RetrievalState{
-			PieceID:   params.PieceID.String(),
-			PieceSize: out.Data.PieceSize,
+		data := RetrievalData{
+			PayloadId: params.PayloadId,
+			PieceSize: abi.PaddedPieceSize(params.Size),
 			Client:    params.Client,
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
-		code, err := st.RetrievalData(rt, nominal, statistics)
+		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data)
 		builtin.RequireNoErr(rt, err, code, "failed to Statistics")
 	})
 	return nil
@@ -184,22 +196,53 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 
 // ConfirmData retrieval data statistics
 func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, approvedCallers := escrowAddress(rt, params.Client)
-	_, _, providerCallers := escrowAddress(rt, params.Provider)
-	approvedCallers = append(approvedCallers, providerCallers...)
+	nominal, _, _ := escrowAddress(rt, params.Client)
+	// _, _, providerCallers := escrowAddress(rt, params.Provider)
+	// approvedCallers = append(approvedCallers, providerCallers...)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerIs(approvedCallers...)
+	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
 
 	var reward abi.TokenAmount
 	var st State
 	rt.StateTransaction(&st, func() {
-		amount, err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, params.PieceID.String())
+		data := RetrievalData{
+			PayloadId: params.PayloadId,
+			PieceSize: abi.PaddedPieceSize(params.Size),
+			Client:    params.Client,
+			Provider:  params.Provider,
+			Epoch:     rt.CurrEpoch(),
+		}
+		amount, err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to confirm data")
 		reward = amount
 	})
 	code := rt.Send(params.Provider, builtin.MethodSend, nil, reward, &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to send retrieval reward")
+	return nil
+}
+
+// MinerRetrieval miner retrieval
+func (a Actor) MinerRetrieval(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
+	nominal, _, _ := escrowAddress(rt, params.Client)
+	// _, _, providerCallers := escrowAddress(rt, params.Provider)
+	// approvedCallers = append(approvedCallers, providerCallers...)
+	// for providers -> only corresponding owner or worker can withdraw
+	// for clients -> only the client i.e the recipient can withdraw
+	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		data := RetrievalData{
+			PayloadId: params.PayloadId,
+			PieceSize: abi.PaddedPieceSize(params.Size),
+			Client:    params.Client,
+			Provider:  params.Provider,
+			Epoch:     rt.CurrEpoch(),
+		}
+		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data)
+		builtin.RequireNoErr(rt, err, code, "failed to handle miner retrieval")
+	})
 	return nil
 }
 
@@ -234,4 +277,43 @@ func (a Actor) TotalCollateral(rt Runtime, _ *abi.EmptyValue) *TotalCollateralRe
 	return &TotalCollateralReturn{
 		TotalCollateral: st.TotalCollateral,
 	}
+}
+
+// BindMinersParams params
+type BindMinersParams struct {
+	Depositor addr.Address
+	Miners    []addr.Address
+}
+
+// BindMiners bind miners
+func (a Actor) BindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue {
+	depositor, _, _ := escrowAddress(rt, params.Depositor)
+	rt.ValidateImmediateCallerIs(depositor)
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		err := st.BindMiners(adt.AsStore(rt), depositor, params.Miners)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to bind miners")
+	})
+
+	for _, miner := range params.Miners {
+		code := rt.Send(miner, builtin.MethodsMiner.BindRetrievalDepositor, &builtin.RetrievalDepositParams{Depositor: depositor}, abi.NewTokenAmount(0), &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send bind retrieval depositor")
+	}
+
+	return nil
+}
+
+// UnbindMiners unbind miners
+func (a Actor) UnbindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue {
+	depositor, _, _ := escrowAddress(rt, params.Depositor)
+	rt.ValidateImmediateCallerIs(depositor)
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		err := st.UnbindMiners(adt.AsStore(rt), depositor, params.Miners)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to unbind miners")
+	})
+
+	return nil
 }

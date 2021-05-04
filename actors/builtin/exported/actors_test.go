@@ -12,6 +12,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/govern"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
@@ -59,6 +60,7 @@ func TestKnownActors(t *testing.T) {
 		{govern.Actor{}, builtin.GovernActorCodeID, builtin.MethodsGovern},
 		{vote.Actor{}, builtin.VoteFundActorCodeID, builtin.MethodsVote},
 		{knowledge.Actor{}, builtin.KnowledgeFundActorCodeID, builtin.MethodsKnowledge},
+		{flowch.Actor{}, builtin.FlowChannelActorCodeID, builtin.MethodsFlowch},
 	}
 	require.Equal(t, len(builtins), len(actorInfos))
 	for i, info := range actorInfos {
