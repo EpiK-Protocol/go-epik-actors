@@ -47,6 +47,7 @@ func main() {
 		builtin.ValidateGrantedParams{},
 		builtin.BatchPieceCIDParams{},
 		builtin.CheckedCID{},
+		builtin.RetrievalDepositParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -277,6 +278,7 @@ func main() {
 		/* miner.ExpirationExtension{},     */
 		miner.TerminationDeclaration{},
 		miner.PoStPartition{},
+		miner.RetrievalDepositParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -285,11 +287,15 @@ func main() {
 		// actor state
 		retrieval.State{},
 		// method params and returns
+		retrieval.DepositParams{},
 		retrieval.WithdrawBalanceParams{},
 		retrieval.RetrievalDataParams{},
 		retrieval.RetrievalState{},
+		retrieval.RetrievalData{},
+		retrieval.DepositState{},
 		retrieval.LockedState{},
 		retrieval.TotalCollateralReturn{},
+		retrieval.BindMinersParams{},
 		// other types
 	); err != nil {
 		panic(err)

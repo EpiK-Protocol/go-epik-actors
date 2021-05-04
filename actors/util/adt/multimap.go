@@ -122,6 +122,32 @@ func (mm *Multimap) RemoveAll(key abi.Keyer) error {
 	return nil
 }
 
+func (mm *Multimap) Delete(key abi.Keyer, i uint64) error {
+	array, found, err := mm.Get(key)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errors.Wrapf(err, "failed to find multimap key %v", key)
+	}
+	if err := array.Delete(i); err != nil {
+		return err
+	}
+
+	c, err := array.Root()
+	if err != nil {
+		return xerrors.Errorf("failed to flush child array: %w", err)
+	}
+
+	// Store the new array root under key.
+	newArrayRoot := cbg.CborCid(c)
+	err = mm.mp.Put(key, &newArrayRoot)
+	if err != nil {
+		return errors.Wrapf(err, "failed to store multimap values")
+	}
+	return nil
+}
+
 // Iterates all entries for a key in the order they were inserted, deserializing each value in turn into `out` and then
 // calling a function.
 // Iteration halts if the function returns an error.

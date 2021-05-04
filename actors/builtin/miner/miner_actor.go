@@ -21,6 +21,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
@@ -72,6 +73,7 @@ func (a Actor) Exports() []interface{} {
 		25:                        a.ChangeCoinbase,
 		26:                        a.StoredAny,
 		27:                        a.DisputeWindowedPoSt,
+		28:                        a.BindRetrievalDepositor,
 	}
 }
 
@@ -737,6 +739,9 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 	})
 	builtin.RequireState(rt, len(dealWeights.Sectors) != 0, "deal weight request returned no records")
 	dealWeight := dealWeights.Sectors[0]
+
+	// add retrieval deposit
+	RetrievalDataDeposit(rt, dealWeight)
 
 	store := adt.AsStore(rt)
 	var st State
@@ -2694,5 +2699,49 @@ func checkPeerInfo(rt Runtime, peerID abi.PeerID, multiaddrs []abi.Multiaddrs) {
 	}
 	if totalSize > MaxMultiaddrData {
 		rt.Abortf(exitcode.ErrIllegalArgument, "multiaddr size of %d exceeds maximum of %d", totalSize, MaxMultiaddrData)
+	}
+}
+
+type RetrievalDepositParams struct {
+	Depositor addr.Address
+}
+
+func (a Actor) BindRetrievalDepositor(rt Runtime, params *RetrievalDepositParams) *abi.EmptyValue {
+	var st State
+	rt.StateTransaction(&st, func() {
+		info := getMinerInfo(rt, &st)
+		if info.RetrievalDepositor == nil {
+			rt.ValidateImmediateCallerAcceptAny()
+		} else {
+			rt.ValidateImmediateCallerIs(info.Owner)
+		}
+		resolved, ok := rt.ResolveAddress(params.Depositor)
+		if !ok {
+			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", params.Depositor)
+		}
+		info.RetrievalDepositor = &resolved
+		err := st.SaveInfo(adt.AsStore(rt), info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to save miner info")
+	})
+
+	return nil
+}
+
+func RetrievalDataDeposit(rt Runtime, dealWeight market.SectorDealInfos) {
+	for index, pieceID := range dealWeight.PieceCIDs {
+		params := retrieval.RetrievalDataParams{
+			PayloadId: pieceID.String(),
+			Size:      uint64(dealWeight.PieceSizes[index]),
+			Client:    rt.Caller(),
+			Provider:  rt.Receiver(),
+		}
+		code := rt.Send(
+			builtin.RetrievalFundActorAddr,
+			builtin.MethodsRetrieval.MinerRetrieval,
+			&params,
+			abi.NewTokenAmount(0),
+			&builtin.Discard{},
+		)
+		builtin.RequireSuccess(rt, code, "failed to retrieval deposit for miner: %v, pieceID:%v", rt.Receiver(), pieceID)
 	}
 }

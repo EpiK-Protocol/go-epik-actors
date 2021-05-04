@@ -70,10 +70,10 @@ func (pca *Actor) Constructor(rt runtime.Runtime, params *ConstructorParams) *ab
 	rt.StateCreate(st)
 
 	rParams := &retrieval.RetrievalDataParams{
-		Flowch:   rt.Receiver(),
-		Client:   st.From,
-		Provider: st.To,
-		Size:     params.Amount.Uint64(),
+		PayloadId: rt.Receiver().String(),
+		Client:    st.From,
+		Provider:  st.To,
+		Size:      params.Amount.Uint64(),
 	}
 	// send ToSend to "To"
 	codeTo := rt.Send(
@@ -127,10 +127,10 @@ func (pca Actor) AddFunds(rt runtime.Runtime, params *AddFundsParams) *abi.Empty
 	})
 
 	rParams := &retrieval.RetrievalDataParams{
-		Flowch:   rt.Receiver(),
-		Client:   st.From,
-		Provider: st.To,
-		Size:     params.Amount.Uint64(),
+		PayloadId: rt.Receiver().String(),
+		Client:    st.From,
+		Provider:  st.To,
+		Size:      params.Amount.Uint64(),
 	}
 	// send ToSend to "To"
 	codeTo := rt.Send(
@@ -400,10 +400,10 @@ func (pca Actor) Collect(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue 
 	}
 
 	params := &retrieval.RetrievalDataParams{
-		Flowch:   rt.Receiver(),
-		Client:   st.From,
-		Provider: st.To,
-		Size:     st.ToSend.Uint64(),
+		PayloadId: rt.Receiver().String(),
+		Client:    st.From,
+		Provider:  st.To,
+		Size:      st.ToSend.Uint64(),
 	}
 	// send ToSend to "To"
 	codeTo := rt.Send(
