@@ -73,7 +73,7 @@ func (a Actor) Exports() []interface{} {
 		25:                        a.ChangeCoinbase,
 		26:                        a.StoredAny,
 		27:                        a.DisputeWindowedPoSt,
-		28:                        a.BindRetrievalDepositor,
+		28:                        a.BindRetrievalPledger,
 	}
 }
 
@@ -740,8 +740,8 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 	builtin.RequireState(rt, len(dealWeights.Sectors) != 0, "deal weight request returned no records")
 	dealWeight := dealWeights.Sectors[0]
 
-	// add retrieval deposit
-	RetrievalDataDeposit(rt, dealWeight)
+	// commit data retrieval
+	CommitDataRetrieve(rt, dealWeight)
 
 	store := adt.AsStore(rt)
 	var st State
@@ -2716,24 +2716,24 @@ func checkPeerInfo(rt Runtime, peerID abi.PeerID, multiaddrs []abi.Multiaddrs) {
 	}
 }
 
-type RetrievalDepositParams struct {
-	Depositor addr.Address
+type RetrievalPledgeParams struct {
+	Pledger addr.Address
 }
 
-func (a Actor) BindRetrievalDepositor(rt Runtime, params *RetrievalDepositParams) *abi.EmptyValue {
+func (a Actor) BindRetrievalPledger(rt Runtime, params *RetrievalPledgeParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
 		info := getMinerInfo(rt, &st)
-		if info.RetrievalDepositor == nil {
+		if info.RetrievalPledger == nil {
 			rt.ValidateImmediateCallerAcceptAny()
 		} else {
 			rt.ValidateImmediateCallerIs(info.Owner)
 		}
-		resolved, ok := rt.ResolveAddress(params.Depositor)
+		resolved, ok := rt.ResolveAddress(params.Pledger)
 		if !ok {
-			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", params.Depositor)
+			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", params.Pledger)
 		}
-		info.RetrievalDepositor = &resolved
+		info.RetrievalPledger = &resolved
 		err := st.SaveInfo(adt.AsStore(rt), info)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to save miner info")
 	})
@@ -2741,7 +2741,7 @@ func (a Actor) BindRetrievalDepositor(rt Runtime, params *RetrievalDepositParams
 	return nil
 }
 
-func RetrievalDataDeposit(rt Runtime, dealWeight market.SectorDealInfos) {
+func CommitDataRetrieve(rt Runtime, dealWeight market.SectorDealInfos) {
 	for index, pieceID := range dealWeight.PieceCIDs {
 		params := retrieval.RetrievalDataParams{
 			PayloadId: pieceID.String(),
@@ -2756,6 +2756,6 @@ func RetrievalDataDeposit(rt Runtime, dealWeight market.SectorDealInfos) {
 			abi.NewTokenAmount(0),
 			&builtin.Discard{},
 		)
-		builtin.RequireSuccess(rt, code, "failed to retrieval deposit for miner: %v, pieceID:%v", rt.Receiver(), pieceID)
+		builtin.RequireSuccess(rt, code, "failed to retrieval data for miner: %v, pieceID:%v", rt.Receiver(), pieceID)
 	}
 }

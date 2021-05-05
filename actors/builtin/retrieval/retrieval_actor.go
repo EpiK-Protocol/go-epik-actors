@@ -20,7 +20,7 @@ type Runtime = runtime.Runtime
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
-		2:                         a.Deposit,
+		2:                         a.Pledge,
 		3:                         a.ApplyForWithdraw,
 		4:                         a.WithdrawBalance,
 		5:                         a.RetrievalData,
@@ -60,36 +60,36 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-type DepositParams struct {
+type PledgeParams struct {
 	Address addr.Address
-	Miner   addr.Address
+	Miners  []addr.Address
 }
 
-// Deposit the received value into the balance held in escrow.
-func (a Actor) Deposit(rt Runtime, params *DepositParams) *abi.EmptyValue {
+// Pledge the received value into the balance held in escrow.
+func (a Actor) Pledge(rt Runtime, params *PledgeParams) *abi.EmptyValue {
 	msgValue := rt.ValueReceived()
-	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "balance to deposit must be greater than zero")
+	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "balance to pledge must be greater than zero")
 
 	// only signing parties can add balance for client AND provider.
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	depositor, _, _ := escrowAddress(rt, rt.Caller())
+	pledger, _, _ := escrowAddress(rt, rt.Caller())
 	nominal, _, _ := escrowAddress(rt, params.Address)
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		err := st.Deposit(adt.AsStore(rt), depositor, nominal, rt.ValueReceived())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
+		err := st.Pledge(adt.AsStore(rt), pledger, nominal, rt.ValueReceived())
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pledge")
 
-		if params.Miner != addr.Undef {
-			err = st.BindMiners(adt.AsStore(rt), depositor, []addr.Address{params.Miner})
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
+		if len(params.Miners) > 0 {
+			err = st.BindMiners(adt.AsStore(rt), pledger, params.Miners)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pledge")
 		}
 	})
 
-	if params.Miner != addr.Undef {
-		code := rt.Send(params.Miner, builtin.MethodsMiner.BindRetrievalDepositor, &builtin.RetrievalDepositParams{Depositor: depositor}, abi.NewTokenAmount(0), &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to send bind retrieval depositor")
+	for _, miner := range params.Miners {
+		code := rt.Send(miner, builtin.MethodsMiner.BindRetrievalPledger, &builtin.RetrievalPledgeParams{Pledger: pledger}, abi.NewTokenAmount(0), &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send bind retrieval pledger")
 	}
 	return nil
 }
@@ -281,23 +281,23 @@ func (a Actor) TotalCollateral(rt Runtime, _ *abi.EmptyValue) *TotalCollateralRe
 
 // BindMinersParams params
 type BindMinersParams struct {
-	Depositor addr.Address
-	Miners    []addr.Address
+	Pledger addr.Address
+	Miners  []addr.Address
 }
 
 // BindMiners bind miners
 func (a Actor) BindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue {
-	depositor, _, _ := escrowAddress(rt, params.Depositor)
-	rt.ValidateImmediateCallerIs(depositor)
+	pledger, _, _ := escrowAddress(rt, params.Pledger)
+	rt.ValidateImmediateCallerIs(pledger)
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		err := st.BindMiners(adt.AsStore(rt), depositor, params.Miners)
+		err := st.BindMiners(adt.AsStore(rt), pledger, params.Miners)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to bind miners")
 	})
 
 	for _, miner := range params.Miners {
-		code := rt.Send(miner, builtin.MethodsMiner.BindRetrievalDepositor, &builtin.RetrievalDepositParams{Depositor: depositor}, abi.NewTokenAmount(0), &builtin.Discard{})
+		code := rt.Send(miner, builtin.MethodsMiner.BindRetrievalPledger, &builtin.RetrievalPledgeParams{Pledger: pledger}, abi.NewTokenAmount(0), &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send bind retrieval depositor")
 	}
 
@@ -306,12 +306,12 @@ func (a Actor) BindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue 
 
 // UnbindMiners unbind miners
 func (a Actor) UnbindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue {
-	depositor, _, _ := escrowAddress(rt, params.Depositor)
-	rt.ValidateImmediateCallerIs(depositor)
+	pledger, _, _ := escrowAddress(rt, params.Pledger)
+	rt.ValidateImmediateCallerIs(pledger)
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		err := st.UnbindMiners(adt.AsStore(rt), depositor, params.Miners)
+		err := st.UnbindMiners(adt.AsStore(rt), pledger, params.Miners)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to unbind miners")
 	})
 

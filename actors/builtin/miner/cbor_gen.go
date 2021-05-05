@@ -449,8 +449,8 @@ func (t *MinerInfo) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.RetrievalDepositor (address.Address) (struct)
-	if err := t.RetrievalDepositor.MarshalCBOR(w); err != nil {
+	// t.RetrievalPledger (address.Address) (struct)
+	if err := t.RetrievalPledger.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
@@ -714,7 +714,7 @@ func (t *MinerInfo) UnmarshalCBOR(r io.Reader) error {
 		}
 
 	}
-	// t.RetrievalDepositor (address.Address) (struct)
+	// t.RetrievalPledger (address.Address) (struct)
 
 	{
 
@@ -726,9 +726,9 @@ func (t *MinerInfo) UnmarshalCBOR(r io.Reader) error {
 			if err := br.UnreadByte(); err != nil {
 				return err
 			}
-			t.RetrievalDepositor = new(address.Address)
-			if err := t.RetrievalDepositor.UnmarshalCBOR(br); err != nil {
-				return xerrors.Errorf("unmarshaling t.RetrievalDepositor pointer: %w", err)
+			t.RetrievalPledger = new(address.Address)
+			if err := t.RetrievalPledger.UnmarshalCBOR(br); err != nil {
+				return xerrors.Errorf("unmarshaling t.RetrievalPledger pointer: %w", err)
 			}
 		}
 
@@ -4324,26 +4324,26 @@ func (t *PoStPartition) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufRetrievalDepositParams = []byte{129}
+var lengthBufRetrievalPledgeParams = []byte{129}
 
-func (t *RetrievalDepositParams) MarshalCBOR(w io.Writer) error {
+func (t *RetrievalPledgeParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
 		_, err := w.Write(cbg.CborNull)
 		return err
 	}
-	if _, err := w.Write(lengthBufRetrievalDepositParams); err != nil {
+	if _, err := w.Write(lengthBufRetrievalPledgeParams); err != nil {
 		return err
 	}
 
-	// t.Depositor (address.Address) (struct)
-	if err := t.Depositor.MarshalCBOR(w); err != nil {
+	// t.Pledger (address.Address) (struct)
+	if err := t.Pledger.MarshalCBOR(w); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (t *RetrievalDepositParams) UnmarshalCBOR(r io.Reader) error {
-	*t = RetrievalDepositParams{}
+func (t *RetrievalPledgeParams) UnmarshalCBOR(r io.Reader) error {
+	*t = RetrievalPledgeParams{}
 
 	br := cbg.GetPeeker(r)
 	scratch := make([]byte, 8)
@@ -4360,12 +4360,12 @@ func (t *RetrievalDepositParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Depositor (address.Address) (struct)
+	// t.Pledger (address.Address) (struct)
 
 	{
 
-		if err := t.Depositor.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Depositor: %w", err)
+		if err := t.Pledger.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Pledger: %w", err)
 		}
 
 	}

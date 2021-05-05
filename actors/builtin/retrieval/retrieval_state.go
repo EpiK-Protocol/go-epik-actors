@@ -16,7 +16,7 @@ import (
 type State struct {
 	RetrievalStates cid.Cid // Map, HAMT[Address]RetrievalState
 
-	Deposits cid.Cid // Map, HAMT[Address]DepositState
+	Pledges cid.Cid // Map, HAMT[Address]PledgeState
 
 	// Amount locked, indexed by actor address.
 	LockedTable cid.Cid // // BalanceTable
@@ -36,10 +36,10 @@ type State struct {
 
 // RetrievalState state
 type RetrievalState struct {
-	Deposits  cid.Cid // Map, HAMT[Address]abi.TokenAmount
+	Pledges   cid.Cid // Map, HAMT[Address]abi.TokenAmount
 	Miners    []addr.Address
 	Datas     cid.Cid         // Map, HAMT[PayloadId]RetrievalData
-	Amount    abi.TokenAmount // total deposit amount
+	Amount    abi.TokenAmount // total pledge amount
 	EpochDate uint64
 	DateSize  abi.PaddedPieceSize // date retrieval size
 }
@@ -53,8 +53,8 @@ type RetrievalData struct {
 	Epoch     abi.ChainEpoch
 }
 
-// DepositState record deposit state
-type DepositState struct {
+// PledgeState record pledge state
+type PledgeState struct {
 	Targets []addr.Address
 }
 
@@ -74,7 +74,7 @@ func ConstructState(store adt.Store) (*State, error) {
 
 	return &State{
 		RetrievalStates: emptyMapCid,
-		Deposits:        emptyMapCid,
+		Pledges:         emptyMapCid,
 		LockedTable:     emptyMapCid,
 
 		TotalLockedCollateral: abi.NewTokenAmount(0),
@@ -84,45 +84,45 @@ func ConstructState(store adt.Store) (*State, error) {
 	}, nil
 }
 
-// Deposit add balance for
-func (st *State) Deposit(store adt.Store, depositor addr.Address, target addr.Address, amount abi.TokenAmount) error {
+// Pledge add balance for
+func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Address, amount abi.TokenAmount) error {
 	if amount.LessThanEqual(big.Zero()) {
 		return xerrors.Errorf("invalid amount %v of funds to add", amount)
 	}
 
-	// update deposits
-	depositsMap, err := adt.AsMap(store, st.Deposits, builtin.DefaultHamtBitwidth)
+	// update pledges
+	pledgesMap, err := adt.AsMap(store, st.Pledges, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return xerrors.Errorf("failed to load dsposits:%v", err)
 	}
 
-	var deposit DepositState
-	found, err := depositsMap.Get(abi.AddrKey(depositor), &deposit)
+	var pledge PledgeState
+	found, err := pledgesMap.Get(abi.AddrKey(pledger), &pledge)
 	if err != nil {
 		return xerrors.Errorf("failed to get dspositor info:%v", err)
 	}
 
 	if found {
 		tfound := false
-		for _, t := range deposit.Targets {
+		for _, t := range pledge.Targets {
 			if t == target {
 				tfound = true
 				break
 			}
 		}
 		if !tfound {
-			deposit.Targets = append(deposit.Targets, target)
+			pledge.Targets = append(pledge.Targets, target)
 		}
 	} else {
-		deposit = DepositState{
+		pledge = PledgeState{
 			Targets: []addr.Address{target},
 		}
 	}
 
-	if err = depositsMap.Put(abi.AddrKey(depositor), &deposit); err != nil {
+	if err = pledgesMap.Put(abi.AddrKey(pledger), &pledge); err != nil {
 		return err
 	}
-	if st.Deposits, err = depositsMap.Root(); err != nil {
+	if st.Pledges, err = pledgesMap.Root(); err != nil {
 		return err
 	}
 
@@ -143,7 +143,7 @@ func (st *State) Deposit(store adt.Store, depositor addr.Address, target addr.Ad
 			return xerrors.Errorf("failed to create empty map: %w", err)
 		}
 		state = RetrievalState{
-			Deposits:  emptyMapCid,
+			Pledges:   emptyMapCid,
 			Miners:    []addr.Address{},
 			Datas:     emptyMapCid,
 			Amount:    abi.NewTokenAmount(0),
@@ -152,20 +152,20 @@ func (st *State) Deposit(store adt.Store, depositor addr.Address, target addr.Ad
 		}
 	}
 	state.Amount = big.Add(state.Amount, amount)
-	sdmap, err := adt.AsMap(store, state.Deposits, builtin.DefaultHamtBitwidth)
+	sdmap, err := adt.AsMap(store, state.Pledges, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return err
 	}
 	var dAmount abi.TokenAmount
-	_, err = sdmap.Get(abi.AddrKey(depositor), &dAmount)
+	_, err = sdmap.Get(abi.AddrKey(pledger), &dAmount)
 	if err != nil {
 		return err
 	}
 	dAmount = big.Add(dAmount, amount)
-	if err = sdmap.Put(abi.AddrKey(depositor), &dAmount); err != nil {
+	if err = sdmap.Put(abi.AddrKey(pledger), &dAmount); err != nil {
 		return err
 	}
-	if state.Deposits, err = sdmap.Root(); err != nil {
+	if state.Pledges, err = sdmap.Root(); err != nil {
 		return err
 	}
 	if err = stateMap.Put(abi.AddrKey(target), &state); err != nil {
@@ -181,23 +181,23 @@ func (st *State) Deposit(store adt.Store, depositor addr.Address, target addr.Ad
 }
 
 // ApplyForWithdraw apply for withdraw amount
-func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depositor addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
+func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, pledger addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
 	if amount.LessThanEqual(big.Zero()) {
 		return exitcode.ErrIllegalState, xerrors.Errorf("invalid amount %v of funds to apply", amount)
 	}
 
-	depositsMap, err := adt.AsMap(store, st.Deposits, builtin.DefaultHamtBitwidth)
+	pledgesMap, err := adt.AsMap(store, st.Pledges, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, err
 	}
 
-	var deposits DepositState
-	found, err := depositsMap.Get(abi.AddrKey(depositor), &deposits)
+	var pledges PledgeState
+	found, err := pledgesMap.Get(abi.AddrKey(pledger), &pledges)
 	if err != nil {
-		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load deposits map: %w", err)
+		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load pledges map: %w", err)
 	}
 	if !found {
-		return exitcode.ErrIllegalState, xerrors.Errorf("failed to find deposit with addr:%s", depositor)
+		return exitcode.ErrIllegalState, xerrors.Errorf("failed to find pledge with addr:%s", pledger)
 	}
 
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
@@ -207,8 +207,8 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depo
 
 	total := abi.NewTokenAmount(0)
 	i := 0
-	for ; i < len(deposits.Targets); i++ {
-		target := deposits.Targets[i]
+	for ; i < len(pledges.Targets); i++ {
+		target := pledges.Targets[i]
 		var state RetrievalState
 		found, err := stateMap.Get(abi.AddrKey(target), &state)
 		if err != nil {
@@ -217,17 +217,17 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depo
 		if !found {
 			return exitcode.ErrIllegalState, xerrors.Errorf("failed to get retrieval state: %v", target)
 		}
-		dmap, err := adt.AsMap(store, state.Deposits, builtin.DefaultHamtBitwidth)
+		dmap, err := adt.AsMap(store, state.Pledges, builtin.DefaultHamtBitwidth)
 		if err != nil {
 			return exitcode.ErrIllegalState, err
 		}
 		var outAmount abi.TokenAmount
-		found, err = dmap.Get(abi.AddrKey(depositor), &outAmount)
+		found, err = dmap.Get(abi.AddrKey(pledger), &outAmount)
 		if err != nil {
 			return exitcode.ErrIllegalState, err
 		}
 		if !found {
-			return exitcode.ErrIllegalState, xerrors.Errorf("failed to get retrieval state deposit: %v", target)
+			return exitcode.ErrIllegalState, xerrors.Errorf("failed to get retrieval state pledge: %v", target)
 		}
 
 		left := abi.NewTokenAmount(0)
@@ -237,10 +237,10 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depo
 			left = big.Sub(big.Add(total, outAmount), amount)
 			total = amount
 		}
-		if err = dmap.Put(abi.AddrKey(depositor), &left); err != nil {
+		if err = dmap.Put(abi.AddrKey(pledger), &left); err != nil {
 			return exitcode.ErrIllegalState, err
 		}
-		if state.Deposits, err = dmap.Root(); err != nil {
+		if state.Pledges, err = dmap.Root(); err != nil {
 			return exitcode.ErrIllegalState, err
 		}
 		state.Amount = big.Sub(state.Amount, big.Sub(outAmount, left))
@@ -253,11 +253,11 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depo
 		}
 	}
 
-	deposits.Targets = deposits.Targets[i:]
-	if err = depositsMap.Put(abi.AddrKey(depositor), &deposits); err != nil {
+	pledges.Targets = pledges.Targets[i:]
+	if err = pledgesMap.Put(abi.AddrKey(pledger), &pledges); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
-	if st.Deposits, err = depositsMap.Root(); err != nil {
+	if st.Pledges, err = pledgesMap.Root(); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
 
@@ -271,7 +271,7 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depo
 		return exitcode.ErrIllegalState, err
 	}
 	var outLocked LockedState
-	found, err = lockedMap.Get(abi.AddrKey(depositor), &outLocked)
+	found, err = lockedMap.Get(abi.AddrKey(pledger), &outLocked)
 
 	if err != nil {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to get locked: %w", err)
@@ -284,7 +284,7 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depo
 	}
 	outLocked.Amount = big.Add(outLocked.Amount, amount)
 	outLocked.ApplyEpoch = curEpoch
-	if err = lockedMap.Put(abi.AddrKey(depositor), &outLocked); err != nil {
+	if err = lockedMap.Put(abi.AddrKey(pledger), &outLocked); err != nil {
 		return exitcode.ErrForbidden, err
 	}
 	if st.LockedTable, err = lockedMap.Root(); err != nil {
@@ -297,7 +297,7 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, depo
 }
 
 // Withdraw withdraw amount
-func (st *State) Withdraw(store adt.Store, curEpoch abi.ChainEpoch, depositor addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
+func (st *State) Withdraw(store adt.Store, curEpoch abi.ChainEpoch, pledger addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
 	if amount.LessThan(big.Zero()) {
 		return exitcode.ErrIllegalState, xerrors.Errorf("negative amount %v of funds to withdraw", amount)
 	}
@@ -307,7 +307,7 @@ func (st *State) Withdraw(store adt.Store, curEpoch abi.ChainEpoch, depositor ad
 		return exitcode.ErrIllegalState, err
 	}
 	var out LockedState
-	found, err := lockedMap.Get(abi.AddrKey(depositor), &out)
+	found, err := lockedMap.Get(abi.AddrKey(pledger), &out)
 	if err != nil {
 		return exitcode.ErrIllegalState, err
 	}
@@ -318,7 +318,7 @@ func (st *State) Withdraw(store adt.Store, curEpoch abi.ChainEpoch, depositor ad
 		return exitcode.ErrForbidden, xerrors.Errorf("failed to withdraw at %d: %s", out.ApplyEpoch, amount)
 	}
 	out.Amount = big.Sub(out.Amount, amount)
-	lockedMap.Put(abi.AddrKey(depositor), &out)
+	lockedMap.Put(abi.AddrKey(pledger), &out)
 	if st.LockedTable, err = lockedMap.Root(); err != nil {
 		return exitcode.ErrIllegalState, err
 	}

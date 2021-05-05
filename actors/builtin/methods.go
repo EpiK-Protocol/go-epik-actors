@@ -113,7 +113,7 @@ var MethodsMiner = struct {
 	ChangeCoinbase           abi.MethodNum
 	StoredAny                abi.MethodNum
 	DisputeWindowedPoSt      abi.MethodNum
-	BindRetrievalDepositor   abi.MethodNum
+	BindRetrievalPledger     abi.MethodNum
 }{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
 
 // var MethodsVerifiedRegistry = struct {
@@ -165,7 +165,7 @@ var MethodsVote = struct {
 
 var MethodsRetrieval = struct {
 	Constructor      abi.MethodNum
-	Deposit          abi.MethodNum
+	Pledge           abi.MethodNum
 	ApplyForWithdraw abi.MethodNum
 	WithdrawBalance  abi.MethodNum
 	RetrievalData    abi.MethodNum

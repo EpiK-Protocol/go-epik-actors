@@ -149,8 +149,8 @@ type ApplyRewardParams struct {
 	Penalty abi.TokenAmount
 }
 
-type RetrievalDepositParams struct {
-	Depositor addr.Address
+type RetrievalPledgeParams struct {
+	Pledger addr.Address
 }
 
 // Discard is a helper

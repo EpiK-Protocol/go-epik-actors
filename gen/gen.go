@@ -47,7 +47,7 @@ func main() {
 		builtin.CheckedCID{},
 		builtin.CheckExpertStateReturn{},
 		builtin.OnExpertVotesUpdatedParams{},
-		builtin.RetrievalDepositParams{},
+		builtin.RetrievalPledgeParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -284,7 +284,7 @@ func main() {
 		/* miner.ExpirationExtension{},     */
 		miner.TerminationDeclaration{},
 		miner.PoStPartition{},
-		miner.RetrievalDepositParams{},
+		miner.RetrievalPledgeParams{},
 	); err != nil {
 		panic(err)
 	}
@@ -293,12 +293,12 @@ func main() {
 		// actor state
 		retrieval.State{},
 		// method params and returns
-		retrieval.DepositParams{},
+		retrieval.PledgeParams{},
 		retrieval.WithdrawBalanceParams{},
 		retrieval.RetrievalDataParams{},
 		retrieval.RetrievalState{},
 		retrieval.RetrievalData{},
-		retrieval.DepositState{},
+		retrieval.PledgeState{},
 		retrieval.LockedState{},
 		retrieval.TotalCollateralReturn{},
 		retrieval.BindMinersParams{},
