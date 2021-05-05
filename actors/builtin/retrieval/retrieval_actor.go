@@ -82,13 +82,13 @@ func (a Actor) Pledge(rt Runtime, params *PledgeParams) *abi.EmptyValue {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pledge")
 
 		if len(params.Miners) > 0 {
-			err = st.BindMiners(adt.AsStore(rt), pledger, params.Miners)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pledge")
+			err = st.BindMiners(adt.AsStore(rt), nominal, params.Miners)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to bind miners")
 		}
 	})
 
 	for _, miner := range params.Miners {
-		code := rt.Send(miner, builtin.MethodsMiner.BindRetrievalPledger, &builtin.RetrievalPledgeParams{Pledger: pledger}, abi.NewTokenAmount(0), &builtin.Discard{})
+		code := rt.Send(miner, builtin.MethodsMiner.BindRetrievalPledger, &builtin.RetrievalPledgeParams{Pledger: nominal}, abi.NewTokenAmount(0), &builtin.Discard{})
 		builtin.RequireSuccess(rt, code, "failed to send bind retrieval pledger")
 	}
 	return nil

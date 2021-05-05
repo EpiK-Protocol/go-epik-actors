@@ -93,13 +93,13 @@ func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Addre
 	// update pledges
 	pledgesMap, err := adt.AsMap(store, st.Pledges, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return xerrors.Errorf("failed to load dsposits:%v", err)
+		return xerrors.Errorf("failed to load pledges:%v", err)
 	}
 
 	var pledge PledgeState
 	found, err := pledgesMap.Get(abi.AddrKey(pledger), &pledge)
 	if err != nil {
-		return xerrors.Errorf("failed to get dspositor info:%v", err)
+		return xerrors.Errorf("failed to get pledger info:%v", err)
 	}
 
 	if found {
@@ -157,11 +157,16 @@ func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Addre
 		return err
 	}
 	var dAmount abi.TokenAmount
-	_, err = sdmap.Get(abi.AddrKey(pledger), &dAmount)
+	found, err = sdmap.Get(abi.AddrKey(pledger), &dAmount)
 	if err != nil {
 		return err
 	}
-	dAmount = big.Add(dAmount, amount)
+	if found {
+		dAmount = big.Add(dAmount, amount)
+	} else {
+		dAmount = amount
+	}
+
 	if err = sdmap.Put(abi.AddrKey(pledger), &dAmount); err != nil {
 		return err
 	}

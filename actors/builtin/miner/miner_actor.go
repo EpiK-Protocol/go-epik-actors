@@ -2742,11 +2742,17 @@ func (a Actor) BindRetrievalPledger(rt Runtime, params *RetrievalPledgeParams) *
 }
 
 func CommitDataRetrieve(rt Runtime, dealWeight market.SectorDealInfos) {
+	var st State
+	rt.StateReadonly(&st)
+	info := getMinerInfo(rt, &st)
+	if info.RetrievalPledger == nil {
+		rt.Abortf(exitcode.ErrIllegalArgument, "failed to commit data retrieval with no pledger: %s", rt.Receiver())
+	}
 	for index, pieceID := range dealWeight.PieceCIDs {
 		params := retrieval.RetrievalDataParams{
 			PayloadId: pieceID.String(),
 			Size:      uint64(dealWeight.PieceSizes[index]),
-			Client:    rt.Caller(),
+			Client:    *info.RetrievalPledger,
 			Provider:  rt.Receiver(),
 		}
 		code := rt.Send(
