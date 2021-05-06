@@ -2084,12 +2084,17 @@ func handleProvingDeadline(rt Runtime) {
 	rt.StateReadonly(&st)
 
 	currDeadline := st.DeadlineInfo(currEpoch)
-	var ret power.AllowNoWindowPoStReturn
-	code := rt.Send(builtin.StoragePowerActorAddr, builtin.MethodsPower.AllowNoWindowPoSt, &power.AllowNoWindowPoStParams{
-		DeadlineChallenge: currDeadline.Challenge,
-		Randomness:        getWindowPoStRandomness(rt, currDeadline.Challenge),
-	}, big.Zero(), &ret)
-	builtin.RequireSuccess(rt, code, "failed to check post ratio at %d, challenge %d", currEpoch, currDeadline.Challenge)
+
+	allowNoPoSt := false
+	if currDeadline.Challenge > 0 {
+		var ret power.AllowNoWindowPoStReturn
+		code := rt.Send(builtin.StoragePowerActorAddr, builtin.MethodsPower.AllowNoWindowPoSt, &power.AllowNoWindowPoStParams{
+			DeadlineChallenge: currDeadline.Challenge,
+			Randomness:        getWindowPoStRandomness(rt, currDeadline.Challenge),
+		}, big.Zero(), &ret)
+		builtin.RequireSuccess(rt, code, "failed to check post ratio at %d, challenge %d", currEpoch, currDeadline.Challenge)
+		allowNoPoSt = ret.Allowed
+	}
 
 	rt.StateTransaction(&st, func() {
 		{
@@ -2121,7 +2126,7 @@ func handleProvingDeadline(rt Runtime) {
 		hadEarlyTerminations = havePendingEarlyTerminations(rt, &st)
 
 		{
-			result, err := st.AdvanceDeadline(store, currDeadline, ret.Allowed)
+			result, err := st.AdvanceDeadline(store, currDeadline, allowNoPoSt)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to advance deadline")
 
 			/* // Faults detected by this missed PoSt pay no penalty, but sectors that were already faulty
