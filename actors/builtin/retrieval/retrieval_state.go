@@ -366,6 +366,19 @@ func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAdd
 	if err != nil {
 		return exitcode.ErrIllegalState, err
 	}
+
+	var outData RetrievalData
+	found, err = dataMap.Get(adt.StringKey(data.PayloadId), &outData)
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	if found {
+		last := uint64(outData.Epoch / RetrievalStateDuration)
+		if last >= curEpochDay {
+			data.PieceSize = data.PieceSize + outData.PieceSize
+		}
+	}
+
 	if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
@@ -408,10 +421,9 @@ func (st *State) ConfirmData(store adt.Store, curEpoch abi.ChainEpoch, fromAddr 
 	}
 
 	curEpochDay := curEpoch / RetrievalStateDuration
-	if (out.Epoch / RetrievalStateDuration) == curEpochDay {
+	if (out.Epoch / RetrievalStateDuration) >= curEpochDay {
 		state.DateSize = state.DateSize - out.PieceSize + data.PieceSize
 	}
-	out.PieceSize = data.PieceSize
 	if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
 		return abi.NewTokenAmount(0), err
 	}
