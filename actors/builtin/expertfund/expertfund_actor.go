@@ -143,10 +143,10 @@ func (a Actor) BatchCheckData(rt Runtime, params *BatchCheckDataParams) *abi.Emp
 	rt.StateReadonly(&st)
 
 	pieceCIDs := make([]cid.Cid, 0, len(params.CheckedPieces))
-	checkedPieceSizes := make(map[cid.Cid]abi.PaddedPieceSize)
+	checkedPieceSizes := make(map[string]abi.PaddedPieceSize)
 	for _, cp := range params.CheckedPieces {
 		pieceCIDs = append(pieceCIDs, cp.PieceCID)
-		checkedPieceSizes[cp.PieceCID] = cp.PieceSize
+		checkedPieceSizes[cp.PieceCID.String()] = cp.PieceSize
 	}
 	pieceToExpert, _, err := st.GetPieceInfos(adt.AsStore(rt), pieceCIDs...)
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get piece info")
@@ -214,8 +214,10 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 
 	expertDepositSize := make(map[address.Address]abi.PaddedPieceSize)
 	for _, info := range onchainInfos {
-		if info.Redundancy == pieceToThreshold[info.PieceID] {
-			expertAddr := pieceToExpert[info.PieceID]
+		pieceID, err := cid.Parse(info.PieceID)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to parse info pieceID")
+		if info.Redundancy == pieceToThreshold[pieceID] {
+			expertAddr := pieceToExpert[pieceID]
 			eInfo, ok := expertToInfo[expertAddr]
 			builtin.RequireState(rt, ok, "expert of piece %s not found", info.PieceID)
 

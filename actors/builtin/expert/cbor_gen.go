@@ -329,16 +329,28 @@ func (t *DataOnChainInfo) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.RootID (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.RootID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.RootID: %w", err)
+	// t.RootID (string) (string)
+	if len(t.RootID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.RootID was too long")
 	}
 
-	// t.PieceID (cid.Cid) (struct)
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.RootID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.RootID)); err != nil {
+		return err
+	}
 
-	if err := cbg.WriteCidBuf(scratch, w, t.PieceID); err != nil {
-		return xerrors.Errorf("failed to write cid field t.PieceID: %w", err)
+	// t.PieceID (string) (string)
+	if len(t.PieceID) > cbg.MaxLength {
+		return xerrors.Errorf("Value in field t.PieceID was too long")
+	}
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajTextString, uint64(len(t.PieceID))); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, string(t.PieceID)); err != nil {
+		return err
 	}
 
 	// t.PieceSize (abi.PaddedPieceSize) (uint64)
@@ -374,29 +386,25 @@ func (t *DataOnChainInfo) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.RootID (cid.Cid) (struct)
+	// t.RootID (string) (string)
 
 	{
-
-		c, err := cbg.ReadCid(br)
+		sval, err := cbg.ReadStringBuf(br, scratch)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.RootID: %w", err)
+			return err
 		}
 
-		t.RootID = c
-
+		t.RootID = string(sval)
 	}
-	// t.PieceID (cid.Cid) (struct)
+	// t.PieceID (string) (string)
 
 	{
-
-		c, err := cbg.ReadCid(br)
+		sval, err := cbg.ReadStringBuf(br, scratch)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.PieceID: %w", err)
+			return err
 		}
 
-		t.PieceID = c
-
+		t.PieceID = string(sval)
 	}
 	// t.PieceSize (abi.PaddedPieceSize) (uint64)
 

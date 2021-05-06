@@ -183,8 +183,8 @@ func (a Actor) ImportData(rt Runtime, params *ImportDataParams) *abi.EmptyValue 
 		builtin.RequireParam(rt, len(infos) == 0, "duplicate data %s", params.PieceID)
 
 		err = st.PutDatas(store, &DataOnChainInfo{
-			RootID:    params.RootID,
-			PieceID:   params.PieceID,
+			RootID:    params.RootID.String(),
+			PieceID:   params.PieceID.String(),
 			PieceSize: params.PieceSize,
 		})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to import data")

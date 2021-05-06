@@ -49,8 +49,8 @@ type ExpertInfo struct {
 }
 
 type DataOnChainInfo struct {
-	RootID     cid.Cid `checked:"true"`
-	PieceID    cid.Cid `checked:"true"`
+	RootID     string
+	PieceID    string
 	PieceSize  abi.PaddedPieceSize
 	Redundancy uint64
 }
@@ -98,7 +98,7 @@ func (st *State) PutDatas(store adt.Store, infos ...*DataOnChainInfo) error {
 	}
 
 	for _, info := range infos {
-		if err := datas.Put(abi.CidKey(info.PieceID), info); err != nil {
+		if err := datas.Put(adt.StringKey(info.PieceID), info); err != nil {
 			return xerrors.Errorf("failed to put data %s: %w", info.PieceID, err)
 		}
 	}
@@ -115,7 +115,7 @@ func (st *State) GetDatas(store adt.Store, mustPresent bool, pieceIDs ...cid.Cid
 	ret := make([]*DataOnChainInfo, 0, len(pieceIDs))
 	for _, pieceID := range pieceIDs {
 		var info DataOnChainInfo
-		found, err := datas.Get(abi.CidKey(pieceID), &info)
+		found, err := datas.Get(adt.StringKey(pieceID.String()), &info)
 		if err != nil {
 			return nil, xerrors.Errorf("failed to get data %v: %w", pieceID, err)
 		}
@@ -135,7 +135,7 @@ func (st *State) DeleteData(store adt.Store, pieceID cid.Cid) error {
 	if err != nil {
 		return err
 	}
-	present, err := datas.TryDelete(abi.CidKey(pieceID))
+	present, err := datas.TryDelete(adt.StringKey(pieceID.String()))
 	if err != nil {
 		return xerrors.Errorf("failed to delete data %s: %w", pieceID, err)
 	}
