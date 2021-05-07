@@ -23,6 +23,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/power"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vesting"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
 	. "github.com/filecoin-project/specs-actors/v2/actors/util"
@@ -61,19 +62,17 @@ func (a Actor) Exports() []interface{} {
 		13:                        a.CheckSectorProven,
 		14:                        a.ApplyRewards,
 		15:                        a.ReportConsensusFault,
-		16:                        a.WithdrawBalance,
-		17:                        a.ConfirmSectorProofsValid,
-		18:                        a.ChangeMultiaddrs,
-		19:                        a.CompactPartitions,
-		20:                        a.CompactSectorNumbers,
-		21:                        a.ConfirmUpdateWorkerKey,
-		22:                        a.RepayDebt,
-		23:                        a.AddPledge,
-		24:                        a.WithdrawPledge,
-		25:                        a.ChangeCoinbase,
-		26:                        a.StoredAny,
-		27:                        a.DisputeWindowedPoSt,
-		28:                        a.BindRetrievalPledger,
+		16:                        a.ConfirmSectorProofsValid,
+		17:                        a.ChangeMultiaddrs,
+		18:                        a.CompactPartitions,
+		19:                        a.CompactSectorNumbers,
+		20:                        a.ConfirmUpdateWorkerKey,
+		21:                        a.AddPledge,
+		22:                        a.WithdrawPledge,
+		23:                        a.ChangeCoinbase,
+		24:                        a.StoredAny,
+		25:                        a.DisputeWindowedPoSt,
+		26:                        a.BindRetrievalPledger,
 	}
 }
 
@@ -541,8 +540,8 @@ func (a Actor) DisputeWindowedPoSt(rt Runtime, params *DisputeWindowedPoStParams
 	// epochReward := requestCurrentEpochBlockReward(rt)
 	// pwrTotal := requestCurrentTotalPower(rt)
 
-	toBurn := abi.NewTokenAmount(0)
-	toReward := abi.NewTokenAmount(0)
+	// toBurn := abi.NewTokenAmount(0)
+	// toReward := abi.NewTokenAmount(0)
 	// pledgeDelta := abi.NewTokenAmount(0)
 	powerDelta := NewPowerPairZero()
 	var st State
@@ -635,16 +634,19 @@ func (a Actor) DisputeWindowedPoSt(rt Runtime, params *DisputeWindowedPoStParams
 			// // portion of their fee back as a reward.
 			// penaltyTarget := big.Add(penaltyBase, rewardTarget)
 
-			err := st.ApplyPenalty(rewardTarget)
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply penalty")
-			penaltyFromVesting, penaltyFromBalance, err := st.RepayPartialDebtInPriorityOrder(store, currEpoch, rt.CurrentBalance())
-			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pay debt")
-			toBurn = big.Add(penaltyFromVesting, penaltyFromBalance)
+			err := st.ApplyReporterDebt(adt.AsStore(rt), reporter, rewardTarget)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply reporter debt")
 
-			// Now, move as much of the target reward as
-			// we can from the burn to the reward.
-			toReward = big.Min(toBurn, rewardTarget)
-			toBurn = big.Sub(toBurn, toReward)
+			// err := st.ApplyPenalty(rewardTarget)
+			// builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply penalty")
+			// penaltyFromVesting, penaltyFromBalance, err := st.RepayPartialDebtInPriorityOrder(store, currEpoch, rt.CurrentBalance())
+			// builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pay debt")
+			// toBurn = big.Add(penaltyFromVesting, penaltyFromBalance)
+
+			// // Now, move as much of the target reward as
+			// // we can from the burn to the reward.
+			// toReward = big.Min(toBurn, rewardTarget)
+			// toBurn = big.Sub(toBurn, toReward)
 
 			// pledgeDelta = penaltyFromVesting.Neg()
 		}
@@ -652,17 +654,17 @@ func (a Actor) DisputeWindowedPoSt(rt Runtime, params *DisputeWindowedPoStParams
 
 	requestUpdatePower(rt, big.Zero(), powerDelta)
 
-	if !toReward.IsZero() {
-		// Try to send the reward to the reporter.
-		code := rt.Send(reporter, builtin.MethodSend, nil, toReward, &builtin.Discard{})
+	// if !toReward.IsZero() {
+	// 	// Try to send the reward to the reporter.
+	// 	code := rt.Send(reporter, builtin.MethodSend, nil, toReward, &builtin.Discard{})
 
-		// If we fail, log and burn the reward to make sure the balances remain correct.
-		if !code.IsSuccess() {
-			rt.Log(rtt.ERROR, "failed to send reward")
-			toBurn = big.Add(toBurn, toReward)
-		}
-	}
-	burnFunds(rt, toBurn)
+	// 	// If we fail, log and burn the reward to make sure the balances remain correct.
+	// 	if !code.IsSuccess() {
+	// 		rt.Log(rtt.ERROR, "failed to send reward")
+	// 		toBurn = big.Add(toBurn, toReward)
+	// 	}
+	// }
+	// burnFunds(rt, toBurn)
 	// notifyPledgeChanged(rt, pledgeDelta)
 	rt.StateReadonly(&st)
 
@@ -746,7 +748,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 	store := adt.AsStore(rt)
 	var st State
 	var err error
-	feeToBurn := abi.NewTokenAmount(0)
+	// feeToBurn := abi.NewTokenAmount(0)
 	rt.StateTransaction(&st, func() {
 		/* newlyVested, err = st.UnlockVestedFunds(store, rt.CurrEpoch())
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to vest funds")
@@ -754,8 +756,8 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 		// this before RepayDebts. We would have to
 		// subtract fee debt explicitly if we called this after.
 		availableBalance, err := st.GetAvailableBalance(rt.CurrentBalance())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate available balance") */
-		feeToBurn = RepayDebtsOrAbort(rt, &st)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate available balance")
+		feeToBurn = RepayDebtsOrAbort(rt, &st) */
 
 		info := getMinerInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(append(info.ControlAddresses, info.Owner, info.Worker)...)
@@ -837,7 +839,7 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add pre-piece")
 	})
 
-	burnFunds(rt, feeToBurn)
+	// burnFunds(rt, feeToBurn)
 	rt.StateReadonly(&st)
 	err = st.CheckBalanceInvariants(rt.CurrentBalance())
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")
@@ -1682,50 +1684,62 @@ func (a Actor) CompactSectorNumbers(rt Runtime, params *CompactSectorNumbersPara
 
 // Locks up some amount of the miner's unlocked balance (including funds received alongside the invoking message).
 func (a Actor) ApplyRewards(rt Runtime, params *builtin.ApplyRewardParams) *abi.EmptyValue {
-	if params.Reward.Sign() < 0 {
-		rt.Abortf(exitcode.ErrIllegalArgument, "cannot lock up a negative amount of funds")
-	}
-	if params.Penalty.Sign() < 0 {
-		rt.Abortf(exitcode.ErrIllegalArgument, "cannot penalize a negative amount of funds")
-	}
+	builtin.RequireParam(rt, params.Reward.Sign() >= 0, "cannot lock up a negative amount of funds")
+	builtin.RequireParam(rt, params.Penalty.Sign() >= 0, "cannot penalize a negative amount of funds")
+
+	received := rt.ValueReceived()
+	builtin.RequireParam(rt, received.Equals(params.Reward), "received funds not equal to expected")
+
+	toBurn := big.Zero()
+	toCoinbase := big.Zero()
+	toReporters := make(map[addr.Address]abi.TokenAmount)
 
 	var st State
-	pledgeDeltaTotal := big.Zero()
-	toBurn := big.Zero()
 	rt.StateTransaction(&st, func() {
-		var err error
 		store := adt.AsStore(rt)
 		rt.ValidateImmediateCallerIs(builtin.RewardActorAddr)
 
-		rewardToLock, lockedRewardVestingSpec := LockedRewardFromReward(params.Reward, rt.NetworkVersion())
+		// rewardToLock, lockedRewardVestingSpec := LockedRewardFromReward(params.Reward, rt.NetworkVersion())
 
 		// This ensures the miner has sufficient funds to lock up amountToLock.
 		// This should always be true if reward actor sends reward funds with the message.
-		unlockedBalance, err := st.GetUnlockedBalance(rt.CurrentBalance())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate unlocked balance")
-		if unlockedBalance.LessThan(rewardToLock) {
-			rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds to lock, available: %v, requested: %v", unlockedBalance, rewardToLock)
-		}
+		// unlockedBalance, err := st.GetUnlockedBalance(rt.CurrentBalance())
+		// builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to calculate unlocked balance")
+		// if unlockedBalance.LessThan(params.Reward) {
+		// 	rt.Abortf(exitcode.ErrInsufficientFunds, "insufficient funds to lock, available: %v, requested: %v", unlockedBalance, params.Reward)
+		// }
 
-		newlyVested, err := st.AddLockedFunds(store, rt.CurrEpoch(), rewardToLock, lockedRewardVestingSpec)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to lock funds in vesting table")
-		pledgeDeltaTotal = big.Sub(pledgeDeltaTotal, newlyVested)
-		pledgeDeltaTotal = big.Add(pledgeDeltaTotal, rewardToLock)
+		// newlyVested, err := st.AddLockedFunds(store, rt.CurrEpoch(), rewardToLock, lockedRewardVestingSpec)
+		// builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to lock funds in vesting table")
+		// pledgeDeltaTotal = big.Sub(pledgeDeltaTotal, newlyVested)
+		// pledgeDeltaTotal = big.Add(pledgeDeltaTotal, rewardToLock)
 
 		// If the miner incurred block mining penalties charge these to miner's fee debt
-		err = st.ApplyPenalty(params.Penalty)
+		err := st.ApplyPenalty(params.Penalty)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply penalty")
-		// Attempt to repay all fee debt in this call. In most cases the miner will have enough
-		// funds in the *reward alone* to cover the penalty. In the rare case a miner incurs more
-		// penalty than it can pay for with reward and existing funds, it will go into fee debt.
-		penaltyFromVesting, penaltyFromBalance, err := st.RepayPartialDebtInPriorityOrder(store, rt.CurrEpoch(), rt.CurrentBalance())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to repay penalty")
-		pledgeDeltaTotal = big.Sub(pledgeDeltaTotal, penaltyFromVesting)
-		toBurn = big.Add(penaltyFromVesting, penaltyFromBalance)
+
+		toCoinbase, toBurn, toReporters, err = st.RepayDebts(store, received)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to repay debts")
+		// // Attempt to repay all fee debt in this call. In most cases the miner will have enough
+		// // funds in the *reward alone* to cover the penalty. In the rare case a miner incurs more
+		// // penalty than it can pay for with reward and existing funds, it will go into fee debt.
+		// penaltyFromVesting, penaltyFromBalance, err := st.RepayPartialDebtInPriorityOrder(store, rt.CurrEpoch(), rt.CurrentBalance())
+		// builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to repay penalty")
+		// pledgeDeltaTotal = big.Sub(pledgeDeltaTotal, penaltyFromVesting)
+		// toBurn = big.Add(penaltyFromVesting, penaltyFromBalance)
 	})
 
-	notifyPledgeChanged(rt, pledgeDeltaTotal)
+	if toCoinbase.GreaterThan(big.Zero()) {
+		info := getMinerInfo(rt, &st)
+		code := rt.Send(builtin.VestingActorAddr, builtin.MethodsVesting.AddVestingFunds, &vesting.AddVestingFundsParams{
+			Coinbase: info.Coinbase,
+			Amount:   toCoinbase,
+		}, toCoinbase, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send funds to vesting")
+	}
+	payReporterDebts(rt, toReporters)
 	burnFunds(rt, toBurn)
+
 	rt.StateReadonly(&st)
 	err := st.CheckBalanceInvariants(rt.CurrentBalance())
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")
@@ -1769,11 +1783,11 @@ func (a Actor) ReportConsensusFault(rt Runtime, params *ReportConsensusFaultPara
 	// These may differ from actual funds send when miner goes into fee debt
 	faultPenalty := ConsensusFaultPenalty(rewardStats.ThisEpochReward)
 	slasherReward := RewardForConsensusSlashReport(faultAge, faultPenalty)
-	pledgeDelta := big.Zero()
+	// pledgeDelta := big.Zero()
 
 	// The amounts actually sent to burnt funds and reporter
-	burnAmount := big.Zero()
-	rewardAmount := big.Zero()
+	// burnAmount := big.Zero()
+	// rewardAmount := big.Zero()
 	rt.StateTransaction(&st, func() {
 		info := getMinerInfo(rt, &st)
 
@@ -1782,30 +1796,35 @@ func (a Actor) ReportConsensusFault(rt Runtime, params *ReportConsensusFaultPara
 			rt.Abortf(exitcode.ErrForbidden, "fault epoch %d is too old, last exclusion period ended at %d", fault.Epoch, info.ConsensusFaultElapsed)
 		}
 
+		rewardAmount := big.Min(faultPenalty, slasherReward)
+		err = st.ApplyReporterDebt(adt.AsStore(rt), reporter, rewardAmount)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply reporter debt")
+
+		faultPenalty = big.Sub(faultPenalty, rewardAmount)
 		err := st.ApplyPenalty(faultPenalty)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to apply penalty")
 
-		// Pay penalty
-		penaltyFromVesting, penaltyFromBalance, err := st.RepayPartialDebtInPriorityOrder(adt.AsStore(rt), currEpoch, rt.CurrentBalance())
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pay fees")
-		// Burn the amount actually payable. Any difference in this and faultPenalty already recorded as FeeDebt
-		burnAmount = big.Add(penaltyFromVesting, penaltyFromBalance)
-		pledgeDelta = big.Add(pledgeDelta, penaltyFromVesting.Neg())
+		// // Pay penalty
+		// penaltyFromVesting, penaltyFromBalance, err := st.RepayPartialDebtInPriorityOrder(adt.AsStore(rt), currEpoch, rt.CurrentBalance())
+		// builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pay fees")
+		// // Burn the amount actually payable. Any difference in this and faultPenalty already recorded as FeeDebt
+		// burnAmount = big.Add(penaltyFromVesting, penaltyFromBalance)
+		// pledgeDelta = big.Add(pledgeDelta, penaltyFromVesting.Neg())
 
-		// clamp reward at funds burnt
-		rewardAmount = big.Min(burnAmount, slasherReward)
-		// reduce burnAmount by rewardAmount
-		burnAmount = big.Sub(burnAmount, rewardAmount)
+		// // clamp reward at funds burnt
+		// rewardAmount = big.Min(burnAmount, slasherReward)
+		// // reduce burnAmount by rewardAmount
+		// burnAmount = big.Sub(burnAmount, rewardAmount)
 		info.ConsensusFaultElapsed = currEpoch + ConsensusFaultIneligibilityDuration
 		err = st.SaveInfo(adt.AsStore(rt), info)
 		builtin.RequireNoErr(rt, err, exitcode.ErrSerialization, "failed to save miner info")
 	})
-	code := rt.Send(reporter, builtin.MethodSend, nil, rewardAmount, &builtin.Discard{})
-	if !code.IsSuccess() {
-		rt.Log(rtt.ERROR, "failed to send reward")
-	}
-	burnFunds(rt, burnAmount)
-	notifyPledgeChanged(rt, pledgeDelta)
+	// code := rt.Send(reporter, builtin.MethodSend, nil, rewardAmount, &builtin.Discard{})
+	// if !code.IsSuccess() {
+	// 	rt.Log(rtt.ERROR, "failed to send reward")
+	// }
+	// burnFunds(rt, burnAmount)
+	// notifyPledgeChanged(rt, pledgeDelta)
 
 	rt.StateReadonly(&st)
 	err = st.CheckBalanceInvariants(rt.CurrentBalance())
@@ -1814,7 +1833,7 @@ func (a Actor) ReportConsensusFault(rt Runtime, params *ReportConsensusFaultPara
 	return nil
 }
 
-type WithdrawBalanceParams struct {
+/* type WithdrawBalanceParams struct {
 	AmountRequested abi.TokenAmount
 }
 
@@ -1898,7 +1917,7 @@ func (a Actor) RepayDebt(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	builtin.RequireNoErr(rt, err, ErrBalanceInvariantBroken, "balance invariants broken")
 
 	return nil
-}
+} */
 
 // ChangeCoinbase will immediately overwrite the existing coinbase with that passed in the params.
 func (a Actor) ChangeCoinbase(rt Runtime, newAddress *addr.Address) *abi.EmptyValue {
@@ -2077,8 +2096,8 @@ func handleProvingDeadline(rt Runtime) {
 
 	powerDeltaTotal := NewPowerPairZero()
 	/* penaltyTotal := abi.NewTokenAmount(0)
-	pledgeDeltaTotal := abi.NewTokenAmount(0) */
-	newlyVested := abi.NewTokenAmount(0)
+	pledgeDeltaTotal := abi.NewTokenAmount(0)
+	newlyVested := abi.NewTokenAmount(0) */
 
 	var st State
 	rt.StateReadonly(&st)
@@ -2097,16 +2116,16 @@ func handleProvingDeadline(rt Runtime) {
 	}
 
 	rt.StateTransaction(&st, func() {
-		{
+		/* {
 			var err error
 			// Vest locked funds.
 			// This happens first so that any subsequent penalties are taken
 			// from locked vesting funds before funds free this epoch.
 			newlyVested, err = st.UnlockVestedFunds(store, rt.CurrEpoch())
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to vest funds")
-			// pledgeDeltaTotal = big.Add(pledgeDeltaTotal, newlyVested.Neg())
+			pledgeDeltaTotal = big.Add(pledgeDeltaTotal, newlyVested.Neg())
 		}
-
+		*/
 		{
 			// Process pending worker change if any
 			info := getMinerInfo(rt, &st)
@@ -2152,8 +2171,8 @@ func handleProvingDeadline(rt Runtime) {
 
 	// Remove power for new faults, and burn penalties.
 	requestUpdatePower(rt, big.Zero(), powerDeltaTotal)
-	/* burnFunds(rt, penaltyTotal) */
-	notifyPledgeChanged(rt, newlyVested.Neg())
+	/* burnFunds(rt, penaltyTotal)
+	notifyPledgeChanged(rt, newlyVested.Neg()) */
 
 	// Schedule cron callback for next deadline's last epoch.
 	newDlInfo := st.DeadlineInfo(currEpoch)
@@ -2499,12 +2518,21 @@ func burnFunds(rt Runtime, amt abi.TokenAmount) {
 	}
 }
 
-func notifyPledgeChanged(rt Runtime, pledgeDelta abi.TokenAmount) {
-	if !pledgeDelta.IsZero() {
-		code := rt.Send(builtin.StoragePowerActorAddr, builtin.MethodsPower.UpdatePledgeTotal, &pledgeDelta, big.Zero(), &builtin.Discard{})
-		builtin.RequireSuccess(rt, code, "failed to update total pledge")
+func payReporterDebts(rt Runtime, rds map[addr.Address]abi.TokenAmount) {
+	for reporter, amount := range rds {
+		if amount.GreaterThan(big.Zero()) {
+			code := rt.Send(reporter, builtin.MethodSend, nil, amount, &builtin.Discard{})
+			builtin.RequireSuccess(rt, code, "failed to pay reward debt to reporter %s", reporter)
+		}
 	}
 }
+
+// func notifyPledgeChanged(rt Runtime, pledgeDelta abi.TokenAmount) {
+// 	if !pledgeDelta.IsZero() {
+// 		code := rt.Send(builtin.StoragePowerActorAddr, builtin.MethodsPower.UpdatePledgeTotal, &pledgeDelta, big.Zero(), &builtin.Discard{})
+// 		builtin.RequireSuccess(rt, code, "failed to update total pledge")
+// 	}
+// }
 
 // Assigns proving period offset randomly in the range [0, WPoStProvingPeriod) by hashing
 // the actor's address and current epoch.

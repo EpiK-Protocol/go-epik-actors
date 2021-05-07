@@ -18,6 +18,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vesting"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
 	"github.com/filecoin-project/specs-actors/v2/actors/states"
@@ -254,11 +255,8 @@ func main() {
 		miner.SectorPreCommitInfo{},
 		miner.SectorOnChainInfo{},
 		miner.WorkerKeyChange{},
-		miner.VestingFunds{},
-		miner.VestingFund{},
 		miner.WindowedPoSt{},
 		// method params and returns
-		// miner.ConstructorParams{},        // in power actor
 		miner.SubmitWindowedPoStParams{},
 		miner.TerminateSectorsParams{},
 		miner.TerminateSectorsReturn{},
@@ -267,12 +265,10 @@ func main() {
 		miner.PreCommitSectorParams{},
 		miner.ProveCommitSectorParams{},
 		miner.ChangeWorkerAddressParams{},
-		/* miner.ExtendSectorExpirationParams{},  */
 		miner.DeclareFaultsParams{},
 		miner.DeclareFaultsRecoveredParams{},
 		miner.ReportConsensusFaultParams{},
 		miner.CheckSectorProvenParams{},
-		miner.WithdrawBalanceParams{},
 		miner.CompactPartitionsParams{},
 		miner.CompactSectorNumbersParams{},
 		miner.CronEventPayload{},
@@ -281,7 +277,6 @@ func main() {
 		// other types
 		miner.FaultDeclaration{},
 		miner.RecoveryDeclaration{},
-		/* miner.ExpirationExtension{},     */
 		miner.TerminationDeclaration{},
 		miner.PoStPartition{},
 		miner.RetrievalPledgeParams{},
@@ -350,6 +345,18 @@ func main() {
 		govern.GrantedAuthorities{},
 		govern.GrantOrRevokeParams{},
 		govern.Authority{},
+	); err != nil {
+		panic(err)
+	}
+
+	if err := gen.WriteTupleEncodersToFile("./actors/builtin/vesting/cbor_gen.go", "vesting",
+		// actor state
+		vesting.State{},
+		vesting.VestingFunds{},
+		vesting.VestingFund{},
+		// method params and returns
+		vesting.AddVestingFundsParams{},
+		vesting.WithdrawBalanceParams{},
 	); err != nil {
 		panic(err)
 	}

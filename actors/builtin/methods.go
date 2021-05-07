@@ -101,20 +101,18 @@ var MethodsMiner = struct {
 	CheckSectorProven        abi.MethodNum
 	ApplyRewards             abi.MethodNum
 	ReportConsensusFault     abi.MethodNum
-	WithdrawBalance          abi.MethodNum
 	ConfirmSectorProofsValid abi.MethodNum
 	ChangeMultiaddrs         abi.MethodNum
 	CompactPartitions        abi.MethodNum
 	CompactSectorNumbers     abi.MethodNum
 	ConfirmUpdateWorkerKey   abi.MethodNum
-	RepayDebt                abi.MethodNum
 	AddPledge                abi.MethodNum
 	WithdrawPledge           abi.MethodNum
 	ChangeCoinbase           abi.MethodNum
 	StoredAny                abi.MethodNum
 	DisputeWindowedPoSt      abi.MethodNum
 	BindRetrievalPledger     abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26}
 
 // var MethodsVerifiedRegistry = struct {
 // 	Constructor       abi.MethodNum
@@ -189,3 +187,9 @@ var MethodsGovern = struct {
 	Revoke          abi.MethodNum
 	ValidateGranted abi.MethodNum
 }{MethodConstructor, 2, 3, 4}
+
+var MethodsVesting = struct {
+	Constructor     abi.MethodNum
+	AddVestingFunds abi.MethodNum
+	WithdrawBalance abi.MethodNum
+}{MethodConstructor, 2, 3}

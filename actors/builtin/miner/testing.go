@@ -719,7 +719,7 @@ func CheckMinerInfo(info *MinerInfo, acc *builtin.MessageAccumulator) {
 
 func CheckMinerBalances(st *State, store adt.Store, balance abi.TokenAmount, acc *builtin.MessageAccumulator) {
 	acc.Require(balance.GreaterThanEqual(big.Zero()), "miner actor balance is less than zero: %v", balance)
-	acc.Require(st.LockedFunds.GreaterThanEqual(big.Zero()), "miner locked funds is less than zero: %v", st.LockedFunds)
+	// acc.Require(st.LockedFunds.GreaterThanEqual(big.Zero()), "miner locked funds is less than zero: %v", st.LockedFunds)
 	/* acc.Require(st.PreCommitDeposits.GreaterThanEqual(big.Zero()), "miner precommit deposit is less than zero: %v", st.PreCommitDeposits) */
 	acc.Require(st.TotalPledge.GreaterThanEqual(big.Zero()), "miner initial pledge is less than zero: %v", st.TotalPledge)
 	acc.Require(st.FeeDebt.GreaterThanEqual(big.Zero()), "miner fee debt is less than zero: %v", st.FeeDebt)
@@ -728,23 +728,23 @@ func CheckMinerBalances(st *State, store adt.Store, balance abi.TokenAmount, acc
 	"miner balance (%v) is less than sum of locked funds (%v), precommit deposit (%v), and initial pledge (%v)",
 	balance, st.LockedFunds, st.PreCommitDeposits, st.InitialPledge) */
 
-	// locked funds must be sum of vesting table and vesting table payments must be quantized
-	vestingSum := big.Zero()
-	if funds, err := st.LoadVestingFunds(store); err != nil {
-		acc.Addf("error loading vesting funds: %v", err)
-	} else {
-		quant := st.QuantSpecEveryDeadline()
-		for _, entry := range funds.Funds {
-			acc.Require(entry.Amount.GreaterThan(big.Zero()), "non-positive amount in miner vesting table entry %v", entry)
-			vestingSum = big.Add(vestingSum, entry.Amount)
+	// // locked funds must be sum of vesting table and vesting table payments must be quantized
+	// vestingSum := big.Zero()
+	// if funds, err := st.LoadVestingFunds(store); err != nil {
+	// 	acc.Addf("error loading vesting funds: %v", err)
+	// } else {
+	// 	quant := st.QuantSpecEveryDeadline()
+	// 	for _, entry := range funds.Funds {
+	// 		acc.Require(entry.Amount.GreaterThan(big.Zero()), "non-positive amount in miner vesting table entry %v", entry)
+	// 		vestingSum = big.Add(vestingSum, entry.Amount)
 
-			quantized := quant.QuantizeUp(entry.Epoch)
-			acc.Require(entry.Epoch == quantized, "vesting table entry has non-quantized epoch %d (should be %d)", entry.Epoch, quantized)
-		}
-	}
+	// 		quantized := quant.QuantizeUp(entry.Epoch)
+	// 		acc.Require(entry.Epoch == quantized, "vesting table entry has non-quantized epoch %d (should be %d)", entry.Epoch, quantized)
+	// 	}
+	// }
 
-	acc.Require(st.LockedFunds.Equals(vestingSum),
-		"locked funds %d is not sum of vesting table entries %d", st.LockedFunds, vestingSum)
+	// acc.Require(st.LockedFunds.Equals(vestingSum),
+	// 	"locked funds %d is not sum of vesting table entries %d", st.LockedFunds, vestingSum)
 }
 
 func CheckPreCommits(st *State, store adt.Store, allocatedSectors map[uint64]bool, acc *builtin.MessageAccumulator) {

@@ -3,8 +3,6 @@ package miner
 import (
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
-	"github.com/filecoin-project/go-state-types/exitcode"
-	"github.com/filecoin-project/go-state-types/network"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
@@ -174,13 +172,13 @@ func InitialPledgeForPower(qaPower, baselinePower abi.StoragePower, rewardEstima
 // may be slightly lower than the true amount. Computing vesting here would be
 // almost always redundant since vesting is quantized to ~daily units.  Vesting
 // will be at most one proving period old if computed in the cron callback.
-func RepayDebtsOrAbort(rt Runtime, st *State) abi.TokenAmount {
-	currBalance := rt.CurrentBalance()
-	toBurn, err := st.repayDebts(currBalance)
-	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "unlocked balance can not repay fee debt")
+// func RepayDebtsOrAbort(rt Runtime, st *State) abi.TokenAmount {
+// 	currBalance := rt.CurrentBalance()
+// 	toBurn, err := st.repayDebts(currBalance)
+// 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "unlocked balance can not repay fee debt")
 
-	return toBurn
-}
+// 	return toBurn
+// }
 
 func ConsensusFaultPenalty(thisEpochReward abi.TokenAmount) abi.TokenAmount {
 	return big.Div(
@@ -189,12 +187,12 @@ func ConsensusFaultPenalty(thisEpochReward abi.TokenAmount) abi.TokenAmount {
 	)
 }
 
-// Returns the amount of a reward to vest, and the vesting schedule, for a reward amount.
-func LockedRewardFromReward(reward abi.TokenAmount, nv network.Version) (abi.TokenAmount, *VestSpec) {
-	return reward, &RewardVestingSpec
-	// lockAmount := reward
-	// spec := &RewardVestingSpec
-	// // Locked amount is 75% of award.
-	// lockAmount = big.Div(big.Mul(reward, LockedRewardFactorNum), LockedRewardFactorDenom)
-	// return lockAmount, spec
-}
+// // Returns the amount of a reward to vest, and the vesting schedule, for a reward amount.
+// func LockedRewardFromReward(reward abi.TokenAmount, nv network.Version) (abi.TokenAmount, *VestSpec) {
+// 	return reward, &RewardVestingSpec
+// 	// lockAmount := reward
+// 	// spec := &RewardVestingSpec
+// 	// // Locked amount is 75% of award.
+// 	// lockAmount = big.Div(big.Mul(reward, LockedRewardFactorNum), LockedRewardFactorDenom)
+// 	// return lockAmount, spec
+// }

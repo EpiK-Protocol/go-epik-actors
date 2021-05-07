@@ -26,10 +26,11 @@ func MinerEligibleForElection(store adt.Store, mstate *miner.State, pstate *powe
 		return false, err
 	}
 
-	// No fee debt.
-	if !mstate.IsDebtFree() {
-		return false, nil
-	}
+	// !!! Allow election with fee debt
+	// // No fee debt.
+	// if !mstate.IsDebtFree() {
+	// 	return false, nil
+	// }
 
 	// No active consensus faults.
 	if mInfo, err := mstate.GetInfo(store); err != nil {

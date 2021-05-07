@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-bitfield"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -30,12 +31,13 @@ type State struct {
 	// Information not related to sectors.
 	Info cid.Cid
 
-	/* PreCommitDeposits abi.TokenAmount // Total funds locked as PreCommitDeposits */
+	/* PreCommitDeposits abi.TokenAmount // Total funds locked as PreCommitDeposits
 	LockedFunds abi.TokenAmount // Total rewards and added funds locked in vesting table
 
-	VestingFunds cid.Cid // VestingFunds (Vesting Funds schedule for the miner).
+	VestingFunds cid.Cid // VestingFunds (Vesting Funds schedule for the miner). */
 
-	FeeDebt abi.TokenAmount // Absolute value of debt this miner owes from unpaid fees
+	FeeDebt       abi.TokenAmount // Absolute value of debt this miner owes from unpaid fees
+	ReporterDebts cid.Cid         // HAMT[reporter]TokenAmount
 
 	TotalPledge abi.TokenAmount
 	Pledges     cid.Cid // HAMT[PledgerAddress]TokenAmount, PledgerAddress is ID-Address
@@ -213,10 +215,6 @@ func ConstructState(store adt.Store, infoCid cid.Cid, periodStart abi.ChainEpoch
 	if err != nil {
 		return nil, xerrors.Errorf("failed to construct empty deadlines: %w", err)
 	}
-	emptyVestingFundsCid, err := store.Put(store.Context(), ConstructVestingFunds())
-	if err != nil {
-		return nil, xerrors.Errorf("failed to construct empty vesting funds: %w", err)
-	}
 
 	emptyPledgesMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -226,14 +224,16 @@ func ConstructState(store adt.Store, infoCid cid.Cid, periodStart abi.ChainEpoch
 	if err != nil {
 		return nil, xerrors.Errorf("failed to construct empty piece map: %w", err)
 	}
+	emptyReportersCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to construct empty piece map: %w", err)
+	}
 
 	return &State{
 		Info: infoCid,
 
-		LockedFunds: abi.NewTokenAmount(0),
-		FeeDebt:     abi.NewTokenAmount(0),
-
-		VestingFunds: emptyVestingFundsCid,
+		FeeDebt:       abi.NewTokenAmount(0),
+		ReporterDebts: emptyReportersCid,
 
 		TotalPledge: abi.NewTokenAmount(0),
 		Pledges:     emptyPledgesMapCid,
@@ -765,25 +765,25 @@ func (st *State) SaveDeadlines(store adt.Store, deadlines *Deadlines) error {
 	return nil
 }
 
-// LoadVestingFunds loads the vesting funds table from the store
-func (st *State) LoadVestingFunds(store adt.Store) (*VestingFunds, error) {
-	var funds VestingFunds
-	if err := store.Get(store.Context(), st.VestingFunds, &funds); err != nil {
-		return nil, xerrors.Errorf("failed to load vesting funds (%s): %w", st.VestingFunds, err)
-	}
+// // LoadVestingFunds loads the vesting funds table from the store
+// func (st *State) LoadVestingFunds(store adt.Store) (*VestingFunds, error) {
+// 	var funds VestingFunds
+// 	if err := store.Get(store.Context(), st.VestingFunds, &funds); err != nil {
+// 		return nil, xerrors.Errorf("failed to load vesting funds (%s): %w", st.VestingFunds, err)
+// 	}
 
-	return &funds, nil
-}
+// 	return &funds, nil
+// }
 
-// SaveVestingFunds saves the vesting table to the store
-func (st *State) SaveVestingFunds(store adt.Store, funds *VestingFunds) error {
-	c, err := store.Put(store.Context(), funds)
-	if err != nil {
-		return err
-	}
-	st.VestingFunds = c
-	return nil
-}
+// // SaveVestingFunds saves the vesting table to the store
+// func (st *State) SaveVestingFunds(store adt.Store, funds *VestingFunds) error {
+// 	c, err := store.Put(store.Context(), funds)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	st.VestingFunds = c
+// 	return nil
+// }
 
 //
 // Funds and vesting
@@ -889,35 +889,35 @@ func (st *State) WithdrawPledge(store adt.Store, pledger addr.Address, amount ab
 	return actual, nil
 }
 
-// AddLockedFunds first vests and unlocks the vested funds AND then locks the given funds in the vesting table.
-func (st *State) AddLockedFunds(store adt.Store, currEpoch abi.ChainEpoch, vestingSum abi.TokenAmount, spec *VestSpec) (vested abi.TokenAmount, err error) {
-	if vestingSum.LessThan(big.Zero()) {
-		return big.Zero(), xerrors.Errorf("negative amount to lock %s", vestingSum)
-	}
+// // AddLockedFunds first vests and unlocks the vested funds AND then locks the given funds in the vesting table.
+// func (st *State) AddLockedFunds(store adt.Store, currEpoch abi.ChainEpoch, vestingSum abi.TokenAmount, spec *VestSpec) (vested abi.TokenAmount, err error) {
+// 	if vestingSum.LessThan(big.Zero()) {
+// 		return big.Zero(), xerrors.Errorf("negative amount to lock %s", vestingSum)
+// 	}
 
-	vestingFunds, err := st.LoadVestingFunds(store)
-	if err != nil {
-		return big.Zero(), xerrors.Errorf("failed to load vesting funds: %w", err)
-	}
+// 	vestingFunds, err := st.LoadVestingFunds(store)
+// 	if err != nil {
+// 		return big.Zero(), xerrors.Errorf("failed to load vesting funds: %w", err)
+// 	}
 
-	// unlock vested funds first
-	amountUnlocked := vestingFunds.unlockVestedFunds(currEpoch)
-	st.LockedFunds = big.Sub(st.LockedFunds, amountUnlocked)
-	if st.LockedFunds.LessThan(big.Zero()) {
-		return big.Zero(), xerrors.Errorf("negative locked funds %v after unlocking %v", st.LockedFunds, amountUnlocked)
-	}
+// 	// unlock vested funds first
+// 	amountUnlocked := vestingFunds.unlockVestedFunds(currEpoch)
+// 	st.LockedFunds = big.Sub(st.LockedFunds, amountUnlocked)
+// 	if st.LockedFunds.LessThan(big.Zero()) {
+// 		return big.Zero(), xerrors.Errorf("negative locked funds %v after unlocking %v", st.LockedFunds, amountUnlocked)
+// 	}
 
-	// add locked funds now
-	vestingFunds.addLockedFunds(currEpoch, vestingSum, st.ProvingPeriodStart, spec)
-	st.LockedFunds = big.Add(st.LockedFunds, vestingSum)
+// 	// add locked funds now
+// 	vestingFunds.addLockedFunds(currEpoch, vestingSum, st.ProvingPeriodStart, spec)
+// 	st.LockedFunds = big.Add(st.LockedFunds, vestingSum)
 
-	// save the updated vesting table state
-	if err := st.SaveVestingFunds(store, vestingFunds); err != nil {
-		return big.Zero(), xerrors.Errorf("failed to save vesting funds: %w", err)
-	}
+// 	// save the updated vesting table state
+// 	if err := st.SaveVestingFunds(store, vestingFunds); err != nil {
+// 		return big.Zero(), xerrors.Errorf("failed to save vesting funds: %w", err)
+// 	}
 
-	return amountUnlocked, nil
-}
+// 	return amountUnlocked, nil
+// }
 
 // ApplyPenalty adds the provided penalty to fee debt.
 func (st *State) ApplyPenalty(penalty abi.TokenAmount) error {
@@ -928,81 +928,170 @@ func (st *State) ApplyPenalty(penalty abi.TokenAmount) error {
 	return nil
 }
 
-// Draws from vesting table and unlocked funds to repay up to the fee debt.
-// Returns the amount unlocked from the vesting table and the amount taken from
-// current balance. If the fee debt exceeds the total amount available for repayment
-// the fee debt field is updated to track the remaining debt.  Otherwise it is set to zero.
-func (st *State) RepayPartialDebtInPriorityOrder(store adt.Store, currEpoch abi.ChainEpoch, currBalance abi.TokenAmount) (fromVesting abi.TokenAmount, fromBalance abi.TokenAmount, err error) {
-	unlockedBalance, err := st.GetUnlockedBalance(currBalance)
+func (st *State) ApplyReporterDebt(store adt.Store, reporter addr.Address, newDebt abi.TokenAmount) error {
+	if newDebt.LessThan(big.Zero()) {
+		return xerrors.Errorf("applying negative reporter debt %v not allowed", newDebt)
+	}
+	if newDebt.IsZero() {
+		return nil
+	}
+
+	reporterDebts, err := adt.AsMap(store, st.ReporterDebts, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return big.Zero(), big.Zero(), err
+		return xerrors.Errorf("failed to load reporter debts: %w", err)
 	}
 
-	// Pay fee debt with locked funds first
-	fromVesting, err = st.UnlockUnvestedFunds(store, currEpoch, st.FeeDebt)
+	var debt abi.TokenAmount
+	found, err := reporterDebts.Get(abi.AddrKey(reporter), &debt)
 	if err != nil {
-		return abi.NewTokenAmount(0), abi.NewTokenAmount(0), err
+		return err
+	}
+	if found {
+		debt = big.Add(debt, newDebt)
+	} else {
+		debt = newDebt
+	}
+	if err = reporterDebts.Put(abi.AddrKey(reporter), &debt); err != nil {
+		return err
 	}
 
-	// We should never unlock more than the debt we need to repay
-	if fromVesting.GreaterThan(st.FeeDebt) {
-		return big.Zero(), big.Zero(), xerrors.Errorf("unlocked more vesting funds %v than required for debt %v", fromVesting, st.FeeDebt)
+	st.ReporterDebts, err = reporterDebts.Root()
+	if err != nil {
+		return xerrors.Errorf("failed to flush reporter debts: %w", err)
 	}
-	st.FeeDebt = big.Sub(st.FeeDebt, fromVesting)
+	return nil
+}
 
-	fromBalance = big.Min(unlockedBalance, st.FeeDebt)
-	st.FeeDebt = big.Sub(st.FeeDebt, fromBalance)
+// // Draws from vesting table and unlocked funds to repay up to the fee debt.
+// // Returns the amount unlocked from the vesting table and the amount taken from
+// // current balance. If the fee debt exceeds the total amount available for repayment
+// // the fee debt field is updated to track the remaining debt.  Otherwise it is set to zero.
+// func (st *State) RepayPartialDebtInPriorityOrder(store adt.Store, currEpoch abi.ChainEpoch, currBalance abi.TokenAmount) (fromVesting abi.TokenAmount, fromBalance abi.TokenAmount, err error) {
+// 	unlockedBalance, err := st.GetUnlockedBalance(currBalance)
+// 	if err != nil {
+// 		return big.Zero(), big.Zero(), err
+// 	}
 
-	return fromVesting, fromBalance, nil
+// 	// Pay fee debt with locked funds first
+// 	fromVesting, err = st.UnlockUnvestedFunds(store, currEpoch, st.FeeDebt)
+// 	if err != nil {
+// 		return abi.NewTokenAmount(0), abi.NewTokenAmount(0), err
+// 	}
 
+// 	// We should never unlock more than the debt we need to repay
+// 	if fromVesting.GreaterThan(st.FeeDebt) {
+// 		return big.Zero(), big.Zero(), xerrors.Errorf("unlocked more vesting funds %v than required for debt %v", fromVesting, st.FeeDebt)
+// 	}
+// 	st.FeeDebt = big.Sub(st.FeeDebt, fromVesting)
+
+// 	fromBalance = big.Min(unlockedBalance, st.FeeDebt)
+// 	st.FeeDebt = big.Sub(st.FeeDebt, fromBalance)
+
+// 	return fromVesting, fromBalance, nil
+
+// }
+
+func (st *State) RepayDebts(store adt.Store, available abi.TokenAmount) (toCoinbase, toBurn abi.TokenAmount,
+	toReporters map[addr.Address]abi.TokenAmount, err error) {
+
+	if available.IsZero() {
+		return big.Zero(), big.Zero(), nil, nil
+	}
+
+	reporterDebts, err := adt.AsMap(store, st.ReporterDebts, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return big.Zero(), big.Zero(), nil, xerrors.Errorf("failed to load reporter debts: %w", err)
+	}
+
+	toBurn = abi.NewTokenAmount(0)
+	toReporters = make(map[addr.Address]abi.TokenAmount)
+
+	// first pay to reporters
+	errStop := xerrors.New("stop")
+	var debt abi.TokenAmount
+	err = reporterDebts.ForEach(&debt, func(k string) error {
+		reporter, err := address.NewFromBytes([]byte(k))
+		if err != nil {
+			return err
+		}
+
+		actual := big.Min(debt, available)
+		if actual.IsZero() {
+			return errStop
+		}
+
+		available = big.Sub(available, actual)
+		toReporters[reporter] = actual
+
+		debt = big.Sub(debt, actual)
+		if debt.IsZero() {
+			return reporterDebts.Delete(abi.AddrKey(reporter))
+		} else {
+			return reporterDebts.Put(abi.AddrKey(reporter), &debt)
+		}
+	})
+	if err != nil && err != errStop {
+		return big.Zero(), big.Zero(), nil, xerrors.Errorf("failed to iterate reporter debts: %w", err)
+	}
+
+	// pay to burn
+	toBurn = big.Min(available, st.FeeDebt)
+	available = big.Sub(available, toBurn)
+	st.FeeDebt = big.Sub(st.FeeDebt, toBurn)
+
+	st.ReporterDebts, err = reporterDebts.Root()
+	if err != nil {
+		return big.Zero(), big.Zero(), nil, xerrors.Errorf("failed to flush reporter debts: %w", err)
+	}
+	return available, toBurn, toReporters, nil
 }
 
 // Repays the full miner actor fee debt.  Returns the amount that must be
 // burnt and an error if there are not sufficient funds to cover repayment.
 // Miner state repays from unlocked funds and fails if unlocked funds are insufficient to cover fee debt.
 // FeeDebt will be zero after a successful call.
-func (st *State) repayDebts(currBalance abi.TokenAmount) (abi.TokenAmount, error) {
-	unlockedBalance, err := st.GetUnlockedBalance(currBalance)
-	if err != nil {
-		return big.Zero(), err
-	}
-	if unlockedBalance.LessThan(st.FeeDebt) {
-		return big.Zero(), xc.ErrInsufficientFunds.Wrapf("unlocked balance can not repay fee debt (%v < %v)", unlockedBalance, st.FeeDebt)
-	}
-	debtToRepay := st.FeeDebt
-	st.FeeDebt = big.Zero()
-	return debtToRepay, nil
-}
+// func (st *State) repayDebts(currBalance abi.TokenAmount) (abi.TokenAmount, error) {
+// 	unlockedBalance, err := st.GetUnlockedBalance(currBalance)
+// 	if err != nil {
+// 		return big.Zero(), err
+// 	}
+// 	if unlockedBalance.LessThan(st.FeeDebt) {
+// 		return big.Zero(), xc.ErrInsufficientFunds.Wrapf("unlocked balance can not repay fee debt (%v < %v)", unlockedBalance, st.FeeDebt)
+// 	}
+// 	debtToRepay := st.FeeDebt
+// 	st.FeeDebt = big.Zero()
+// 	return debtToRepay, nil
+// }
 
-// Unlocks an amount of funds that have *not yet vested*, if possible.
-// The soonest-vesting entries are unlocked first.
-// Returns the amount actually unlocked.
-func (st *State) UnlockUnvestedFunds(store adt.Store, currEpoch abi.ChainEpoch, target abi.TokenAmount) (abi.TokenAmount, error) {
-	// Nothing to unlock, don't bother loading any state.
-	if target.IsZero() || st.LockedFunds.IsZero() {
-		return big.Zero(), nil
-	}
+// // Unlocks an amount of funds that have *not yet vested*, if possible.
+// // The soonest-vesting entries are unlocked first.
+// // Returns the amount actually unlocked.
+// func (st *State) UnlockUnvestedFunds(store adt.Store, currEpoch abi.ChainEpoch, target abi.TokenAmount) (abi.TokenAmount, error) {
+// 	// Nothing to unlock, don't bother loading any state.
+// 	if target.IsZero() || st.LockedFunds.IsZero() {
+// 		return big.Zero(), nil
+// 	}
 
-	vestingFunds, err := st.LoadVestingFunds(store)
-	if err != nil {
-		return big.Zero(), xerrors.Errorf("failed tp load vesting funds: %w", err)
-	}
+// 	vestingFunds, err := st.LoadVestingFunds(store)
+// 	if err != nil {
+// 		return big.Zero(), xerrors.Errorf("failed tp load vesting funds: %w", err)
+// 	}
 
-	amountUnlocked := vestingFunds.unlockUnvestedFunds(currEpoch, target)
+// 	amountUnlocked := vestingFunds.unlockUnvestedFunds(currEpoch, target)
 
-	st.LockedFunds = big.Sub(st.LockedFunds, amountUnlocked)
-	if st.LockedFunds.LessThan(big.Zero()) {
-		return big.Zero(), xerrors.Errorf("negative locked funds %v after unlocking %v", st.LockedFunds, amountUnlocked)
-	}
+// 	st.LockedFunds = big.Sub(st.LockedFunds, amountUnlocked)
+// 	if st.LockedFunds.LessThan(big.Zero()) {
+// 		return big.Zero(), xerrors.Errorf("negative locked funds %v after unlocking %v", st.LockedFunds, amountUnlocked)
+// 	}
 
-	if err := st.SaveVestingFunds(store, vestingFunds); err != nil {
-		return big.Zero(), xerrors.Errorf("failed to save vesting funds: %w", err)
-	}
+// 	if err := st.SaveVestingFunds(store, vestingFunds); err != nil {
+// 		return big.Zero(), xerrors.Errorf("failed to save vesting funds: %w", err)
+// 	}
 
-	return amountUnlocked, nil
-}
+// 	return amountUnlocked, nil
+// }
 
-// Unlocks all vesting funds that have vested before the provided epoch.
+/* // Unlocks all vesting funds that have vested before the provided epoch.
 // Returns the amount unlocked.
 func (st *State) UnlockVestedFunds(store adt.Store, currEpoch abi.ChainEpoch) (abi.TokenAmount, error) {
 	// Short-circuit to avoid loading vesting funds if we don't have any.
@@ -1051,12 +1140,12 @@ func (st *State) CheckVestedFunds(store adt.Store, currEpoch abi.ChainEpoch) (ab
 	}
 
 	return amountVested, nil
-}
+} */
 
 // Unclaimed funds that are not locked -- includes free funds and does not
 // account for fee debt.  Always greater than or equal to zero
 func (st *State) GetUnlockedBalance(actorBalance abi.TokenAmount) (abi.TokenAmount, error) {
-	unlockedBalance := big.Subtract(actorBalance, st.LockedFunds /* st.PreCommitDeposits, */, st.TotalPledge)
+	unlockedBalance := big.Subtract(actorBalance /* , st.LockedFunds st.PreCommitDeposits, */, st.TotalPledge)
 	if unlockedBalance.LessThan(big.Zero()) {
 		return big.Zero(), xerrors.Errorf("negative unlocked balance %v", unlockedBalance)
 	}
@@ -1076,19 +1165,19 @@ func (st *State) GetAvailableBalance(actorBalance abi.TokenAmount) (abi.TokenAmo
 func (st *State) CheckBalanceInvariants(balance abi.TokenAmount) error {
 	/* if st.PreCommitDeposits.LessThan(big.Zero()) {
 		return xerrors.Errorf("pre-commit deposit is negative: %v", st.PreCommitDeposits)
-	} */
+	}
 	if st.LockedFunds.LessThan(big.Zero()) {
 		return xerrors.Errorf("locked funds is negative: %v", st.LockedFunds)
-	}
+	} */
 	if st.TotalPledge.LessThan(big.Zero()) {
 		return xerrors.Errorf("initial pledge is negative: %v", st.TotalPledge)
 	}
 	if st.FeeDebt.LessThan(big.Zero()) {
 		return xerrors.Errorf("fee debt is negative: %v", st.FeeDebt)
 	}
-	minBalance := big.Sum( /* st.PreCommitDeposits, */ st.LockedFunds, st.TotalPledge)
-	if balance.LessThan(minBalance) {
-		return xerrors.Errorf("balance %v below required %v", balance, minBalance)
+	// minBalance := big.Sum(st.PreCommitDeposits, st.LockedFunds, st.TotalPledge)
+	if balance.LessThan(st.TotalPledge) {
+		return xerrors.Errorf("balance %v below required %v", balance, st.TotalPledge)
 	}
 	return nil
 }

@@ -19,6 +19,7 @@ var (
 	RetrievalFundActorAddr = mustMakeAddress(51)
 	VoteFundActorAddr      = mustMakeAddress(52)
 	KnowledgeFundActorAddr = mustMakeAddress(53)
+	VestingActorAddr       = mustMakeAddress(54)
 
 	// Distinguished AccountActor that is the destination of all burnt funds.
 	BurntFundsActorAddr = mustMakeAddress(99)

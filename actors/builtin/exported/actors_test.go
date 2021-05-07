@@ -24,6 +24,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/retrieval"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/reward"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/system"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vesting"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/vote"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/ipfs/go-cid"
@@ -61,6 +62,7 @@ func TestKnownActors(t *testing.T) {
 		{vote.Actor{}, builtin.VoteFundActorCodeID, builtin.MethodsVote},
 		{knowledge.Actor{}, builtin.KnowledgeFundActorCodeID, builtin.MethodsKnowledge},
 		{flowch.Actor{}, builtin.FlowChannelActorCodeID, builtin.MethodsFlowch},
+		{vesting.Actor{}, builtin.VestingActorCodeID, builtin.MethodsVesting},
 	}
 	require.Equal(t, len(builtins), len(actorInfos))
 	for i, info := range actorInfos {

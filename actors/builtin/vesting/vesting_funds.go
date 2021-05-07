@@ -1,17 +1,19 @@
-package miner
+package vesting
 
-/* import (
+import (
 	"sort"
 
-	"github.com/filecoin-project/go-state-types/abi"
+	abi "github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 )
 
-// VestingFunds represents the vesting table state for the miner.
-// It is a slice of (VestingEpoch, VestingAmount).
-// The slice will always be sorted by the VestingEpoch.
 type VestingFunds struct {
-	Funds []VestingFund
+	Funds           []VestingFund
+	UnlockedBalance abi.TokenAmount
+}
+
+func (v *VestingFunds) UnlockVestedFunds(currEpoch abi.ChainEpoch) abi.TokenAmount {
+	return v.unlockVestedFunds(currEpoch)
 }
 
 func (v *VestingFunds) unlockVestedFunds(currEpoch abi.ChainEpoch) abi.TokenAmount {
@@ -35,8 +37,7 @@ func (v *VestingFunds) unlockVestedFunds(currEpoch abi.ChainEpoch) abi.TokenAmou
 	return amountUnlocked
 }
 
-func (v *VestingFunds) addLockedFunds(currEpoch abi.ChainEpoch, vestingSum abi.TokenAmount,
-	provingPeriodStart abi.ChainEpoch, spec *VestSpec) {
+func (v *VestingFunds) addLockedFunds(currEpoch abi.ChainEpoch, vestingSum abi.TokenAmount, spec *VestSpec) {
 	// maps the epochs in VestingFunds to their indices in the slice
 	epochToIndex := make(map[abi.ChainEpoch]int, len(v.Funds))
 	for i, vf := range v.Funds {
@@ -48,7 +49,7 @@ func (v *VestingFunds) addLockedFunds(currEpoch abi.ChainEpoch, vestingSum abi.T
 	vestPeriod := big.NewInt(int64(spec.VestPeriod))
 	vestedSoFar := big.Zero()
 	for e := vestBegin + spec.StepDuration; vestedSoFar.LessThan(vestingSum); e += spec.StepDuration {
-		vestEpoch := quantizeUp(e, spec.Quantization, provingPeriodStart)
+		vestEpoch := quantizeUp(e, spec.Quantization)
 		elapsed := vestEpoch - vestBegin
 
 		targetVest := big.Zero() //nolint:ineffassign
@@ -115,15 +116,16 @@ func (v *VestingFunds) unlockUnvestedFunds(currEpoch abi.ChainEpoch, target abi.
 	return amountUnlocked
 }
 
-// VestingFund represents miner funds that will vest at the given epoch.
 type VestingFund struct {
 	Epoch  abi.ChainEpoch
 	Amount abi.TokenAmount
 }
 
-// ConstructVestingFunds constructs empty VestingFunds state.
-func ConstructVestingFunds() *VestingFunds {
-	v := new(VestingFunds)
-	v.Funds = nil
-	return v
-} */
+func quantizeUp(e abi.ChainEpoch, unit abi.ChainEpoch) abi.ChainEpoch {
+	remainder := e % unit
+	quotient := e / unit
+	if remainder > 0 {
+		return unit * (quotient + 1)
+	}
+	return unit * quotient
+}
