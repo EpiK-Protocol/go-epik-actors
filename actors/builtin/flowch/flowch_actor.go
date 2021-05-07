@@ -114,7 +114,7 @@ type AddFundsParams struct {
 func (pca Actor) AddFunds(rt runtime.Runtime, params *AddFundsParams) *abi.EmptyValue {
 	var st State
 	rt.StateTransaction(&st, func() {
-		rt.ValidateImmediateCallerIs(st.From, st.To)
+		rt.ValidateImmediateCallerAcceptAny()
 
 		if st.SettlingAt != 0 {
 			rt.Abortf(exitcode.ErrIllegalState, "channel already settling")
