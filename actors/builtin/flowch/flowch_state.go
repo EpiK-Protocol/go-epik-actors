@@ -16,6 +16,9 @@ type State struct {
 	// Recipient of payouts from channel
 	To addr.Address
 
+	// Amount received from the from address
+	Received abi.TokenAmount
+
 	// Amount successfully redeemed through the payment channel, paid out on `Collect()`
 	ToSend abi.TokenAmount
 
@@ -37,10 +40,11 @@ type LaneState struct {
 
 const LaneStatesAmtBitwidth = 3
 
-func ConstructState(from addr.Address, to addr.Address, emptyArrCid cid.Cid) *State {
+func ConstructState(from addr.Address, to addr.Address, emptyArrCid cid.Cid, amount abi.TokenAmount) *State {
 	return &State{
 		From:            from,
 		To:              to,
+		Received:        amount,
 		ToSend:          big.Zero(),
 		SettlingAt:      0,
 		MinSettleHeight: 0,

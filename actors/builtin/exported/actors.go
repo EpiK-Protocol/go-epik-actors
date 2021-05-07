@@ -5,6 +5,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/cron"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expert"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/expertfund"
+	"github.com/filecoin-project/specs-actors/v2/actors/builtin/flowch"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/govern"
 	init_ "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin/knowledge"
@@ -38,5 +39,6 @@ func BuiltinActors() []runtime.VMActor {
 		govern.Actor{},
 		vote.Actor{},
 		knowledge.Actor{},
+		flowch.Actor{},
 	}
 }

@@ -14,7 +14,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{134}
+var lengthBufState = []byte{135}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -34,6 +34,11 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	// t.To (address.Address) (struct)
 	if err := t.To.MarshalCBOR(w); err != nil {
+		return err
+	}
+
+	// t.Received (big.Int) (struct)
+	if err := t.Received.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -87,7 +92,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 7 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -106,6 +111,15 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 
 		if err := t.To.UnmarshalCBOR(br); err != nil {
 			return xerrors.Errorf("unmarshaling t.To: %w", err)
+		}
+
+	}
+	// t.Received (big.Int) (struct)
+
+	{
+
+		if err := t.Received.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Received: %w", err)
 		}
 
 	}

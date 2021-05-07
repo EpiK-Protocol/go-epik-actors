@@ -94,7 +94,7 @@ func TestPaymentChannelActor_Constructor(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			builder := mock.NewBuilder(ctx, paychAddr).
 				WithCaller(callerAddr, builtin.InitActorCodeID).
-				WithActorType(paychAddr, builtin.PaymentChannelActorCodeID).
+				WithActorType(paychAddr, builtin.FlowChannelActorCodeID).
 				WithActorType(payerAddr, tc.toCode).
 				WithActorType(payeeAddr, tc.fromCode)
 			rt := builder.Build(t)

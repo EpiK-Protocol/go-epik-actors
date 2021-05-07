@@ -116,6 +116,62 @@ func TestExec(t *testing.T) {
 		actor.checkState(rt)
 	})
 
+	t.Run("happy path exec create 2 flow channels", func(t *testing.T) {
+		rt := builder.Build(t)
+
+		actor.constructAndVerify(rt)
+		// anne execs a payment channel actor with 100 FIL.
+		rt.SetCaller(anne, builtin.AccountActorCodeID)
+
+		rt.SetBalance(balance)
+		rt.SetReceived(balance)
+
+		// re-org-stable address of the payment channel actor
+		uniqueAddr1 := tutil.NewActorAddr(t, "flowch")
+		rt.SetNewActorAddress(uniqueAddr1)
+
+		// next id address
+		expectedIdAddr1 := tutil.NewIDAddr(t, 100)
+		rt.ExpectCreateActor(builtin.FlowChannelActorCodeID, expectedIdAddr1)
+
+		// expect anne creating a payment channel to trigger a send to the payment channels constructor
+		rt.ExpectSend(expectedIdAddr1, builtin.MethodConstructor, fakeParams, balance, nil, exitcode.Ok)
+		execRet1 := actor.execAndVerify(rt, builtin.FlowChannelActorCodeID, fakeParams)
+		assert.Equal(t, uniqueAddr1, execRet1.RobustAddress)
+		assert.Equal(t, expectedIdAddr1, execRet1.IDAddress)
+
+		var st init_.State
+		rt.GetState(&st)
+		actualIdAddr, found, err := st.ResolveAddress(adt.AsStore(rt), uniqueAddr1)
+		assert.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, expectedIdAddr1, actualIdAddr)
+
+		// creating another actor should get a different address, the below logic is a repeat of the above to insure
+		// the next ID address created is incremented. 100 -> 101
+		rt.SetBalance(balance)
+		rt.SetReceived(balance)
+		uniqueAddr2 := tutil.NewActorAddr(t, "paych2")
+		rt.SetNewActorAddress(uniqueAddr2)
+		// the incremented ID address.
+		expectedIdAddr2 := tutil.NewIDAddr(t, 101)
+		rt.ExpectCreateActor(builtin.FlowChannelActorCodeID, expectedIdAddr2)
+
+		// expect anne creating a payment channel to trigger a send to the payment channels constructor
+		rt.ExpectSend(expectedIdAddr2, builtin.MethodConstructor, fakeParams, balance, nil, exitcode.Ok)
+		execRet2 := actor.execAndVerify(rt, builtin.FlowChannelActorCodeID, fakeParams)
+		assert.Equal(t, uniqueAddr2, execRet2.RobustAddress)
+		assert.Equal(t, expectedIdAddr2, execRet2.IDAddress)
+
+		var st2 init_.State
+		rt.GetState(&st2)
+		actualIdAddr2, found, err := st2.ResolveAddress(adt.AsStore(rt), uniqueAddr2)
+		assert.NoError(t, err)
+		assert.True(t, found)
+		assert.Equal(t, expectedIdAddr2, actualIdAddr2)
+		actor.checkState(rt)
+	})
+
 	t.Run("happy path exec create storage miner", func(t *testing.T) {
 		rt := builder.Build(t)
 

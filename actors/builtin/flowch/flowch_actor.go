@@ -66,14 +66,14 @@ func (pca *Actor) Constructor(rt runtime.Runtime, params *ConstructorParams) *ab
 	emptyArrCid, err := emptyArr.Root()
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to persist empty array")
 
-	st := ConstructState(from, to, emptyArrCid)
+	st := ConstructState(from, to, emptyArrCid, params.Amount)
 	rt.StateCreate(st)
 
 	rParams := &retrieval.RetrievalDataParams{
 		PayloadId: rt.Receiver().String(),
 		Client:    st.From,
 		Provider:  st.To,
-		Size:      params.Amount.Uint64(),
+		Size:      st.Received.Uint64(),
 	}
 	// send ToSend to "To"
 	codeTo := rt.Send(
@@ -120,17 +120,14 @@ func (pca Actor) AddFunds(rt runtime.Runtime, params *AddFundsParams) *abi.Empty
 			rt.Abortf(exitcode.ErrIllegalState, "channel already settling")
 		}
 
-		st.SettlingAt = rt.CurrEpoch() + SettleDelay
-		if st.SettlingAt < st.MinSettleHeight {
-			st.SettlingAt = st.MinSettleHeight
-		}
+		st.Received = big.Add(st.Received, params.Amount)
 	})
 
 	rParams := &retrieval.RetrievalDataParams{
 		PayloadId: rt.Receiver().String(),
 		Client:    st.From,
 		Provider:  st.To,
-		Size:      params.Amount.Uint64(),
+		Size:      st.Received.Uint64(),
 	}
 	// send ToSend to "To"
 	codeTo := rt.Send(
