@@ -2754,17 +2754,18 @@ type RetrievalPledgeParams struct {
 }
 
 func (a Actor) BindRetrievalPledger(rt Runtime, params *RetrievalPledgeParams) *abi.EmptyValue {
+	resolved, ok := rt.ResolveAddress(params.Pledger)
+	if !ok {
+		rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", params.Pledger)
+	}
+
 	var st State
 	rt.StateTransaction(&st, func() {
 		info := getMinerInfo(rt, &st)
-		if info.RetrievalPledger == nil {
+		if info.RetrievalPledger == nil || *info.RetrievalPledger == resolved {
 			rt.ValidateImmediateCallerAcceptAny()
 		} else {
 			rt.ValidateImmediateCallerIs(info.Owner)
-		}
-		resolved, ok := rt.ResolveAddress(params.Pledger)
-		if !ok {
-			rt.Abortf(exitcode.ErrIllegalArgument, "unable to resolve address %v", params.Pledger)
 		}
 		info.RetrievalPledger = &resolved
 		err := st.SaveInfo(adt.AsStore(rt), info)

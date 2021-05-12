@@ -79,12 +79,12 @@ func RequireNoErr(rt runtime.Runtime, err error, defaultExitCode exitcode.ExitCo
 	}
 }
 
-func RequestMinerControlAddrs(rt runtime.Runtime, minerAddr addr.Address) (ownerAddr addr.Address, workerAddr addr.Address, controlAddrs []addr.Address) {
+func RequestMinerControlAddrs(rt runtime.Runtime, minerAddr addr.Address) (ownerAddr addr.Address, workerAddr addr.Address, controlAddrs []addr.Address, coinbase addr.Address) {
 	var addrs GetControlAddressesReturn
 	code := rt.Send(minerAddr, MethodsMiner.ControlAddresses, nil, abi.NewTokenAmount(0), &addrs)
 	RequireSuccess(rt, code, "failed fetching miner control addresses")
 
-	return addrs.Owner, addrs.Worker, addrs.ControlAddrs
+	return addrs.Owner, addrs.Worker, addrs.ControlAddrs, addrs.Coinbase
 }
 
 // This type duplicates the Miner.ControlAddresses return type, to work around a circular dependency between actors.

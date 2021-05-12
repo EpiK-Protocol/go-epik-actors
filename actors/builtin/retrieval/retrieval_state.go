@@ -332,7 +332,7 @@ func (st *State) Withdraw(store adt.Store, curEpoch abi.ChainEpoch, pledger addr
 }
 
 // RetrievalData record the retrieval data
-func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAddr addr.Address, data RetrievalData) (exitcode.ExitCode, error) {
+func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAddr addr.Address, data RetrievalData, minerCheck bool) (exitcode.ExitCode, error) {
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval state: %w", err)
@@ -347,6 +347,19 @@ func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAdd
 	}
 	if !found {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval state: %v", fromAddr)
+	}
+
+	if minerCheck {
+		match := false
+		for _, miner := range state.Miners {
+			if miner == data.Provider {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return exitcode.ErrIllegalState, xerrors.Errorf("failed to match miner with pledger: %v, miner:%v", fromAddr, data.Provider)
+		}
 	}
 
 	if curEpochDay > state.EpochDate {
@@ -373,9 +386,7 @@ func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAdd
 		return exitcode.ErrIllegalState, err
 	}
 	if found {
-		if uint64(out.Epoch/RetrievalStateDuration) >= curEpochDay {
-			state.DateSize = state.DateSize - out.PieceSize
-		}
+		data.PieceSize += out.PieceSize
 	}
 
 	if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
@@ -419,13 +430,17 @@ func (st *State) ConfirmData(store adt.Store, curEpoch abi.ChainEpoch, fromAddr 
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval data: %v", data.PayloadId)
 	}
 
-	curEpochDay := curEpoch / RetrievalStateDuration
-	if (out.Epoch / RetrievalStateDuration) >= curEpochDay {
-		state.DateSize = state.DateSize + data.PieceSize - out.PieceSize
+	if out.PieceSize < data.PieceSize {
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to confirm retrieval data: %v, data:%d, confirm:%d", data.PayloadId, out.PieceSize, data.PieceSize)
 	}
-	if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
-		return abi.NewTokenAmount(0), err
-	}
+
+	// curEpochDay := curEpoch / RetrievalStateDuration
+	// if (out.Epoch / RetrievalStateDuration) >= curEpochDay {
+	// 	state.DateSize = state.DateSize + data.PieceSize - out.PieceSize
+	// }
+	// if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
+	// 	return abi.NewTokenAmount(0), err
+	// }
 	if state.Datas, err = dataMap.Root(); err != nil {
 		return abi.NewTokenAmount(0), err
 	}

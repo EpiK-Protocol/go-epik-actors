@@ -175,7 +175,7 @@ func (a Actor) PublishStorageDeals(rt Runtime, params *PublishStorageDealsParams
 	}
 
 	caller := rt.Caller()
-	_, worker, controllers := builtin.RequestMinerControlAddrs(rt, provider)
+	_, worker, controllers, _ := builtin.RequestMinerControlAddrs(rt, provider)
 	callerOk := caller == worker
 	for _, controller := range controllers {
 		if callerOk {
@@ -906,7 +906,7 @@ func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, reci
 
 	if codeID.Equals(builtin.StorageMinerActorCodeID) {
 		// Storage miner actor entry; implied funds recipient is the associated owner address.
-		ownerAddr, workerAddr, _ := builtin.RequestMinerControlAddrs(rt, nominal)
+		ownerAddr, workerAddr, _, _ := builtin.RequestMinerControlAddrs(rt, nominal)
 		return nominal, ownerAddr, []addr.Address{ownerAddr, workerAddr}
 	}
 

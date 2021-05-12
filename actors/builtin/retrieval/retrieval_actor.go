@@ -73,8 +73,8 @@ func (a Actor) Pledge(rt Runtime, params *PledgeParams) *abi.EmptyValue {
 	// only signing parties can add balance for client AND provider.
 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	pledger, _, _ := escrowAddress(rt, rt.Caller())
-	nominal, _, _ := escrowAddress(rt, params.Address)
+	pledger, _, _, _ := escrowAddress(rt, rt.Caller())
+	nominal, _, _, _ := escrowAddress(rt, params.Address)
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -106,7 +106,7 @@ func (a Actor) ApplyForWithdraw(rt Runtime, params *WithdrawBalanceParams) *abi.
 		rt.Abortf(exitcode.ErrIllegalArgument, "invalid amount %v", params.Amount)
 	}
 
-	nominal, _, approvedCallers := escrowAddress(rt, params.ProviderOrClientAddress)
+	nominal, _, approvedCallers, _ := escrowAddress(rt, params.ProviderOrClientAddress)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerIs(approvedCallers...)
@@ -126,7 +126,7 @@ func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.E
 		rt.Abortf(exitcode.ErrIllegalArgument, "invalid amount %v", params.Amount)
 	}
 
-	nominal, _, approvedCallers := escrowAddress(rt, params.ProviderOrClientAddress)
+	nominal, _, approvedCallers, _ := escrowAddress(rt, params.ProviderOrClientAddress)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerIs(approvedCallers...)
@@ -143,7 +143,7 @@ func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.E
 
 // Resolves a provider or client address to the canonical form against which a balance should be held, and
 // the designated recipient address of withdrawals (which is the same, for simple account parties).
-func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, recipient addr.Address, approved []addr.Address) {
+func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, recipient addr.Address, approved []addr.Address, coinbase addr.Address) {
 	// Resolve the provided address to the canonical form against which the balance is held.
 	nominal, ok := rt.ResolveAddress(address)
 	if !ok {
@@ -157,11 +157,11 @@ func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, reci
 
 	if codeID.Equals(builtin.StorageMinerActorCodeID) {
 		// Storage miner actor entry; implied funds recipient is the associated owner address.
-		ownerAddr, workerAddr, _ := builtin.RequestMinerControlAddrs(rt, nominal)
-		return nominal, ownerAddr, []addr.Address{ownerAddr, workerAddr}
+		ownerAddr, workerAddr, _, coinbase := builtin.RequestMinerControlAddrs(rt, nominal)
+		return nominal, ownerAddr, []addr.Address{ownerAddr, workerAddr}, coinbase
 	}
 
-	return nominal, nominal, []addr.Address{nominal}
+	return nominal, nominal, []addr.Address{nominal}, nominal
 }
 
 // RetrievalDataParams retrieval data params
@@ -174,7 +174,7 @@ type RetrievalDataParams struct {
 
 // RetrievalData retrieval data statistics
 func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, _ := escrowAddress(rt, params.Client)
+	nominal, _, _, _ := escrowAddress(rt, params.Client)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
@@ -188,7 +188,7 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
-		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data)
+		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data, false)
 		builtin.RequireNoErr(rt, err, code, "failed to Statistics")
 	})
 	return nil
@@ -196,12 +196,13 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 
 // ConfirmData retrieval data statistics
 func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, _ := escrowAddress(rt, params.Client)
-	// _, _, providerCallers := escrowAddress(rt, params.Provider)
+	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
+
+	nominal, _, _, _ := escrowAddress(rt, params.Client)
+	_, _, _, coinbase := escrowAddress(rt, params.Provider)
 	// approvedCallers = append(approvedCallers, providerCallers...)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
 
 	var reward abi.TokenAmount
 	var st State
@@ -217,14 +218,14 @@ func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyVa
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to confirm data")
 		reward = amount
 	})
-	code := rt.Send(params.Provider, builtin.MethodSend, nil, reward, &builtin.Discard{})
+	code := rt.Send(coinbase, builtin.MethodSend, nil, reward, &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to send retrieval reward")
 	return nil
 }
 
 // MinerRetrieval miner retrieval
 func (a Actor) MinerRetrieval(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	nominal, _, _ := escrowAddress(rt, params.Client)
+	nominal, _, _, _ := escrowAddress(rt, params.Client)
 	// _, _, providerCallers := escrowAddress(rt, params.Provider)
 	// approvedCallers = append(approvedCallers, providerCallers...)
 	// for providers -> only corresponding owner or worker can withdraw
@@ -240,7 +241,7 @@ func (a Actor) MinerRetrieval(rt Runtime, params *RetrievalDataParams) *abi.Empt
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
-		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data)
+		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data, true)
 		builtin.RequireNoErr(rt, err, code, "failed to handle miner retrieval")
 	})
 	return nil
@@ -287,7 +288,7 @@ type BindMinersParams struct {
 
 // BindMiners bind miners
 func (a Actor) BindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue {
-	pledger, _, _ := escrowAddress(rt, params.Pledger)
+	pledger, _, _, _ := escrowAddress(rt, params.Pledger)
 	rt.ValidateImmediateCallerIs(pledger)
 
 	var st State
@@ -306,7 +307,7 @@ func (a Actor) BindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue 
 
 // UnbindMiners unbind miners
 func (a Actor) UnbindMiners(rt Runtime, params *BindMinersParams) *abi.EmptyValue {
-	pledger, _, _ := escrowAddress(rt, params.Pledger)
+	pledger, _, _, _ := escrowAddress(rt, params.Pledger)
 	rt.ValidateImmediateCallerIs(pledger)
 
 	var st State

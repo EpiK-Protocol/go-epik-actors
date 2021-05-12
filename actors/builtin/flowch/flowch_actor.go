@@ -75,7 +75,6 @@ func (pca *Actor) Constructor(rt runtime.Runtime, params *ConstructorParams) *ab
 		Provider:  st.To,
 		Size:      st.Received.Uint64(),
 	}
-	// send ToSend to "To"
 	codeTo := rt.Send(
 		builtin.RetrievalFundActorAddr,
 		builtin.MethodsRetrieval.RetrievalData,
@@ -115,11 +114,6 @@ func (pca Actor) AddFunds(rt runtime.Runtime, params *AddFundsParams) *abi.Empty
 	var st State
 	rt.StateTransaction(&st, func() {
 		rt.ValidateImmediateCallerAcceptAny()
-
-		if st.SettlingAt != 0 {
-			rt.Abortf(exitcode.ErrIllegalState, "channel already settling")
-		}
-
 		st.Received = big.Add(st.Received, params.Amount)
 	})
 
@@ -127,9 +121,8 @@ func (pca Actor) AddFunds(rt runtime.Runtime, params *AddFundsParams) *abi.Empty
 		PayloadId: rt.Receiver().String(),
 		Client:    st.From,
 		Provider:  st.To,
-		Size:      st.Received.Uint64(),
+		Size:      params.Amount.Uint64(),
 	}
-	// send ToSend to "To"
 	codeTo := rt.Send(
 		builtin.RetrievalFundActorAddr,
 		builtin.MethodsRetrieval.RetrievalData,
@@ -282,6 +275,7 @@ func (pca Actor) UpdateChannelState(rt runtime.Runtime, params *UpdateChannelSta
 		builtin.RequireSuccess(rt, code, "spend voucher verification failed")
 	}
 
+	var balanceDelta abi.TokenAmount
 	rt.StateTransaction(&st, func() {
 		laneFound := true
 
@@ -334,7 +328,7 @@ func (pca Actor) UpdateChannelState(rt runtime.Runtime, params *UpdateChannelSta
 		// 2. To prevent double counting, remove already redeemed amounts (from
 		// voucher or other lanes) from the voucher amount
 		laneState.Nonce = sv.Nonce
-		balanceDelta := big.Sub(sv.Amount, big.Add(redeemedFromOthers, laneState.Redeemed))
+		balanceDelta = big.Sub(sv.Amount, big.Add(redeemedFromOthers, laneState.Redeemed))
 		// 3. set new redeemed value for merged-into lane
 		laneState.Redeemed = sv.Amount
 
@@ -367,6 +361,21 @@ func (pca Actor) UpdateChannelState(rt runtime.Runtime, params *UpdateChannelSta
 		st.LaneStates, err = lstates.Root()
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to save lanes")
 	})
+	retrievalParams := &retrieval.RetrievalDataParams{
+		PayloadId: rt.Receiver().String(),
+		Client:    st.From,
+		Provider:  st.To,
+		Size:      balanceDelta.Uint64(),
+	}
+	// send ToSend to "To"
+	codeTo := rt.Send(
+		builtin.RetrievalFundActorAddr,
+		builtin.MethodsRetrieval.ConfirmData,
+		retrievalParams,
+		abi.NewTokenAmount(0),
+		&builtin.Discard{},
+	)
+	builtin.RequireSuccess(rt, codeTo, "Failed to confirm retrieve data")
 	return nil
 }
 
@@ -396,21 +405,21 @@ func (pca Actor) Collect(rt runtime.Runtime, _ *abi.EmptyValue) *abi.EmptyValue 
 		rt.Abortf(exitcode.ErrForbidden, "payment channel not settling or settled")
 	}
 
-	params := &retrieval.RetrievalDataParams{
-		PayloadId: rt.Receiver().String(),
-		Client:    st.From,
-		Provider:  st.To,
-		Size:      st.ToSend.Uint64(),
-	}
-	// send ToSend to "To"
-	codeTo := rt.Send(
-		builtin.RetrievalFundActorAddr,
-		builtin.MethodsRetrieval.ConfirmData,
-		params,
-		abi.NewTokenAmount(0),
-		&builtin.Discard{},
-	)
-	builtin.RequireSuccess(rt, codeTo, "Failed to confirm retrieve to `To`")
+	// params := &retrieval.RetrievalDataParams{
+	// 	PayloadId: rt.Receiver().String(),
+	// 	Client:    st.From,
+	// 	Provider:  st.To,
+	// 	Size:      st.ToSend.Uint64(),
+	// }
+	// // send ToSend to "To"
+	// codeTo := rt.Send(
+	// 	builtin.RetrievalFundActorAddr,
+	// 	builtin.MethodsRetrieval.ConfirmData,
+	// 	params,
+	// 	abi.NewTokenAmount(0),
+	// 	&builtin.Discard{},
+	// )
+	// builtin.RequireSuccess(rt, codeTo, "Failed to confirm retrieve to `To`")
 
 	// the remaining balance will be returned to "From" upon deletion.
 	rt.DeleteActor(st.From)
