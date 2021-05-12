@@ -158,13 +158,17 @@ func (a Actor) ChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
 	return nil
 }
 
+type BatchImportDataParams struct {
+	Datas []ImportDataParams
+}
+
 type ImportDataParams struct {
 	RootID    cid.Cid `checked:"true"`
 	PieceID   cid.Cid `checked:"true"`
 	PieceSize abi.PaddedPieceSize
 }
 
-func (a Actor) ImportData(rt Runtime, params *ImportDataParams) *abi.EmptyValue {
+func (a Actor) ImportData(rt Runtime, params *BatchImportDataParams) *abi.EmptyValue {
 	var st State
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
@@ -178,19 +182,25 @@ func (a Actor) ImportData(rt Runtime, params *ImportDataParams) *abi.EmptyValue 
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "faile to apply new owner")
 		}
 
-		infos, err := st.GetDatas(store, false, params.PieceID)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data")
-		builtin.RequireParam(rt, len(infos) == 0, "duplicate data %s", params.PieceID)
+		for _, data := range params.Datas {
+			infos, err := st.GetDatas(store, false, data.PieceID)
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data")
+			builtin.RequireParam(rt, len(infos) == 0, "duplicate data %s", data.PieceID)
 
-		err = st.PutDatas(store, &DataOnChainInfo{
-			RootID:    params.RootID.String(),
-			PieceID:   params.PieceID.String(),
-			PieceSize: params.PieceSize,
-		})
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to import data")
-		st.DataCount++
+			err = st.PutDatas(store, &DataOnChainInfo{
+				RootID:    data.RootID.String(),
+				PieceID:   data.PieceID.String(),
+				PieceSize: data.PieceSize,
+			})
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to import data")
+			st.DataCount++
+		}
 	})
-	builtin.NotifyExpertImport(rt, params.PieceID)
+	cids := []cid.Cid{}
+	for _, data := range params.Datas {
+		cids = append(cids, data.PieceID)
+	}
+	builtin.NotifyExpertImport(rt, cids)
 	return nil
 }
 

@@ -94,18 +94,20 @@ func (a Actor) Claim(rt Runtime, params *ClaimFundParams) *abi.TokenAmount {
 }
 
 // OnExpertImport
-func (a Actor) OnExpertImport(rt Runtime, params *builtin.CheckedCID) *abi.EmptyValue {
+func (a Actor) OnExpertImport(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.ExpertActorCodeID)
 
-	builtin.RequireParam(rt, params.CID != cid.Undef, "undefined cid")
+	builtin.RequireParam(rt, len(params.PieceCIDs) > 0, "undefined cid")
 
 	var st State
 	rt.StateTransaction(&st, func() {
 		// global unique
-		err := st.PutPieceInfos(adt.AsStore(rt), true, map[cid.Cid]*PieceInfo{
-			params.CID: {rt.Caller(), st.DataStoreThreshold},
-		})
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put data info: %s, %s", rt.Caller(), params.CID)
+		for _, checked := range params.PieceCIDs {
+			err := st.PutPieceInfos(adt.AsStore(rt), true, map[cid.Cid]*PieceInfo{
+				checked.CID: {rt.Caller(), st.DataStoreThreshold},
+			})
+			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to put data info: %s, %s", rt.Caller(), checked.CID)
+		}
 	})
 	return nil
 }

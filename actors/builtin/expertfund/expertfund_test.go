@@ -177,8 +177,8 @@ func TestGetData(t *testing.T) {
 		pieceID := tutil.MakeCID("1", &market.PieceCIDPrefix)
 		actor.onExpertImport(rt, expert1, &builtin.CheckedCID{CID: pieceID})
 
-		di := actor.getData(rt, expert1, &builtin.CheckedCID{CID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID, RootID: rootID})
-		require.True(t, di.Expert == expert1 && di.Data.PieceID == pieceID && di.Data.RootID == rootID)
+		di := actor.getData(rt, expert1, &builtin.CheckedCID{CID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID.String(), RootID: rootID.String()})
+		require.True(t, di.Expert == expert1 && di.Data.PieceID == pieceID.String() && di.Data.RootID == rootID.String())
 	})
 
 	t.Run("get nonexistent data", func(t *testing.T) {
@@ -189,7 +189,7 @@ func TestGetData(t *testing.T) {
 		pieceID := tutil.MakeCID("1", &market.PieceCIDPrefix)
 
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "piece not found", func() {
-			actor.getData(rt, expert1, &builtin.CheckedCID{CID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID, RootID: rootID})
+			actor.getData(rt, expert1, &builtin.CheckedCID{CID: pieceID}, &expert.DataOnChainInfo{PieceID: pieceID.String(), RootID: rootID.String()})
 		})
 	})
 
@@ -205,7 +205,7 @@ func TestGetData(t *testing.T) {
 		rt.ExpectValidateCallerAny()
 		params := &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: pieceID}}}
 		expRet := &expert.GetDatasReturn{
-			Infos: []*expert.DataOnChainInfo{{PieceID: pieceID, RootID: rootID}},
+			Infos: []*expert.DataOnChainInfo{{PieceID: pieceID.String(), RootID: rootID.String()}},
 		}
 		rt.ExpectSend(expert1, builtin.MethodsExpert.GetDatas, params, abi.NewTokenAmount(0), expRet, exitcode.ErrForbidden)
 
@@ -354,8 +354,8 @@ func TestBatchCheckData(t *testing.T) {
 		rt.ExpectSend(expert1, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: pieceID1}}},
 			big.Zero(), &expert.GetDatasReturn{
 				Infos: []*expert.DataOnChainInfo{{
-					RootID:    pieceID1,
-					PieceID:   pieceID1,
+					RootID:    pieceID1.String(),
+					PieceID:   pieceID1.String(),
 					PieceSize: 100,
 				}},
 			}, exitcode.Ok)
@@ -419,8 +419,8 @@ func TestBatchCheckData(t *testing.T) {
 		rt.ExpectSend(expert1, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: pieceID1}}},
 			big.Zero(), &expert.GetDatasReturn{
 				Infos: []*expert.DataOnChainInfo{{
-					RootID:    pieceID1,
-					PieceID:   pieceID1,
+					RootID:    pieceID1.String(),
+					PieceID:   pieceID1.String(),
 					PieceSize: 100,
 				}},
 			}, exitcode.Ok)
@@ -446,20 +446,20 @@ func TestBatchCheckData(t *testing.T) {
 		rt.ExpectSend(expert1, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: pieceID1}, {CID: pieceID2}}},
 			big.Zero(), &expert.GetDatasReturn{
 				Infos: []*expert.DataOnChainInfo{{
-					RootID:    pieceID1,
-					PieceID:   pieceID1,
+					RootID:    pieceID1.String(),
+					PieceID:   pieceID1.String(),
 					PieceSize: 100,
 				}, {
-					RootID:    pieceID2,
-					PieceID:   pieceID2,
+					RootID:    pieceID2.String(),
+					PieceID:   pieceID2.String(),
 					PieceSize: 200,
 				}},
 			}, exitcode.Ok)
 		rt.ExpectSend(expert2, builtin.MethodsExpert.GetDatas, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{{CID: pieceID3}}},
 			big.Zero(), &expert.GetDatasReturn{
 				Infos: []*expert.DataOnChainInfo{{
-					RootID:    pieceID3,
-					PieceID:   pieceID3,
+					RootID:    pieceID3.String(),
+					PieceID:   pieceID3.String(),
 					PieceSize: 300,
 				}},
 			}, exitcode.Ok)
@@ -516,8 +516,8 @@ func TestBatchStoreData(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: st.DataStoreThreshold - 1,
 				}}},
@@ -533,8 +533,8 @@ func TestBatchStoreData(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: st.DataStoreThreshold,
 				}}},
@@ -550,8 +550,8 @@ func TestBatchStoreData(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: st.DataStoreThreshold + 1,
 				}}},
@@ -583,8 +583,8 @@ func TestBatchStoreData(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  400,
 					Redundancy: st.DataStoreThreshold + 1,
 				}}},
@@ -612,8 +612,8 @@ func TestBatchStoreData(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: st.DataStoreThreshold,
 				}}},
@@ -643,8 +643,8 @@ func TestBatchStoreData(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -662,8 +662,8 @@ func TestBatchStoreData(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -715,8 +715,8 @@ func TestClaim(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -734,8 +734,8 @@ func TestClaim(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -803,8 +803,8 @@ func TestClaim(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -816,8 +816,8 @@ func TestClaim(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -893,8 +893,8 @@ func TestClaim(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -997,8 +997,8 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1010,8 +1010,8 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1082,8 +1082,8 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1095,8 +1095,8 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1190,8 +1190,8 @@ func TestBlockExpert(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1203,8 +1203,8 @@ func TestBlockExpert(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert3: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1258,8 +1258,8 @@ func TestBlockExpert(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1271,8 +1271,8 @@ func TestBlockExpert(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert3: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1320,8 +1320,8 @@ func TestBlockExpert(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert1: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID1,
-					PieceID:    pieceID1,
+					RootID:     pieceID1.String(),
+					PieceID:    pieceID1.String(),
 					PieceSize:  100,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1333,8 +1333,8 @@ func TestBlockExpert(t *testing.T) {
 			},
 			expectStoreDataReturn: map[address.Address]*expert.GetDatasReturn{
 				expert2: {Infos: []*expert.DataOnChainInfo{{
-					RootID:     pieceID2,
-					PieceID:    pieceID2,
+					RootID:     pieceID2.String(),
+					PieceID:    pieceID2.String(),
 					PieceSize:  400,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
@@ -1430,7 +1430,10 @@ func (h *actorHarness) applyForExpert(rt *mock.Runtime, owner address.Address, e
 func (h *actorHarness) onExpertImport(rt *mock.Runtime, exp address.Address, params *builtin.CheckedCID) {
 	rt.SetCaller(exp, builtin.ExpertActorCodeID)
 	rt.ExpectValidateCallerType(builtin.ExpertActorCodeID)
-	rt.Call(h.OnExpertImport, params)
+	batchParams := &builtin.BatchPieceCIDParams{
+		PieceCIDs: []builtin.CheckedCID{*params},
+	}
+	rt.Call(h.OnExpertImport, batchParams)
 	rt.Verify()
 }
 

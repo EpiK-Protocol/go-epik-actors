@@ -132,7 +132,7 @@ func constructStateHarness(t *testing.T) *stateHarness {
 
 func newDataOnChainInfo(rootID, pieceID cid.Cid) *expert.DataOnChainInfo {
 	return &expert.DataOnChainInfo{
-		RootID:  rootID,
-		PieceID: pieceID,
+		RootID:  rootID.String(),
+		PieceID: pieceID.String(),
 	}
 }

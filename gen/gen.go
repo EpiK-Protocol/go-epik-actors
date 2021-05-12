@@ -81,6 +81,7 @@ func main() {
 		expert.DataOnChainInfo{},
 		// method params
 		expert.ConstructorParams{},
+		expert.BatchImportDataParams{},
 		expert.ImportDataParams{},
 		expert.GetDatasReturn{},
 		expert.OnBlockedReturn{},

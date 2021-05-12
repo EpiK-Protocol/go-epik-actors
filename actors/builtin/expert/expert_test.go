@@ -180,33 +180,39 @@ func TestImportData(t *testing.T) {
 		actor.constructAndVerify(rt, builtin.ExpertFoundation)
 
 		// first
-		params := newImportDataParams()
-		checkedID := builtin.CheckedCID{CID: params.PieceID}
+		batchParams := newImportDataParams()
+		cids := []builtin.CheckedCID{}
+		for _, data := range batchParams.Datas {
+			cids = append(cids, builtin.CheckedCID{CID: data.PieceID})
+		}
+		checkedIDs := builtin.BatchPieceCIDParams{PieceCIDs: cids}
 
 		rt.SetCaller(owner, builtin.AccountActorCodeID)
 		rt.ExpectValidateCallerAddr(owner)
-		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &checkedID, abi.NewTokenAmount(0), nil, exitcode.Ok)
-		rt.Call(actor.ImportData, params)
+		rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &checkedIDs, abi.NewTokenAmount(0), nil, exitcode.Ok)
+		rt.Call(actor.ImportData, batchParams)
 		rt.Verify()
 
 		st := getState(rt)
-		ret := actor.getDatas(rt, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{checkedID}})
+		ret := actor.getDatas(rt, &checkedIDs)
 		require.True(t, st.DataCount == 1 && len(ret.Infos) == 1 &&
-			ret.Infos[0].PieceID == params.PieceID &&
-			ret.Infos[0].RootID == params.RootID &&
-			ret.Infos[0].PieceSize == params.PieceSize)
+			ret.Infos[0].PieceID == batchParams.Datas[0].PieceID.String() &&
+			ret.Infos[0].RootID == batchParams.Datas[0].RootID.String() &&
+			ret.Infos[0].PieceSize == batchParams.Datas[0].PieceSize)
 
-		// second
-		params2 := newImportDataParams()
-		checkedID2 := builtin.CheckedCID{CID: params2.PieceID}
+		batchParams2 := newImportDataParams()
+		for _, data := range batchParams2.Datas {
+			cids = append(cids, builtin.CheckedCID{CID: data.PieceID})
+		}
+		checkedIDs2 := builtin.BatchPieceCIDParams{PieceCIDs: cids}
 
-		actor.importData(rt, params2)
+		actor.importData(rt, batchParams2)
 		st = getState(rt)
-		ret = actor.getDatas(rt, &builtin.BatchPieceCIDParams{PieceCIDs: []builtin.CheckedCID{checkedID, checkedID2}})
-		require.True(t, st.DataCount == 2 && len(ret.Infos) == 2 &&
-			ret.Infos[1].PieceID == params2.PieceID &&
-			ret.Infos[1].RootID == params2.RootID &&
-			ret.Infos[1].PieceSize == params2.PieceSize)
+		ret = actor.getDatas(rt, &checkedIDs2)
+		require.True(t, st.DataCount == 2 && len(ret.Infos) == 2)
+		require.True(t, ret.Infos[1].PieceID == batchParams2.Datas[0].PieceID.String() &&
+			ret.Infos[1].RootID == batchParams2.Datas[0].RootID.String() &&
+			ret.Infos[1].PieceSize == batchParams2.Datas[0].PieceSize)
 	})
 
 	t.Run("fail when import duplicate data", func(t *testing.T) {
@@ -216,7 +222,7 @@ func TestImportData(t *testing.T) {
 		params := newImportDataParams()
 		actor.importData(rt, params)
 
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "duplicate data "+params.PieceID.String(), func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "duplicate data "+params.Datas[0].PieceID.String(), func() {
 			actor.importData(rt, params)
 		})
 	})
@@ -250,7 +256,7 @@ func TestStoreData(t *testing.T) {
 
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "data not found "+params2.PieceID.String(), func() {
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "data not found "+params2.Datas[0].PieceID.String(), func() {
 			rt.Call(actor.StoreData, newStoreDataParams(params1, params2))
 		})
 	})
@@ -265,18 +271,18 @@ func TestStoreData(t *testing.T) {
 		// first time
 		ret := actor.storeData(rt, newStoreDataParams(params1))
 		require.True(t, ret.Infos[0].Redundancy == 1 &&
-			ret.Infos[0].PieceID == params1.PieceID &&
-			ret.Infos[0].RootID == params1.RootID &&
-			ret.Infos[0].PieceSize == params1.PieceSize)
+			ret.Infos[0].PieceID == params1.Datas[0].PieceID.String() &&
+			ret.Infos[0].RootID == params1.Datas[0].RootID.String() &&
+			ret.Infos[0].PieceSize == params1.Datas[0].PieceSize)
 
 		// second time
 		params2 := newImportDataParams()
 		actor.importData(rt, params2)
 		ret = actor.storeData(rt, newStoreDataParams(params1, params2))
 		require.True(t, ret.Infos[0].Redundancy == 2 && ret.Infos[1].Redundancy == 1 &&
-			ret.Infos[1].PieceID == params2.PieceID &&
-			ret.Infos[1].RootID == params2.RootID &&
-			ret.Infos[1].PieceSize == params2.PieceSize)
+			ret.Infos[1].PieceID == params2.Datas[0].PieceID.String() &&
+			ret.Infos[1].RootID == params2.Datas[0].RootID.String() &&
+			ret.Infos[1].PieceSize == params2.Datas[0].PieceSize)
 	})
 }
 
@@ -856,22 +862,27 @@ func TestOnVotesUpdated(t *testing.T) {
 	})
 }
 
-func newStoreDataParams(expertDataParams ...*expert.ImportDataParams) *builtin.BatchPieceCIDParams {
+func newStoreDataParams(expertDataParams ...*expert.BatchImportDataParams) *builtin.BatchPieceCIDParams {
 	var ret builtin.BatchPieceCIDParams
-	for _, p := range expertDataParams {
-		ret.PieceCIDs = append(ret.PieceCIDs, builtin.CheckedCID{CID: p.PieceID})
+	for _, params := range expertDataParams {
+		for _, data := range params.Datas {
+			ret.PieceCIDs = append(ret.PieceCIDs, builtin.CheckedCID{CID: data.PieceID})
+		}
 	}
 	return &ret
 }
 
-func newImportDataParams() *expert.ImportDataParams {
+func newImportDataParams() *expert.BatchImportDataParams {
 	rd := rand.Intn(100) + 100
 	rootID := tutil.MakeCID(strconv.Itoa(rd), &miner.SealedCIDPrefix)
 	pieceID := tutil.MakeCID(strconv.Itoa(rd), &market.PieceCIDPrefix)
-	return &expert.ImportDataParams{
-		RootID:    rootID,
-		PieceID:   pieceID,
-		PieceSize: abi.PaddedPieceSize(rd) + abi.PaddedPieceSize(2<<10),
+	return &expert.BatchImportDataParams{
+		Datas: []expert.ImportDataParams{
+			expert.ImportDataParams{
+				RootID:    rootID,
+				PieceID:   pieceID,
+				PieceSize: abi.PaddedPieceSize(rd) + abi.PaddedPieceSize(2<<10),
+			}},
 	}
 }
 
@@ -914,12 +925,15 @@ func (h *actorHarness) controlAddress(rt *mock.Runtime) addr.Address {
 	return *owner
 }
 
-func (h *actorHarness) importData(rt *mock.Runtime, params *expert.ImportDataParams) {
+func (h *actorHarness) importData(rt *mock.Runtime, params *expert.BatchImportDataParams) {
 	rt.SetCaller(h.owner, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerAddr(h.owner)
-	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &builtin.CheckedCID{
-		CID: params.PieceID,
-	}, abi.NewTokenAmount(0), nil, exitcode.Ok)
+	cids := []builtin.CheckedCID{}
+	for _, data := range params.Datas {
+		cids = append(cids, builtin.CheckedCID{data.PieceID})
+	}
+	checkedIDs := builtin.BatchPieceCIDParams{PieceCIDs: cids}
+	rt.ExpectSend(builtin.ExpertFundActorAddr, builtin.MethodsExpertFunds.OnExpertImport, &checkedIDs, abi.NewTokenAmount(0), nil, exitcode.Ok)
 	rt.Call(h.ImportData, params)
 	rt.Verify()
 }
