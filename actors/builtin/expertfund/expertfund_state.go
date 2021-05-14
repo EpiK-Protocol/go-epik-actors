@@ -191,6 +191,33 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 	return st.SavePool(store, pool)
 }
 
+func (st *State) PendingReward(rt Runtime, expertAddr address.Address) (abi.TokenAmount, error) {
+	store := adt.AsStore(rt)
+	pool, err := st.GetPool(store)
+	if err != nil {
+		return abi.NewTokenAmount(0), err
+	}
+	expert, err := st.GetExpert(store, expertAddr)
+	if err != nil {
+		return big.Zero(), err
+	}
+	accPerShare := pool.AccPerShare
+
+	if rt.CurrEpoch() > pool.CurrentEpoch && pool.PrevTotalDataSize != 0 {
+		currBalance := rt.CurrentBalance()
+		reward := big.Sub(currBalance, pool.LastRewardBalance)
+		if reward.LessThan(big.Zero()) {
+			return abi.NewTokenAmount(0), nil
+		}
+		accPerShare = big.Div(big.Mul(reward, AccumulatedMultiplier), big.NewIntUnsigned(uint64(pool.PrevTotalDataSize)))
+	}
+	rewardDebt := big.Div(
+		big.Mul(big.NewIntUnsigned(uint64(expert.DataSize)), accPerShare),
+		AccumulatedMultiplier)
+	pending := big.Sub(rewardDebt, expert.RewardDebt)
+	return pending, nil
+}
+
 func (st *State) Claim(rt Runtime, expertAddr address.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
 
 	pool, err := st.UpdatePool(rt)
