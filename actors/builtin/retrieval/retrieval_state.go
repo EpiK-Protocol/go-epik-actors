@@ -56,6 +56,7 @@ type RetrievalData struct {
 // PledgeState record pledge state
 type PledgeState struct {
 	Targets []addr.Address
+	Amount  abi.TokenAmount
 }
 
 // LockedState record lock state
@@ -113,9 +114,11 @@ func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Addre
 		if !tfound {
 			pledge.Targets = append(pledge.Targets, target)
 		}
+		pledge.Amount = big.Add(pledge.Amount, amount)
 	} else {
 		pledge = PledgeState{
 			Targets: []addr.Address{target},
+			Amount:  amount,
 		}
 	}
 
@@ -204,6 +207,9 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, pled
 	if !found {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to find pledge with addr:%s", pledger)
 	}
+	if amount.GreaterThan(pledges.Amount) {
+		return exitcode.ErrIllegalState, xerrors.Errorf("pledge is less than apply amount:%v, pledge:%v", amount, pledges.Amount)
+	}
 
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -258,6 +264,7 @@ func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, pled
 		}
 	}
 
+	pledges.Amount = big.Sub(pledges.Amount, amount)
 	pledges.Targets = pledges.Targets[i:]
 	if err = pledgesMap.Put(abi.AddrKey(pledger), &pledges); err != nil {
 		return exitcode.ErrIllegalState, err
@@ -386,7 +393,9 @@ func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAdd
 		return exitcode.ErrIllegalState, err
 	}
 	if found {
-		data.PieceSize += out.PieceSize
+		if (out.Epoch / RetrievalStateDuration) >= abi.ChainEpoch(state.EpochDate) {
+			data.PieceSize += out.PieceSize
+		}
 	}
 
 	if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
@@ -406,59 +415,52 @@ func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAdd
 }
 
 // ConfirmData record the retrieval data
-func (st *State) ConfirmData(store adt.Store, curEpoch abi.ChainEpoch, fromAddr addr.Address, data RetrievalData) (abi.TokenAmount, error) {
+func (st *State) ConfirmData(store adt.Store, curEpoch abi.ChainEpoch, fromAddr addr.Address, data RetrievalData) error {
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval state: %w", err)
+		return xerrors.Errorf("failed to load retrieval state: %w", err)
 	}
 
 	var state RetrievalState
 	found, err := stateMap.Get(abi.AddrKey(fromAddr), &state)
 	if err != nil {
-		return abi.NewTokenAmount(0), err
+		return err
 	}
 	if !found {
-		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval state: %v", fromAddr)
+		return xerrors.Errorf("failed to load retrieval state: %v", fromAddr)
 	}
 
 	dataMap, err := adt.AsMap(store, state.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return abi.NewTokenAmount(0), err
+		return err
 	}
 	var out RetrievalData
 	if found, err = dataMap.Get(adt.StringKey(data.PayloadId), &out); !found || err != nil {
-		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval data: %v", data.PayloadId)
+		return xerrors.Errorf("failed to load retrieval data: %v", data.PayloadId)
 	}
 
-	if out.PieceSize < data.PieceSize {
-		return abi.NewTokenAmount(0), xerrors.Errorf("failed to confirm retrieval data: %v, data:%d, confirm:%d", data.PayloadId, out.PieceSize, data.PieceSize)
+	curEpochDay := curEpoch / RetrievalStateDuration
+	if (out.Epoch/RetrievalStateDuration) >= curEpochDay && out.PieceSize > data.PieceSize {
+		if state.DateSize+data.PieceSize > out.PieceSize {
+			state.DateSize = state.DateSize + data.PieceSize - out.PieceSize
+		} else {
+			state.DateSize = 0
+		}
 	}
-
-	// curEpochDay := curEpoch / RetrievalStateDuration
-	// if (out.Epoch / RetrievalStateDuration) >= curEpochDay {
-	// 	state.DateSize = state.DateSize + data.PieceSize - out.PieceSize
-	// }
-	// if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
-	// 	return abi.NewTokenAmount(0), err
-	// }
+	if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
+		return err
+	}
 	if state.Datas, err = dataMap.Root(); err != nil {
-		return abi.NewTokenAmount(0), err
+		return err
 	}
 	if err = stateMap.Put(abi.AddrKey(fromAddr), &state); err != nil {
-		return abi.NewTokenAmount(0), err
+		return err
 	}
 	if st.RetrievalStates, err = stateMap.Root(); err != nil {
-		return abi.NewTokenAmount(0), err
+		return err
 	}
 
-	amount := big.Mul(big.NewInt(int64(data.PieceSize)), RetrievalRewardPerByte)
-	if st.PendingReward.GreaterThanEqual(amount) {
-		st.PendingReward = big.Sub(st.PendingReward, amount)
-	} else {
-		amount = st.PendingReward
-		st.PendingReward = abi.NewTokenAmount(0)
-	}
-	return amount, nil
+	return nil
 }
 
 // StateInfo state info

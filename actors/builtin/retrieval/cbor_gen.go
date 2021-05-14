@@ -733,7 +733,7 @@ func (t *RetrievalData) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufPledgeState = []byte{129}
+var lengthBufPledgeState = []byte{130}
 
 func (t *PledgeState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -759,6 +759,11 @@ func (t *PledgeState) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.Amount (big.Int) (struct)
+	if err := t.Amount.MarshalCBOR(w); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -776,7 +781,7 @@ func (t *PledgeState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -809,6 +814,15 @@ func (t *PledgeState) UnmarshalCBOR(r io.Reader) error {
 		t.Targets[i] = v
 	}
 
+	// t.Amount (big.Int) (struct)
+
+	{
+
+		if err := t.Amount.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Amount: %w", err)
+		}
+
+	}
 	return nil
 }
 

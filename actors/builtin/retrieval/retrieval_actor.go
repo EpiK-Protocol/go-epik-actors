@@ -175,34 +175,10 @@ type RetrievalDataParams struct {
 // RetrievalData retrieval data statistics
 func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
 	nominal, _, _, _ := escrowAddress(rt, params.Client)
-	// for providers -> only corresponding owner or worker can withdraw
-	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
-
-	var st State
-	rt.StateTransaction(&st, func() {
-		data := RetrievalData{
-			PayloadId: params.PayloadId,
-			PieceSize: abi.PaddedPieceSize(params.Size),
-			Client:    params.Client,
-			Provider:  params.Provider,
-			Epoch:     rt.CurrEpoch(),
-		}
-		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data, false)
-		builtin.RequireNoErr(rt, err, code, "failed to Statistics")
-	})
-	return nil
-}
-
-// ConfirmData retrieval data statistics
-func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
-
-	nominal, _, _, _ := escrowAddress(rt, params.Client)
 	_, _, _, coinbase := escrowAddress(rt, params.Provider)
-	// approvedCallers = append(approvedCallers, providerCallers...)
 	// for providers -> only corresponding owner or worker can withdraw
 	// for clients -> only the client i.e the recipient can withdraw
+	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
 
 	var reward abi.TokenAmount
 	var st State
@@ -214,12 +190,43 @@ func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyVa
 			Provider:  params.Provider,
 			Epoch:     rt.CurrEpoch(),
 		}
-		amount, err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to confirm data")
-		reward = amount
+		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data, false)
+		builtin.RequireNoErr(rt, err, code, "failed to Statistics")
+
+		reward := big.Mul(big.NewInt(int64(data.PieceSize)), RetrievalRewardPerByte)
+		if st.PendingReward.GreaterThanEqual(reward) {
+			st.PendingReward = big.Sub(st.PendingReward, reward)
+		} else {
+			reward = st.PendingReward
+			st.PendingReward = abi.NewTokenAmount(0)
+		}
 	})
 	code := rt.Send(coinbase, builtin.MethodSend, nil, reward, &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to send retrieval reward")
+	return nil
+}
+
+// ConfirmData retrieval data statistics
+func (a Actor) ConfirmData(rt Runtime, params *RetrievalDataParams) *abi.EmptyValue {
+	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
+
+	nominal, _, _, _ := escrowAddress(rt, params.Client)
+	// approvedCallers = append(approvedCallers, providerCallers...)
+	// for providers -> only corresponding owner or worker can withdraw
+	// for clients -> only the client i.e the recipient can withdraw
+
+	var st State
+	rt.StateTransaction(&st, func() {
+		data := RetrievalData{
+			PayloadId: params.PayloadId,
+			PieceSize: abi.PaddedPieceSize(params.Size),
+			Client:    params.Client,
+			Provider:  params.Provider,
+			Epoch:     rt.CurrEpoch(),
+		}
+		err := st.ConfirmData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to confirm data")
+	})
 	return nil
 }
 
