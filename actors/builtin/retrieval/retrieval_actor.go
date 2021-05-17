@@ -180,7 +180,7 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 	// for clients -> only the client i.e the recipient can withdraw
 	rt.ValidateImmediateCallerType(builtin.FlowChannelActorCodeID)
 
-	var reward abi.TokenAmount
+	reward := abi.NewTokenAmount(0)
 	var st State
 	rt.StateTransaction(&st, func() {
 		data := RetrievalData{
@@ -193,7 +193,7 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 		code, err := st.RetrievalData(adt.AsStore(rt), rt.CurrEpoch(), nominal, data, false)
 		builtin.RequireNoErr(rt, err, code, "failed to Statistics")
 
-		reward := big.Mul(big.NewInt(int64(data.PieceSize)), RetrievalRewardPerByte)
+		reward = big.Mul(big.NewInt(int64(data.PieceSize)), RetrievalRewardPerByte)
 		if st.PendingReward.GreaterThanEqual(reward) {
 			st.PendingReward = big.Sub(st.PendingReward, reward)
 		} else {
@@ -201,8 +201,10 @@ func (a Actor) RetrievalData(rt Runtime, params *RetrievalDataParams) *abi.Empty
 			st.PendingReward = abi.NewTokenAmount(0)
 		}
 	})
-	code := rt.Send(coinbase, builtin.MethodSend, nil, reward, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send retrieval reward")
+	if reward.GreaterThan(big.Zero()) {
+		code := rt.Send(coinbase, builtin.MethodSend, nil, reward, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to send retrieval reward")
+	}
 	return nil
 }
 
