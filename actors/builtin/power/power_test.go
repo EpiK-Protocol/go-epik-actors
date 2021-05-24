@@ -306,9 +306,9 @@ func TestPowerAndPledgeAccounting(t *testing.T) {
 
 		// Add power and pledge for miner2
 		actor.updateClaimedPower(rt, miner2, smallPowerUnit, smallPowerUnit, minPledge)
-		actor.updatePledgeTotal(rt, miner1, abi.NewTokenAmount(1e6))
+		// actor.updatePledgeTotal(rt, miner1, abi.NewTokenAmount(1e6))
 		actor.expectTotalPowerEager(rt, 0, mul(smallPowerUnit, 2), mul(smallPowerUnit, 3))
-		actor.expectTotalPledgeEager(rt, big.Add(abi.NewTokenAmount(1e6), big.Add(minPledge, minPledgeSubOne)))
+		actor.expectTotalPledgeEager(rt, big.Add(minPledge, minPledgeSubOne))
 
 		rt.Verify()
 
@@ -327,9 +327,9 @@ func TestPowerAndPledgeAccounting(t *testing.T) {
 
 		// Subtract power and some pledge for miner2
 		actor.updateClaimedPower(rt, miner2, smallPowerUnit.Neg(), smallPowerUnit.Neg(), big.NewInt(1).Neg())
-		actor.updatePledgeTotal(rt, miner2, abi.NewTokenAmount(1e5).Neg())
+		// actor.updatePledgeTotal(rt, miner2, abi.NewTokenAmount(1e5).Neg())
 		actor.expectTotalPowerEager(rt, 0, mul(smallPowerUnit, 1), mul(smallPowerUnit, 2))
-		actor.expectTotalPledgeEager(rt, big.Add(abi.NewTokenAmount(9e5), big.Mul(minPledgeSubOne, big.NewInt(2))))
+		actor.expectTotalPledgeEager(rt, big.Mul(minPledgeSubOne, big.NewInt(2)))
 
 		rt.GetState(&st)
 		claim2 = actor.getClaim(rt, miner2)
@@ -603,28 +603,28 @@ func TestPowerAndPledgeAccounting(t *testing.T) {
 	})
 }
 
-func TestUpdatePledgeTotal(t *testing.T) {
-	// most coverage of update pledge total is in accounting test above
+// func TestUpdatePledgeTotal(t *testing.T) {
+// 	// most coverage of update pledge total is in accounting test above
 
-	actor := newHarness(t)
-	owner := tutil.NewIDAddr(t, 101)
-	miner := tutil.NewIDAddr(t, 111)
-	builder := mock.NewBuilder(context.Background(), builtin.StoragePowerActorAddr).
-		WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
+// 	actor := newHarness(t)
+// 	owner := tutil.NewIDAddr(t, 101)
+// 	miner := tutil.NewIDAddr(t, 111)
+// 	builder := mock.NewBuilder(context.Background(), builtin.StoragePowerActorAddr).
+// 		WithCaller(builtin.SystemActorAddr, builtin.SystemActorCodeID)
 
-	t.Run("update pledge total aborts if miner has no claim", func(t *testing.T) {
-		rt := builder.Build(t)
-		actor.constructAndVerify(rt)
-		actor.createMinerBasic(rt, owner, owner, miner)
+// 	t.Run("update pledge total aborts if miner has no claim", func(t *testing.T) {
+// 		rt := builder.Build(t)
+// 		actor.constructAndVerify(rt)
+// 		actor.createMinerBasic(rt, owner, owner, miner)
 
-		// explicitly delete miner claim
-		actor.deleteClaim(rt, miner)
+// 		// explicitly delete miner claim
+// 		actor.deleteClaim(rt, miner)
 
-		rt.ExpectAbortContainsMessage(exitcode.ErrForbidden, "unknown miner", func() {
-			actor.updatePledgeTotal(rt, miner, abi.NewTokenAmount(1e6))
-		})
-	})
-}
+// 		rt.ExpectAbortContainsMessage(exitcode.ErrForbidden, "unknown miner", func() {
+// 			actor.updatePledgeTotal(rt, miner, abi.NewTokenAmount(1e6))
+// 		})
+// 	})
+// }
 
 func TestChangeWdPoStRatio(t *testing.T) {
 	caller := tutil.NewIDAddr(t, 101)
@@ -659,7 +659,7 @@ func TestChangeWdPoStRatio(t *testing.T) {
 		rt, actor := setupFunc()
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "invalid ratio", func() {
 			actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{
-				Ratio: 1001,
+				Ratio: 10001,
 			})
 		})
 	})
@@ -691,11 +691,11 @@ func TestChangeWdPoStRatio(t *testing.T) {
 		rt.SetEpoch(100)
 
 		// append
-		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 1000})
+		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 10000})
 		ratios = getRatios(rt)
 		require.True(t, len(ratios) == 2 &&
 			ratios[0].EffectiveEpoch == 0 && ratios[0].Ratio == power.MaxWindowPoStRatio &&
-			ratios[1].EffectiveEpoch == 101 && ratios[1].Ratio == 1000)
+			ratios[1].EffectiveEpoch == 101 && ratios[1].Ratio == 10000)
 
 		// override
 		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 200})
@@ -722,7 +722,7 @@ func TestAllowNoWindowPoSt(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		rt, actor := setupFunc()
 
-		// Ratios: {0: 1000, 101: 200, 201: 400}
+		// Ratios: {0: 10000, 101: 200, 201: 400}
 		rt.SetEpoch(100)
 		actor.changeWdPoStRatio(rt, caller, &power.ChangeWdPoStRatioParams{Ratio: 200})
 
@@ -793,12 +793,12 @@ func TestCron(t *testing.T) {
 
 		expectedPower := big.Mul(big.NewInt(4), powerUnit)
 
-		delta := abi.NewTokenAmount(1)
-		actor.updatePledgeTotal(rt, miner1, delta)
+		// delta := abi.NewTokenAmount(1)
+		// actor.updatePledgeTotal(rt, miner1, delta)
 		actor.onEpochTickEnd(rt, 0, nil, nil)
 
 		st := getState(rt)
-		require.EqualValues(t, big.Add(delta, big.Mul(power.ConsensusMinerMinPledge, big.NewInt(4))), st.ThisEpochPledgeCollateral)
+		require.EqualValues(t, big.Mul(power.ConsensusMinerMinPledge, big.NewInt(4)), st.ThisEpochPledgeCollateral)
 		require.EqualValues(t, expectedPower, st.ThisEpochQualityAdjPower)
 		require.EqualValues(t, expectedPower, st.ThisEpochRawBytePower)
 		actor.checkState(rt)
@@ -1542,19 +1542,19 @@ func (h *spActorHarness) updateClaimedPower(rt *mock.Runtime, miner addr.Address
 	}
 }
 
-func (h *spActorHarness) updatePledgeTotal(rt *mock.Runtime, miner addr.Address, delta abi.TokenAmount) {
-	st := getState(rt)
-	prev := st.TotalPledgeCollateral
+// func (h *spActorHarness) updatePledgeTotal(rt *mock.Runtime, miner addr.Address, delta abi.TokenAmount) {
+// 	st := getState(rt)
+// 	prev := st.TotalPledgeCollateral
 
-	rt.SetCaller(miner, builtin.StorageMinerActorCodeID)
-	rt.ExpectValidateCallerType(builtin.StorageMinerActorCodeID)
-	rt.Call(h.UpdatePledgeTotal, &delta)
-	rt.Verify()
+// 	rt.SetCaller(miner, builtin.StorageMinerActorCodeID)
+// 	rt.ExpectValidateCallerType(builtin.StorageMinerActorCodeID)
+// 	rt.Call(h.UpdatePledgeTotal, &delta)
+// 	rt.Verify()
 
-	st = getState(rt)
-	new := st.TotalPledgeCollateral
-	require.EqualValues(h.t, big.Add(prev, delta), new)
-}
+// 	st = getState(rt)
+// 	new := st.TotalPledgeCollateral
+// 	require.EqualValues(h.t, big.Add(prev, delta), new)
+// }
 
 func (h *spActorHarness) currentPowerTotal(rt *mock.Runtime) *power.CurrentTotalPowerReturn {
 	rt.ExpectValidateCallerAny()

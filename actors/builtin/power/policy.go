@@ -18,7 +18,7 @@ const MaxMinerProveCommitsPerEpoch = 200 // PARAM_SPEC
 
 var ConsensusMinerMinPledge = big.Mul(big.NewInt(1000), builtin.TokenPrecision) // 1000 EPK
 
-const MaxWindowPoStRatio = uint64(1000)
+const MaxWindowPoStRatio = uint64(10000)
 const MinWindowPoStRatio = uint64(0)
 
 func IsValidWdPoStRatio(ratio uint64) bool {

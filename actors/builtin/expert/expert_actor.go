@@ -417,7 +417,7 @@ func (a Actor) OnVotesUpdated(rt Runtime, params *builtin.OnExpertVotesUpdatedPa
 			return
 		}
 
-		builtin.RequireState(rt, st.ExpertState == ExpertStateQualified || st.ExpertState == ExpertStateUnqualified, "unexpected expert state %d", st.ExpertState)
+		builtin.RequireState(rt, st.ExpertState.AllowVote(), "unexpected expert state %d", st.ExpertState)
 
 		if st.CurrentVotes.GreaterThanEqual(st.VoteThreshold()) {
 			st.ExpertState = ExpertStateQualified

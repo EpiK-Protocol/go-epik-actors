@@ -5,7 +5,6 @@ import (
 
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/exitcode"
 	"github.com/ipfs/go-cid"
@@ -35,11 +34,10 @@ func (a Actor) Exports() []interface{} {
 		3:                         a.UpdateClaimedPower,
 		4:                         a.EnrollCronEvent,
 		5:                         a.OnEpochTickEnd,
-		6:                         a.UpdatePledgeTotal,
-		7:                         a.SubmitPoRepForBulkVerify,
-		8:                         a.CurrentTotalPower,
-		9:                         a.AllowNoWindowPoSt,
-		10:                        a.ChangeWdPoStRatio,
+		6:                         a.SubmitPoRepForBulkVerify,
+		7:                         a.CurrentTotalPower,
+		8:                         a.AllowNoWindowPoSt,
+		9:                         a.ChangeWdPoStRatio,
 	}
 }
 
@@ -241,16 +239,16 @@ func (a Actor) OnEpochTickEnd(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-func (a Actor) UpdatePledgeTotal(rt Runtime, pledgeDelta *abi.TokenAmount) *abi.EmptyValue {
-	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
-	var st State
-	rt.StateTransaction(&st, func() {
-		validateMinerHasClaim(rt, st, rt.Caller())
-		st.addPledgeTotal(*pledgeDelta)
-		builtin.RequireState(rt, st.TotalPledgeCollateral.GreaterThanEqual(big.Zero()), "negative total pledge collateral %v", st.TotalPledgeCollateral)
-	})
-	return nil
-}
+// func (a Actor) UpdatePledgeTotal(rt Runtime, pledgeDelta *abi.TokenAmount) *abi.EmptyValue {
+// 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		validateMinerHasClaim(rt, st, rt.Caller())
+// 		st.addPledgeTotal(*pledgeDelta)
+// 		builtin.RequireState(rt, st.TotalPledgeCollateral.GreaterThanEqual(big.Zero()), "negative total pledge collateral %v", st.TotalPledgeCollateral)
+// 	})
+// 	return nil
+// }
 
 // GasOnSubmitVerifySeal is amount of gas charged for SubmitPoRepForBulkVerify
 // This number is empirically determined
