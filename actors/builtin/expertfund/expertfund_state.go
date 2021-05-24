@@ -23,6 +23,9 @@ type State struct {
 	PieceInfos cid.Cid // Map, HAMT[PieceCID]PieceInfo
 
 	DataStoreThreshold uint64
+
+	// expert not foundation has daily data register size threshold
+	DailyImportSizeThreshold uint64
 }
 
 // ExpertInfo info of expert registered data
@@ -87,7 +90,8 @@ func ConstructState(store adt.Store, pool cid.Cid) (*State, error) {
 		PieceInfos:          emptyPisMapCid,
 		DisqualifiedExperts: emptyDisqualifiedExpertsMapCid,
 
-		DataStoreThreshold: DefaultDataStoreThreshold,
+		DataStoreThreshold:       DefaultDataStoreThreshold,
+		DailyImportSizeThreshold: DefaultImportThreshold,
 	}, nil
 }
 
@@ -161,7 +165,7 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 	}
 
 	for expertAddr, size := range expertToSize {
-		deltaSize := adjustSize(size)
+		deltaSize := AdjustSize(size)
 		// update ExpertInfo
 		expertInfo, err := st.GetExpert(store, expertAddr)
 		if err != nil {
@@ -170,7 +174,7 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 		if !expertInfo.Active {
 			return xerrors.Errorf("inactive expert cannot deposit: %s", expertAddr)
 		}
-		if err := st.updateVestingFunds(rt, pool, expertInfo); err != nil {
+		if _, err := st.updateVestingFunds(store, rt.CurrEpoch(), pool, expertInfo); err != nil {
 			return err
 		}
 
@@ -191,31 +195,34 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 	return st.SavePool(store, pool)
 }
 
-func (st *State) PendingReward(rt Runtime, expertAddr address.Address) (abi.TokenAmount, error) {
-	store := adt.AsStore(rt)
+type ExpertReward struct {
+	ExpertInfo
+	PendingFunds abi.TokenAmount
+	TotalReward  abi.TokenAmount
+}
+
+func (st *State) Reward(store adt.Store, currEpoch abi.ChainEpoch, expertAddr address.Address) (*ExpertReward, error) {
 	pool, err := st.GetPool(store)
 	if err != nil {
-		return abi.NewTokenAmount(0), err
+		return nil, err
 	}
 	expert, err := st.GetExpert(store, expertAddr)
 	if err != nil {
-		return big.Zero(), err
+		return nil, err
 	}
-	accPerShare := pool.AccPerShare
 
-	if rt.CurrEpoch() > pool.CurrentEpoch && pool.PrevTotalDataSize != 0 {
-		currBalance := rt.CurrentBalance()
-		reward := big.Sub(currBalance, pool.LastRewardBalance)
-		if reward.LessThan(big.Zero()) {
-			return abi.NewTokenAmount(0), nil
-		}
-		accPerShare = big.Div(big.Mul(reward, AccumulatedMultiplier), big.NewIntUnsigned(uint64(pool.PrevTotalDataSize)))
+	pending, err := st.updateVestingFunds(store, currEpoch, pool, expert)
+	if err != nil {
+		return nil, err
 	}
-	rewardDebt := big.Div(
-		big.Mul(big.NewIntUnsigned(uint64(expert.DataSize)), accPerShare),
-		AccumulatedMultiplier)
-	pending := big.Sub(rewardDebt, expert.RewardDebt)
-	return pending, nil
+	total := big.Add(expert.RewardDebt, pending)
+	total = big.Add(total, expert.UnlockedFunds)
+	total = big.Add(total, expert.LockedFunds)
+	return &ExpertReward{
+		ExpertInfo:   *expert,
+		PendingFunds: pending,
+		TotalReward:  total,
+	}, nil
 }
 
 func (st *State) Claim(rt Runtime, expertAddr address.Address, amount abi.TokenAmount) (abi.TokenAmount, error) {
@@ -232,7 +239,7 @@ func (st *State) Claim(rt Runtime, expertAddr address.Address, amount abi.TokenA
 		return big.Zero(), err
 	}
 
-	if err := st.updateVestingFunds(rt, pool, out); err != nil {
+	if _, err := st.updateVestingFunds(store, rt.CurrEpoch(), pool, out); err != nil {
 		return big.Zero(), err
 	}
 	if out.Active {
@@ -323,7 +330,7 @@ func (st *State) DeactivateExperts(rt Runtime, experts map[addr.Address]bool) (a
 			continue
 		}
 
-		if err := st.updateVestingFunds(rt, pool, expertInfo); err != nil {
+		if _, err := st.updateVestingFunds(store, rt.CurrEpoch(), pool, expertInfo); err != nil {
 			return big.Zero(), err
 		}
 
@@ -359,25 +366,23 @@ func (st *State) DeactivateExperts(rt Runtime, experts map[addr.Address]bool) (a
 	return totalBurned, st.SavePool(store, pool)
 }
 
-func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo) error {
+func (st *State) updateVestingFunds(store adt.Store, currEpoch abi.ChainEpoch, pool *PoolInfo, out *ExpertInfo) (abi.TokenAmount, error) {
 
 	pending := abi.NewTokenAmount(0)
 	if out.Active {
 		pending = big.Mul(big.NewIntUnsigned(uint64(out.DataSize)), pool.AccPerShare)
 		pending = big.Div(pending, AccumulatedMultiplier)
 		if pending.LessThan(out.RewardDebt) {
-			return xerrors.Errorf("debt greater than pending: %s, %s", out.RewardDebt, pending)
+			return abi.NewTokenAmount(0), xerrors.Errorf("debt greater than pending: %s, %s", out.RewardDebt, pending)
 		}
 		pending = big.Sub(pending, out.RewardDebt)
 		out.LockedFunds = big.Add(out.LockedFunds, pending)
 	}
 
-	vestingFund, err := adt.AsMap(adt.AsStore(rt), out.VestingFunds, builtin.DefaultHamtBitwidth)
+	vestingFund, err := adt.AsMap(store, out.VestingFunds, builtin.DefaultHamtBitwidth)
 	if err != nil {
-		return xerrors.Errorf("failed to load VestingFunds: %w", err)
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load VestingFunds: %w", err)
 	}
-
-	currEpoch := rt.CurrEpoch()
 
 	// add new pending value
 	if !pending.IsZero() {
@@ -385,13 +390,13 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 		var old abi.TokenAmount
 		found, err := vestingFund.Get(k, &old)
 		if err != nil {
-			return xerrors.Errorf("failed to get old vesting at epoch %d: %w", currEpoch, err)
+			return abi.NewTokenAmount(0), xerrors.Errorf("failed to get old vesting at epoch %d: %w", currEpoch, err)
 		}
 		if found {
 			pending = big.Add(pending, old)
 		}
 		if err := vestingFund.Put(k, &pending); err != nil {
-			return xerrors.Errorf("failed to put new vesting at epoch %d: %w", currEpoch, err)
+			return abi.NewTokenAmount(0), xerrors.Errorf("failed to put new vesting at epoch %d: %w", currEpoch, err)
 		}
 	}
 
@@ -410,16 +415,16 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 		return nil
 	})
 	if err != nil {
-		return xerrors.Errorf("failed to iterate vestingFund: %w", err)
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to iterate vestingFund: %w", err)
 	}
 	out.VestingFunds, err = vestingFund.Root()
 	if err != nil {
-		return xerrors.Errorf("failed to flush VestingFunds: %w", err)
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to flush VestingFunds: %w", err)
 	}
 
 	out.LockedFunds = big.Sub(out.LockedFunds, unlocked)
 	out.UnlockedFunds = big.Add(out.UnlockedFunds, unlocked)
-	return nil
+	return pending, nil
 }
 
 func (st *State) SavePool(store adt.Store, pool *PoolInfo) error {
@@ -632,7 +637,9 @@ func (st *State) ForEachExpert(store adt.Store, f func(addr.Address, *ExpertInfo
 }
 
 // Note: Considering that audio files are larger than text files, it is not fair to text files, so take the square root of size
-func adjustSize(originSize abi.PaddedPieceSize) abi.PaddedPieceSize {
+func AdjustSize(originSize abi.PaddedPieceSize) abi.PaddedPieceSize {
 	sqrtSize := big.Zero().Sqrt(big.NewIntUnsigned(uint64(originSize)).Int)
+	sqrtSize = big.Zero().Sqrt(sqrtSize)
+	sqrtSize = big.Zero().Sqrt(sqrtSize)
 	return abi.PaddedPieceSize(sqrtSize.Uint64())
 }

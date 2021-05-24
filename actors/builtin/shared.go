@@ -127,6 +127,7 @@ func ResolveToIDAddr(rt runtime.Runtime, address addr.Address) (addr.Address, er
 
 type BatchPieceCIDParams struct {
 	PieceCIDs []CheckedCID
+	Size      uint64
 }
 
 type CheckedCID struct {

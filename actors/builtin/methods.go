@@ -124,9 +124,10 @@ var MethodsExpert = struct {
 	Constructor    abi.MethodNum
 	ControlAddress abi.MethodNum
 	ChangeOwner    abi.MethodNum
+	ChangeInfo     abi.MethodNum
 	ImportData     abi.MethodNum
 	GetDatas       abi.MethodNum
-	StoreData      abi.MethodNum
+	OnStoreData    abi.MethodNum
 	Nominate       abi.MethodNum
 	OnNominated    abi.MethodNum
 	OnBlocked      abi.MethodNum
@@ -134,7 +135,7 @@ var MethodsExpert = struct {
 	GovChangeOwner abi.MethodNum
 	CheckState     abi.MethodNum
 	OnVotesUpdated abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14}
 
 var MethodsExpertFunds = struct {
 	Constructor          abi.MethodNum

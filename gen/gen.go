@@ -82,6 +82,7 @@ func main() {
 		// method params
 		expert.ConstructorParams{},
 		expert.BatchImportDataParams{},
+		expert.ChangeInfoParams{},
 		expert.ImportDataParams{},
 		expert.GetDatasReturn{},
 		expert.OnBlockedReturn{},
@@ -97,6 +98,7 @@ func main() {
 		expertfund.PoolInfo{},
 		expertfund.ExpertInfo{},
 		expertfund.PieceInfo{},
+		expertfund.ExpertReward{},
 		// method params and returns
 		expertfund.ClaimFundParams{},
 		expertfund.GetDataReturn{},

@@ -3,6 +3,7 @@ package expertfund_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -315,7 +316,7 @@ func TestChangeThreshold(t *testing.T) {
 			Caller: governor,
 			Method: builtin.MethodsExpertFunds.ChangeThreshold,
 		}, big.Zero(), nil, exitcode.Ok)
-		rt.Call(actor.ChangeThreshold, &expertfund.ChangeThresholdParams{expertfund.DefaultDataStoreThreshold + 1})
+		rt.Call(actor.ChangeThreshold, &expertfund.ChangeThresholdParams{expertfund.DefaultDataStoreThreshold + 1, expertfund.DefaultImportThreshold + 1})
 		rt.Verify()
 
 		st = getState(rt)
@@ -527,6 +528,7 @@ func TestBatchStoreData(t *testing.T) {
 		actor.expectPool(rt, 0, 0, 0, 0, 0, 0)
 
 		// expert2, DataStoreThreshold
+		pieceSize := abi.PaddedPieceSize(100)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -535,13 +537,13 @@ func TestBatchStoreData(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize,
 					Redundancy: st.DataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10)) // Sqrt(PieceSize)
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 10)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize)))) // Sqrt(PieceSize)
+		actor.expectPool(rt, 0, 0, 0, 100, 0, int64(expertfund.AdjustSize(pieceSize)))
 
 		// expert2, DataStoreThreshold+1
 		actor.batchStoreData(rt, &batchStoreDataConf{
@@ -552,13 +554,13 @@ func TestBatchStoreData(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  abi.PaddedPieceSize(pieceSize),
 					Redundancy: st.DataStoreThreshold + 1,
 				}}},
 			},
 		})
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 10) // no deposit triggered
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(abi.PaddedPieceSize(pieceSize)))))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, int64(expertfund.AdjustSize(pieceSize))) // no deposit triggered
 	})
 
 	t.Run("no deposit when beyond threshold", func(t *testing.T) {
@@ -637,6 +639,7 @@ func TestBatchStoreData(t *testing.T) {
 		// store peice1
 		rt.SetEpoch(100)
 		rt.SetBalance(abi.NewTokenAmount(100))
+		pieceSize1 := abi.PaddedPieceSize(80000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -645,17 +648,18 @@ func TestBatchStoreData(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20))
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 20)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, int64(expertfund.AdjustSize(pieceSize1)))
 
 		// store peice2
 		rt.SetEpoch(200)
 		rt.SetBalance(abi.NewTokenAmount(350))
+		pieceSize2 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID2}},
@@ -664,14 +668,14 @@ func TestBatchStoreData(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectPool(rt, 175*1e11, 350, 100, 200, 20, 30)
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(175))
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20))
+		actor.expectPool(rt, 87500000000000, 350, 100, 200, int64(expertfund.AdjustSize(pieceSize1)), int64(expertfund.AdjustSize(pieceSize1)+expertfund.AdjustSize(pieceSize2)))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(262))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
 	})
 }
 
@@ -709,6 +713,7 @@ func TestClaim(t *testing.T) {
 		// store peice1
 		rt.SetEpoch(150)
 		rt.SetBalance(abi.NewTokenAmount(100))
+		pieceSize1 := abi.PaddedPieceSize(80000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -717,17 +722,18 @@ func TestClaim(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20))
-		actor.expectPool(rt, 0, 0, 0, 150, 0, 20)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectPool(rt, 0, 0, 0, 150, 0, int64(expertfund.AdjustSize(pieceSize1)))
 
 		// store peice2
 		rt.SetEpoch(200)
 		rt.SetBalance(abi.NewTokenAmount(350))
+		pieceSize2 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID2}},
@@ -736,38 +742,39 @@ func TestClaim(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(175))
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20))
-		actor.expectPool(rt, 175*1e11, 350, 150, 200, 20, 30)
+		total := int64(expertfund.AdjustSize(pieceSize1) + expertfund.AdjustSize(pieceSize2))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(262))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectPool(rt, 87500000000000, 350, 150, 200, int64(expertfund.AdjustSize(pieceSize1)), total)
 
 		// first claim
 		start1 := abi.ChainEpoch(210)
 		rt.SetEpoch(start1)
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), big.Zero())
 		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).
-			withDatasize(20).
+			withDatasize(int64(expertfund.AdjustSize(pieceSize1))).
 			withRewardDebt(350).
 			withLockedFunds(350).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
 				abi.ChainEpoch(210): abi.NewTokenAmount(350),
 			}))
-		actor.expectPool(rt, 175*1e11, 350, 200, 210, 30, 30)
+		actor.expectPool(rt, 87500000000000, 350, 200, 210, total, total)
 
 		rt.SetEpoch(220)
 		actor.claim(rt, expert2, owner, abi.NewTokenAmount(100000), big.Zero())
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(175))
-		actor.expectPool(rt, 175*1e11, 350, 210, 220, 30, 30)
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(262))
+		actor.expectPool(rt, 87500000000000, 350, 210, 220, total, total)
 
 		// immature
 		rt.SetEpoch(start1 + expertfund.RewardVestingDelay)
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), big.Zero())
 		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).
-			withDatasize(20).
+			withDatasize(int64(expertfund.AdjustSize(pieceSize1))).
 			withRewardDebt(350).
 			withLockedFunds(350).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
@@ -777,9 +784,9 @@ func TestClaim(t *testing.T) {
 		rt.SetEpoch(start1 + expertfund.RewardVestingDelay + 1)
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), abi.NewTokenAmount(350))
 		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).
-			withDatasize(20).
+			withDatasize(int64(expertfund.AdjustSize(pieceSize1))).
 			withRewardDebt(350))
-		actor.expectPool(rt, 175*1e11, 0, int64(start1+expertfund.RewardVestingDelay), int64(start1+expertfund.RewardVestingDelay)+1, 30, 30)
+		actor.expectPool(rt, 87500000000000, 0, int64(start1+expertfund.RewardVestingDelay), int64(start1+expertfund.RewardVestingDelay)+1, total, total)
 	})
 
 	t.Run("multi claims in same epoch", func(t *testing.T) {
@@ -796,7 +803,8 @@ func TestClaim(t *testing.T) {
 
 		// store peice1 and piece2
 		rt.SetEpoch(150)
-		rt.SetBalance(abi.NewTokenAmount(300))
+		rt.SetBalance(abi.NewTokenAmount(500))
+		pieceSize1 := abi.PaddedPieceSize(80000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -805,11 +813,12 @@ func TestClaim(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
+		pieceSize2 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID2}},
@@ -818,65 +827,67 @@ func TestClaim(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectPool(rt, 0, 0, 0, 150, 0, 30)
+		total := int64(expertfund.AdjustSize(pieceSize1) + expertfund.AdjustSize(pieceSize2))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
+		actor.expectPool(rt, 0, 0, 0, 150, 0, total)
 
 		rt.SetEpoch(150)
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), big.Zero())
-		actor.expectPool(rt, 0, 0, 0, 150, 0, 30)
+		actor.expectPool(rt, 0, 0, 0, 150, 0, total)
 
 		// claim expert1, expert2 at 151
 		rt.SetEpoch(151)
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), big.Zero())
 		actor.claim(rt, expert2, owner, abi.NewTokenAmount(100000), big.Zero())
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20).withRewardDebt(200).withLockedFunds(200).
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(285).withLockedFunds(285).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(151): abi.NewTokenAmount(200),
+				abi.ChainEpoch(151): abi.NewTokenAmount(285),
 			}))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(100).withLockedFunds(100).
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(214).withLockedFunds(214).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(151): abi.NewTokenAmount(100),
+				abi.ChainEpoch(151): abi.NewTokenAmount(214),
 			}))
-		actor.expectPool(rt, 100*1e11, 300, 150, 151, 30, 30)
+		actor.expectPool(rt, 71428571428571, 500, 150, 151, total, total)
 
 		// re-claim expert1 at 151 + expertfund.RewardVestingDelay
 		rt.SetEpoch(151 + expertfund.RewardVestingDelay)
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), big.Zero())
 		actor.claim(rt, expert2, owner, abi.NewTokenAmount(100000), big.Zero())
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20).withRewardDebt(200).withLockedFunds(200).
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(285).withLockedFunds(285).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(151): abi.NewTokenAmount(200),
+				abi.ChainEpoch(151): abi.NewTokenAmount(285),
 			}))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(100).withLockedFunds(100).
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(214).withLockedFunds(214).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(151): abi.NewTokenAmount(100),
+				abi.ChainEpoch(151): abi.NewTokenAmount(214),
 			}))
-		actor.expectPool(rt, 100*1e11, 300, 151, 151+int64(expertfund.RewardVestingDelay), 30, 30)
+		actor.expectPool(rt, 71428571428571, 500, 151, 151+int64(expertfund.RewardVestingDelay), total, total)
 
 		// re-claim expert1 at 151 + expertfund.RewardVestingDelay + 1
 		rt.SetEpoch(151 + expertfund.RewardVestingDelay + 1)
-		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), abi.NewTokenAmount(200))
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20).withRewardDebt(200))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(100).withLockedFunds(100).
+		actor.claim(rt, expert1, owner, abi.NewTokenAmount(100000), abi.NewTokenAmount(285))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(285))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(214).withLockedFunds(214).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(151): abi.NewTokenAmount(100),
+				abi.ChainEpoch(151): abi.NewTokenAmount(214),
 			}))
-		actor.expectPool(rt, 100*1e11, 100, 151+int64(expertfund.RewardVestingDelay), 152+int64(expertfund.RewardVestingDelay), 30, 30)
-		require.True(t, rt.Balance().Equals(big.NewInt(100)))
+		actor.expectPool(rt, 71428571428571, 215, 151+int64(expertfund.RewardVestingDelay), 152+int64(expertfund.RewardVestingDelay), total, total)
+		fmt.Println("balance:", rt.Balance())
+		require.True(t, rt.Balance().Equals(big.NewInt(215)))
 
 		// re-claim expert2 at 151 + expertfund.RewardVestingDelay + 100
 		rt.SetEpoch(151 + expertfund.RewardVestingDelay + 100)
-		actor.claim(rt, expert2, owner, abi.NewTokenAmount(100000), abi.NewTokenAmount(100))
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(20).withRewardDebt(200))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(100))
-		actor.expectPool(rt, 100*1e11, 0, 152+int64(expertfund.RewardVestingDelay), 251+int64(expertfund.RewardVestingDelay), 30, 30)
-		require.True(t, rt.Balance().Equals(big.NewInt(0)))
+		actor.claim(rt, expert2, owner, abi.NewTokenAmount(100000), abi.NewTokenAmount(214))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(285))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(214))
+		actor.expectPool(rt, 71428571428571, 1, 152+int64(expertfund.RewardVestingDelay), 251+int64(expertfund.RewardVestingDelay), total, total)
+		require.True(t, rt.Balance().Equals(big.NewInt(1)))
 	})
 
 	t.Run("multi claims in same epoch", func(t *testing.T) {
@@ -887,6 +898,7 @@ func TestClaim(t *testing.T) {
 
 		// store data
 		rt.SetEpoch(100)
+		pieceSize1 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -895,21 +907,21 @@ func TestClaim(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 10)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
 
 		// first claim
 		rt.SetEpoch(200)
 		rt.SetBalance(abi.NewTokenAmount(300))
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(10000), big.Zero())
 		actor.expectDisqualifiedExpert(rt, expert1, false, -1)
-		actor.expectPool(rt, 300*1e11, 300, 100, 200, 10, 10)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(300).withLockedFunds(300).
+		actor.expectPool(rt, 100000000000000, 300, 100, 200, int64(expertfund.AdjustSize(pieceSize1)), int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(300).withLockedFunds(300).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
 				abi.ChainEpoch(200): abi.NewTokenAmount(300),
 			}))
@@ -917,10 +929,10 @@ func TestClaim(t *testing.T) {
 		rt.SetBalance(abi.NewTokenAmount(500))
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(10000), big.Zero())
 		actor.expectDisqualifiedExpert(rt, expert1, false, -1)
-		actor.expectPool(rt, 500*1e11, 500, 100, 200, 10, 10)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(500).withLockedFunds(500).
+		actor.expectPool(rt, 166666666666666, 500, 100, 200, int64(expertfund.AdjustSize(pieceSize1)), int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(499).withLockedFunds(499).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(500),
+				abi.ChainEpoch(200): abi.NewTokenAmount(499),
 			}))
 	})
 }
@@ -991,6 +1003,7 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 
 		// store data
 		rt.SetEpoch(100)
+		pieceSize1 := abi.PaddedPieceSize(80000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -999,11 +1012,12 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
+		pieceSize2 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID2}},
@@ -1012,14 +1026,15 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 30)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(20))
+		total := int64(expertfund.AdjustSize(pieceSize1) + expertfund.AdjustSize(pieceSize2))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, total)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
 
 		// deactivate expert2 for no enough votes
 		rt.SetEpoch(200)
@@ -1027,11 +1042,11 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 		actor.onExpertVotesUpdated(rt, expert2, false)
 		actor.expectDisqualifiedExpert(rt, expert1, false, invalidEpoch)
 		actor.expectDisqualifiedExpert(rt, expert2, true, 200)
-		actor.expectPool(rt, 100*1e11, 300, 100, 200, 30, 10)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(20).withLockedFunds(200).
+		actor.expectPool(rt, 42857142857142, 300, 100, 200, total, int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withLockedFunds(128).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(200),
+				abi.ChainEpoch(200): abi.NewTokenAmount(128),
 			}))
 
 		// activate expert2 in 3 days
@@ -1041,26 +1056,27 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 		actor.onExpertVotesUpdated(rt, expert2, true)
 		actor.expectDisqualifiedExpert(rt, expert1, false, invalidEpoch)
 		actor.expectDisqualifiedExpert(rt, expert2, false, invalidEpoch)
-		actor.expectPool(rt, 200*1e11, 400, 200, int64(deadline), 10, 30)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(20).withRewardDebt(400).withLockedFunds(200).
+		actor.expectPool(rt, 67857142857142, 400, 200, int64(deadline), int64(expertfund.AdjustSize(pieceSize1)), total)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(203).withLockedFunds(128).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(200),
+				abi.ChainEpoch(200): abi.NewTokenAmount(128),
 			}))
 
 		rt.SetEpoch(deadline + 1)
 		rt.SetBalance(abi.NewTokenAmount(550))
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(10000), big.Zero())
-		actor.expectPool(rt, 250*1e11, 550, int64(deadline), int64(deadline)+1, 30, 30)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(250).withLockedFunds(250).
+		actor.expectPool(rt, 89285714285713, 550, int64(deadline), int64(deadline)+1, total, total)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(357).withLockedFunds(357).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(deadline + 1): abi.NewTokenAmount(250),
+				abi.ChainEpoch(deadline + 1): abi.NewTokenAmount(357),
 			}))
 		actor.claim(rt, expert2, owner, abi.NewTokenAmount(10000), big.Zero())
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(20).withRewardDebt(500).withLockedFunds(300).
+		fmt.Println("deadline:", deadline)
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withRewardDebt(267).withLockedFunds(192).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200):          abi.NewTokenAmount(200),
-				abi.ChainEpoch(deadline + 1): abi.NewTokenAmount(100),
+				abi.ChainEpoch(200):          abi.NewTokenAmount(128),
+				abi.ChainEpoch(deadline + 1): abi.NewTokenAmount(64),
 			}))
 	})
 
@@ -1076,6 +1092,7 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 
 		// store data
 		rt.SetEpoch(100)
+		pieceSize1 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -1084,11 +1101,12 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
+		pieceSize2 := abi.PaddedPieceSize(160000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID2}},
@@ -1097,14 +1115,15 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 30)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(20))
+		total := int64(expertfund.AdjustSize(pieceSize1) + expertfund.AdjustSize(pieceSize2))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, total)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
 
 		// deactivate expert2 for no enough votes
 		rt.SetEpoch(200)
@@ -1112,11 +1131,11 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 		actor.onExpertVotesUpdated(rt, expert2, false)
 		actor.expectDisqualifiedExpert(rt, expert1, false, invalidEpoch)
 		actor.expectDisqualifiedExpert(rt, expert2, true, 200)
-		actor.expectPool(rt, 100*1e11, 300, 100, 200, 30, 10)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(20).withLockedFunds(200).
+		actor.expectPool(rt, 42857142857142, 300, 100, 200, total, int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withLockedFunds(171).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(200),
+				abi.ChainEpoch(200): abi.NewTokenAmount(171),
 			}))
 
 		// activate expert2 in 3 days
@@ -1126,25 +1145,25 @@ func TestOnExpertVotesUpdated(t *testing.T) {
 		actor.onExpertVotesUpdated(rt, expert2, true)
 		actor.expectDisqualifiedExpert(rt, expert1, false, invalidEpoch)
 		actor.expectDisqualifiedExpert(rt, expert2, false, invalidEpoch)
-		actor.expectPool(rt, 200*1e11, 400, 200, int64(afterDeadline), 10, 10)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withLockedFunds(200). // RewardDebt cleared
+		actor.expectPool(rt, 76190476190475, 400, 200, int64(afterDeadline), int64(expertfund.AdjustSize(pieceSize1)), int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withLockedFunds(171). // RewardDebt cleared
 														withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(200),
+				abi.ChainEpoch(200): abi.NewTokenAmount(171),
 			}))
 
 		rt.SetEpoch(afterDeadline + 1)
 		rt.SetBalance(abi.NewTokenAmount(550))
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(10000), big.Zero())
-		actor.expectPool(rt, 350*1e11, 550, int64(afterDeadline), int64(afterDeadline)+1, 10, 10)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10).withRewardDebt(350).withLockedFunds(350).
+		actor.expectPool(rt, 126190476190475, 550, int64(afterDeadline), int64(afterDeadline)+1, int64(expertfund.AdjustSize(pieceSize1)), int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withRewardDebt(378).withLockedFunds(378).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(afterDeadline + 1): abi.NewTokenAmount(350),
+				abi.ChainEpoch(afterDeadline + 1): abi.NewTokenAmount(378),
 			}))
 		actor.claim(rt, expert2, owner, abi.NewTokenAmount(10000), big.Zero())
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withLockedFunds(200).
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withLockedFunds(171).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(200),
+				abi.ChainEpoch(200): abi.NewTokenAmount(171),
 			}))
 	})
 }
@@ -1184,6 +1203,7 @@ func TestBlockExpert(t *testing.T) {
 
 		// store data
 		rt.SetEpoch(100)
+		pieceSize1 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID1}},
@@ -1192,11 +1212,12 @@ func TestBlockExpert(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
+		pieceSize2 := abi.PaddedPieceSize(160000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert3: {{CID: pieceID2}},
@@ -1205,14 +1226,15 @@ func TestBlockExpert(t *testing.T) {
 				expert3: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 30)
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(true).withDatasize(20))
+		total := int64(expertfund.AdjustSize(pieceSize1) + expertfund.AdjustSize(pieceSize2))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, total)
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
 		actor.expectDisqualifiedExpert(rt, expert2, false, -1)
 		actor.expectDisqualifiedExpert(rt, expert3, false, -1)
 
@@ -1222,11 +1244,12 @@ func TestBlockExpert(t *testing.T) {
 		actor.blockExpert(rt, owner, expert3, &expert.OnBlockedReturn{
 			ImplicatedExpert:            expert2,
 			ImplicatedExpertVotesEnough: true,
-		}, abi.NewTokenAmount(200))
-		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(100)))
-		actor.expectPool(rt, 100*1e11, 100, 100, 200, 30, 10)
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(false).withDatasize(20))
+		}, abi.NewTokenAmount(171))
+		fmt.Println("balance", rt.Balance())
+		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(129)))
+		actor.expectPool(rt, 42857142857142, 129, 100, 200, total, int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(false).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
 
 		// re-block expert3
 		rt.SetEpoch(300)
@@ -1234,8 +1257,8 @@ func TestBlockExpert(t *testing.T) {
 			ImplicatedExpert:            expert2,
 			ImplicatedExpertVotesEnough: true,
 		}, abi.NewTokenAmount(0))
-		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(100)))
-		actor.expectPool(rt, 100*1e11, 100, 200, 300, 10, 10)
+		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(129)))
+		actor.expectPool(rt, 42857142857142, 129, 200, 300, int64(expertfund.AdjustSize(pieceSize1)), int64(expertfund.AdjustSize(pieceSize1)))
 	})
 
 	t.Run("burn vesting funds, proposer has no enough votes", func(t *testing.T) {
@@ -1252,6 +1275,7 @@ func TestBlockExpert(t *testing.T) {
 
 		// store data
 		rt.SetEpoch(100)
+		pieceSize1 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID1}},
@@ -1260,11 +1284,12 @@ func TestBlockExpert(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
+		pieceSize2 := abi.PaddedPieceSize(160000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert3: {{CID: pieceID2}},
@@ -1273,14 +1298,15 @@ func TestBlockExpert(t *testing.T) {
 				expert3: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 30)
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(true).withDatasize(20))
+		total := int64(expertfund.AdjustSize(pieceSize1) + expertfund.AdjustSize(pieceSize2))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, total)
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
 		actor.expectDisqualifiedExpert(rt, expert2, false, -1)
 		actor.expectDisqualifiedExpert(rt, expert3, false, -1)
 
@@ -1290,14 +1316,15 @@ func TestBlockExpert(t *testing.T) {
 		actor.blockExpert(rt, owner, expert3, &expert.OnBlockedReturn{
 			ImplicatedExpert:            expert2,
 			ImplicatedExpertVotesEnough: false,
-		}, abi.NewTokenAmount(200))
-		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(100)))
-		actor.expectPool(rt, 100*1e11, 100, 100, 200, 30, 0)
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(10).withLockedFunds(100).
+		}, abi.NewTokenAmount(171))
+		fmt.Println("balance:", rt.Balance())
+		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(129)))
+		actor.expectPool(rt, 42857142857142, 129, 100, 200, total, 0)
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).withLockedFunds(128).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(100),
+				abi.ChainEpoch(200): abi.NewTokenAmount(128),
 			}))
-		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(false).withDatasize(20))
+		actor.expectExpert(rt, expert3, newExpectExpertInfo().withActive(false).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
 		actor.expectDisqualifiedExpert(rt, expert2, true, 200)
 		actor.expectDisqualifiedExpert(rt, expert3, true, 200)
 	})
@@ -1314,6 +1341,7 @@ func TestBlockExpert(t *testing.T) {
 
 		// store data
 		rt.SetEpoch(100)
+		pieceSize1 := abi.PaddedPieceSize(10000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert1: {{CID: pieceID1}},
@@ -1322,11 +1350,12 @@ func TestBlockExpert(t *testing.T) {
 				expert1: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID1.String(),
 					PieceID:    pieceID1.String(),
-					PieceSize:  100,
+					PieceSize:  pieceSize1,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
+		pieceSize2 := abi.PaddedPieceSize(160000)
 		actor.batchStoreData(rt, &batchStoreDataConf{
 			expectStoreDataParams: map[address.Address][]builtin.CheckedCID{
 				expert2: {{CID: pieceID2}},
@@ -1335,14 +1364,15 @@ func TestBlockExpert(t *testing.T) {
 				expert2: {Infos: []*expert.DataOnChainInfo{{
 					RootID:     pieceID2.String(),
 					PieceID:    pieceID2.String(),
-					PieceSize:  400,
+					PieceSize:  pieceSize2,
 					Redundancy: expertfund.DefaultDataStoreThreshold,
 				}}},
 			},
 		})
-		actor.expectPool(rt, 0, 0, 0, 100, 0, 30)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(20))
+		total := int64(expertfund.AdjustSize(pieceSize1) + expertfund.AdjustSize(pieceSize2))
+		actor.expectPool(rt, 0, 0, 0, 100, 0, total)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))))
 		actor.expectDisqualifiedExpert(rt, expert1, false, -1)
 		actor.expectDisqualifiedExpert(rt, expert2, false, -1)
 
@@ -1356,18 +1386,18 @@ func TestBlockExpert(t *testing.T) {
 		actor.claim(rt, expert1, owner, abi.NewTokenAmount(10000), big.Zero())
 		actor.claim(rt, expert2, owner, abi.NewTokenAmount(10000), big.Zero())
 
-		actor.expectPool(rt, 300*1e11, 900, 200, int64(200+expertfund.RewardVestingDelay), 30, 30)
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10).
-			withLockedFunds(300).withRewardDebt(300).
+		actor.expectPool(rt, 128571428571427, 900, 200, int64(200+expertfund.RewardVestingDelay), total, total)
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).
+			withLockedFunds(385).withRewardDebt(385).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(100),
-				abi.ChainEpoch(200 + expertfund.RewardVestingDelay): abi.NewTokenAmount(200),
+				abi.ChainEpoch(200): abi.NewTokenAmount(128),
+				abi.ChainEpoch(200 + expertfund.RewardVestingDelay): abi.NewTokenAmount(257),
 			}))
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(20).
-			withLockedFunds(600).withRewardDebt(600).
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).
+			withLockedFunds(514).withRewardDebt(514).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(200),
-				abi.ChainEpoch(200 + expertfund.RewardVestingDelay): abi.NewTokenAmount(400),
+				abi.ChainEpoch(200): abi.NewTokenAmount(171),
+				abi.ChainEpoch(200 + expertfund.RewardVestingDelay): abi.NewTokenAmount(343),
 			}))
 
 		// block expert2
@@ -1376,15 +1406,16 @@ func TestBlockExpert(t *testing.T) {
 		actor.blockExpert(rt, owner, expert2, &expert.OnBlockedReturn{
 			ImplicatedExpert:            expert1,
 			ImplicatedExpertVotesEnough: true,
-		}, abi.NewTokenAmount(400))
-		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(500)))
-		actor.expectPool(rt, 300*1e11, 500, int64(200+expertfund.RewardVestingDelay), int64(200+expertfund.RewardVestingDelay+1), 30, 10)
-		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(20).withUnlockedFunds(200).withRewardDebt(600))
-		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(10).
-			withLockedFunds(300).withRewardDebt(300).
+		}, abi.NewTokenAmount(343))
+		fmt.Println("balance", rt.Balance())
+		require.True(t, rt.Balance().Equals(abi.NewTokenAmount(557)))
+		actor.expectPool(rt, 128571428571427, 557, int64(200+expertfund.RewardVestingDelay), int64(200+expertfund.RewardVestingDelay+1), total, int64(expertfund.AdjustSize(pieceSize1)))
+		actor.expectExpert(rt, expert2, newExpectExpertInfo().withActive(false).withDatasize(int64(expertfund.AdjustSize(pieceSize2))).withUnlockedFunds(171).withRewardDebt(514))
+		actor.expectExpert(rt, expert1, newExpectExpertInfo().withActive(true).withDatasize(int64(expertfund.AdjustSize(pieceSize1))).
+			withLockedFunds(385).withRewardDebt(385).
 			withVestings(map[abi.ChainEpoch]abi.TokenAmount{
-				abi.ChainEpoch(200): abi.NewTokenAmount(100),
-				abi.ChainEpoch(200 + expertfund.RewardVestingDelay): abi.NewTokenAmount(200),
+				abi.ChainEpoch(200): abi.NewTokenAmount(128),
+				abi.ChainEpoch(200 + expertfund.RewardVestingDelay): abi.NewTokenAmount(257),
 			}))
 	})
 }
@@ -1502,7 +1533,7 @@ func (h *actorHarness) batchStoreData(rt *mock.Runtime, conf *batchStoreDataConf
 	var params builtin.BatchPieceCIDParams
 	for expertAddr, checkedIDs := range conf.expectStoreDataParams {
 		params.PieceCIDs = append(params.PieceCIDs, checkedIDs...)
-		rt.ExpectSend(expertAddr, builtin.MethodsExpert.StoreData, &builtin.BatchPieceCIDParams{PieceCIDs: checkedIDs},
+		rt.ExpectSend(expertAddr, builtin.MethodsExpert.OnStoreData, &builtin.BatchPieceCIDParams{PieceCIDs: checkedIDs},
 			big.Zero(), conf.expectStoreDataReturn[expertAddr], exitcode.Ok)
 	}
 
@@ -1528,14 +1559,16 @@ func (h *actorHarness) expectPool(rt *mock.Runtime, accPerShare, lastBalance, pr
 	st := getState(rt)
 	info, err := st.GetPool(adt.AsStore(rt))
 	require.NoError(h.t, err)
-	require.True(h.t,
-		info.AccPerShare.Equals(big.NewInt(accPerShare)) &&
-			info.LastRewardBalance.Equals(big.NewInt(lastBalance)) &&
-			info.PrevEpoch == abi.ChainEpoch(prevEpoch) &&
-			info.PrevTotalDataSize == abi.PaddedPieceSize(prevTotalSize) &&
-			info.CurrentEpoch == abi.ChainEpoch(curEpoch) &&
-			info.CurrentTotalDataSize == abi.PaddedPieceSize(curTotalSize),
-	)
+	fmt.Println("pershare:", info.AccPerShare.String())
+	require.True(h.t, info.AccPerShare.Equals(big.NewInt(accPerShare)))
+	fmt.Println("LastRewardBalance:", info.LastRewardBalance)
+	require.True(h.t, info.LastRewardBalance.Equals(big.NewInt(lastBalance)))
+	require.True(h.t, info.PrevEpoch == abi.ChainEpoch(prevEpoch))
+	fmt.Println("PrevTotalDataSize:", info.PrevTotalDataSize)
+	require.True(h.t, info.PrevTotalDataSize == abi.PaddedPieceSize(prevTotalSize))
+	require.True(h.t, info.CurrentEpoch == abi.ChainEpoch(curEpoch))
+	fmt.Println("CurrentTotalDataSize:", info.CurrentTotalDataSize)
+	require.True(h.t, info.CurrentTotalDataSize == abi.PaddedPieceSize(curTotalSize))
 }
 
 type expectExpertInfo struct {
@@ -1584,13 +1617,14 @@ func (h *actorHarness) expectExpert(rt *mock.Runtime, expertAddr address.Address
 	st := getState(rt)
 	info, err := st.GetExpert(adt.AsStore(rt), expertAddr)
 	require.NoError(h.t, err)
-	require.True(h.t,
-		info.Active == expect.Active &&
-			info.DataSize == expect.DataSize &&
-			info.RewardDebt.Equals(expect.RewardDebt) &&
-			info.LockedFunds.Equals(expect.LockedFunds) &&
-			info.UnlockedFunds.Equals(expect.UnlockedFunds),
-	)
+	require.True(h.t, info.Active == expect.Active)
+	require.True(h.t, info.DataSize == expect.DataSize)
+	fmt.Println("rewarddebt:", info.RewardDebt)
+	require.True(h.t, info.RewardDebt.Equals(expect.RewardDebt))
+	fmt.Println("LockedFunds:", info.LockedFunds)
+	require.True(h.t, info.LockedFunds.Equals(expect.LockedFunds))
+	fmt.Println("UnlockedFunds:", info.UnlockedFunds)
+	require.True(h.t, info.UnlockedFunds.Equals(expect.UnlockedFunds))
 	vestings, err := adt.AsMap(adt.AsStore(rt), info.VestingFunds, builtin.DefaultHamtBitwidth)
 	require.NoError(h.t, err)
 	count := 0
@@ -1598,6 +1632,7 @@ func (h *actorHarness) expectExpert(rt *mock.Runtime, expertAddr address.Address
 	err = vestings.ForEach(&amount, func(k string) error {
 		epoch, err := abi.ParseIntKey(k)
 		require.NoError(h.t, err)
+		fmt.Println("vest:", epoch, expect.vestings[abi.ChainEpoch(epoch)], amount)
 		require.True(h.t, expect.vestings[abi.ChainEpoch(epoch)].Equals(amount))
 		count++
 		return nil

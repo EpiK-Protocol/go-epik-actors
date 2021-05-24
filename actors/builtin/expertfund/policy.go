@@ -8,6 +8,9 @@ import (
 // DefaultDataStoreThreshold default threshold
 var DefaultDataStoreThreshold = uint64(10)
 
+// DefaultDailyImportThreshold, 8MiB
+var DefaultImportThreshold = uint64(8 << 20)
+
 // AccumulatedMultiplier accumulated
 var AccumulatedMultiplier = abi.NewTokenAmount(1e12)
 

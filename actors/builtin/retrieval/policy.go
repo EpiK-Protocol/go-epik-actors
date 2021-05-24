@@ -7,7 +7,7 @@ import (
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 )
 
-// RetrievalSizePerEPK retrieval size stake per epk
+// RetrievalSizePerEPK retrieval size stake per epk, 10Mib
 const RetrievalSizePerEPK = 10 << 20
 
 // RetrievalRewardPerByte retrieval reward per byte, 10M = 0.0002 EPK

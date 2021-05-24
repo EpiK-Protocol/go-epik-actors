@@ -20,13 +20,14 @@ const (
 	ExpertNormal
 )
 
-func NotifyExpertImport(rt runtime.Runtime, pieceIDs []cid.Cid) {
+func NotifyExpertImport(rt runtime.Runtime, pieceIDs []cid.Cid, size uint64) {
 	cids := []CheckedCID{}
 	for _, pieceID := range pieceIDs {
 		cids = append(cids, CheckedCID{CID: pieceID})
 	}
 	params := &BatchPieceCIDParams{
 		PieceCIDs: cids,
+		Size:      size,
 	}
 	code := rt.Send(ExpertFundActorAddr, MethodsExpertFunds.OnExpertImport, params, abi.NewTokenAmount(0), &Discard{})
 	RequireSuccess(rt, code, "failed to notify expert import")

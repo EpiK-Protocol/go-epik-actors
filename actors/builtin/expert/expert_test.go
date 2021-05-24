@@ -246,7 +246,7 @@ func TestStoreData(t *testing.T) {
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "data not found", func() {
-			rt.Call(actor.StoreData, newStoreDataParams(newImportDataParams()))
+			rt.Call(actor.OnStoreData, newStoreDataParams(newImportDataParams()))
 		})
 
 		// piece 1 imported but piece 2 not
@@ -257,7 +257,7 @@ func TestStoreData(t *testing.T) {
 		rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 		rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalState, "data not found "+params2.Datas[0].PieceID.String(), func() {
-			rt.Call(actor.StoreData, newStoreDataParams(params1, params2))
+			rt.Call(actor.OnStoreData, newStoreDataParams(params1, params2))
 		})
 	})
 
@@ -474,13 +474,6 @@ func TestOnBlocked(t *testing.T) {
 		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "try to block expert with invalid state", func() {
 			actor.onBlocked(rt, proposer, true)
 		})
-
-		st = getState(rt)
-		st.ExpertState = expert.ExpertStateRegistered
-		rt.ReplaceState(st)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "try to block expert with invalid state", func() {
-			actor.onBlocked(rt, proposer, true)
-		})
 	})
 
 	t.Run("ok", func(t *testing.T) {
@@ -645,7 +638,9 @@ func TestChangeOwner(t *testing.T) {
 		st = getState(rt)
 		info, err = st.GetInfo(adt.AsStore(rt))
 		require.NoError(t, err)
-		require.True(t, newowner == info.Owner && govnewowner == info.ApplyNewOwner && -1 == info.ApplyNewOwnerEpoch)
+		require.True(t, newowner == info.Owner)
+		require.True(t, govnewowner == info.ApplyNewOwner)
+		require.True(t, -1 == info.ApplyNewOwnerEpoch)
 	})
 
 	t.Run("success calling with new owner when gov change effect", func(t *testing.T) {
@@ -706,17 +701,10 @@ func TestGovChangeOwner(t *testing.T) {
 		})
 	})
 
-	t.Run("fail when non-ID address", func(t *testing.T) {
-		rt, actor := setupFunc(governor)
-		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, "owner address must be an ID address", func() {
-			newowner := tutil.NewBLSAddr(t, 1)
-			rt.Call(actor.GovChangeOwner, &newowner)
-		})
-	})
-
 	t.Run("normal", func(t *testing.T) {
 		rt, actor := setupFunc(governor)
 		newowner := tutil.NewIDAddr(t, 200)
+		rt.SetAddressActorType(newowner, builtin.AccountActorCodeID)
 
 		rt.SetEpoch(100)
 		rt.Call(actor.GovChangeOwner, &newowner)
@@ -941,7 +929,7 @@ func (h *actorHarness) importData(rt *mock.Runtime, params *expert.BatchImportDa
 func (h *actorHarness) storeData(rt *mock.Runtime, params *builtin.BatchPieceCIDParams) *expert.GetDatasReturn {
 	rt.SetCaller(builtin.ExpertFundActorAddr, builtin.ExpertFundActorCodeID)
 	rt.ExpectValidateCallerAddr(builtin.ExpertFundActorAddr)
-	ret := rt.Call(h.StoreData, params).(*expert.GetDatasReturn)
+	ret := rt.Call(h.OnStoreData, params).(*expert.GetDatasReturn)
 	rt.Verify()
 	return ret
 }
@@ -1017,6 +1005,7 @@ func (h *actorHarness) changeOwner(rt *mock.Runtime, oldOwner, newOwner addr.Add
 }
 
 func (h *actorHarness) govChangeOwner(rt *mock.Runtime, governor, newOwner addr.Address) {
+	rt.SetAddressActorType(newOwner, builtin.AccountActorCodeID)
 	rt.SetCaller(governor, builtin.AccountActorCodeID)
 	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
 	rt.ExpectSend(builtin.GovernActorAddr, builtin.MethodsGovern.ValidateGranted, &builtin.ValidateGrantedParams{

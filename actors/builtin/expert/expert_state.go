@@ -24,7 +24,12 @@ type State struct {
 	ExpertState ExpertState
 
 	ImplicatedTimes uint64
-	CurrentVotes    abi.TokenAmount // Valid votes
+
+	CurrentVotes abi.TokenAmount // Valid votes
+
+	// normal expert(not foundation) hash daily import size limit
+	EpochDate       uint64
+	DailyImportSize uint64
 }
 
 // ExpertInfo expert info
@@ -67,6 +72,8 @@ func ConstructState(store adt.Store, info cid.Cid, state ExpertState) (*State, e
 		ExpertState:     state,
 		ImplicatedTimes: 0,
 		CurrentVotes:    abi.NewTokenAmount(0),
+		EpochDate:       0,
+		DailyImportSize: 0,
 	}, nil
 }
 

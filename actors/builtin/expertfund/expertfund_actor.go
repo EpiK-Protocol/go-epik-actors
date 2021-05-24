@@ -101,6 +101,9 @@ func (a Actor) OnExpertImport(rt Runtime, params *builtin.BatchPieceCIDParams) *
 
 	var st State
 	rt.StateTransaction(&st, func() {
+		if params.Size > st.DailyImportSizeThreshold {
+			rt.Abortf(exitcode.ErrForbidden, "expert import data size out of daily threshold:%v", st.DailyImportSizeThreshold)
+		}
 		// global unique
 		for _, checked := range params.PieceCIDs {
 			err := st.PutPieceInfos(adt.AsStore(rt), true, map[cid.Cid]*PieceInfo{
@@ -113,7 +116,8 @@ func (a Actor) OnExpertImport(rt Runtime, params *builtin.BatchPieceCIDParams) *
 }
 
 type ChangeThresholdParams struct {
-	DataStoreThreshold uint64
+	DataStoreThreshold   uint64
+	DailyImportThreshold uint64
 }
 
 // ChangeThreshold update the fund config
@@ -123,7 +127,12 @@ func (a Actor) ChangeThreshold(rt Runtime, params *ChangeThresholdParams) *abi.E
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		st.DataStoreThreshold = params.DataStoreThreshold
+		if params.DataStoreThreshold > 0 {
+			st.DataStoreThreshold = params.DataStoreThreshold
+		}
+		if params.DailyImportThreshold > 0 {
+			st.DailyImportSizeThreshold = params.DailyImportThreshold
+		}
 	})
 	return nil
 }
@@ -204,7 +213,7 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	expertToInfo := make(map[address.Address]*ExpertInfo)
 	for expertAddr, pieces := range expertToPieces {
 		var out expert.GetDatasReturn
-		code := rt.Send(expertAddr, builtin.MethodsExpert.StoreData, &builtin.BatchPieceCIDParams{PieceCIDs: pieces}, abi.NewTokenAmount(0), &out)
+		code := rt.Send(expertAddr, builtin.MethodsExpert.OnStoreData, &builtin.BatchPieceCIDParams{PieceCIDs: pieces}, abi.NewTokenAmount(0), &out)
 		builtin.RequireSuccess(rt, code, "failed to store data of %s", expertAddr)
 		builtin.RequireState(rt, !out.ExpertBlocked, "expert blocked %s", expertAddr)
 

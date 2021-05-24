@@ -407,7 +407,7 @@ func (t *ValidateGrantedParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufBatchPieceCIDParams = []byte{129}
+var lengthBufBatchPieceCIDParams = []byte{130}
 
 func (t *BatchPieceCIDParams) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -433,6 +433,13 @@ func (t *BatchPieceCIDParams) MarshalCBOR(w io.Writer) error {
 			return err
 		}
 	}
+
+	// t.Size (uint64) (uint64)
+
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.Size)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -450,7 +457,7 @@ func (t *BatchPieceCIDParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 1 {
+	if extra != 2 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -483,6 +490,20 @@ func (t *BatchPieceCIDParams) UnmarshalCBOR(r io.Reader) error {
 		t.PieceCIDs[i] = v
 	}
 
+	// t.Size (uint64) (uint64)
+
+	{
+
+		maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
+		if err != nil {
+			return err
+		}
+		if maj != cbg.MajUnsignedInt {
+			return fmt.Errorf("wrong type for uint64 field")
+		}
+		t.Size = uint64(extra)
+
+	}
 	return nil
 }
 

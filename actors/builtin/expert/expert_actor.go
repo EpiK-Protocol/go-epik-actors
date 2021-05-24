@@ -25,16 +25,17 @@ func (a Actor) Exports() []interface{} {
 		builtin.MethodConstructor: a.Constructor,
 		2:                         a.ControlAddress,
 		3:                         a.ChangeOwner,
-		4:                         a.ImportData,
-		5:                         a.GetDatas,
-		6:                         a.StoreData,
-		7:                         a.Nominate,
-		8:                         a.OnNominated,
-		9:                         a.OnBlocked,
-		10:                        a.OnImplicated,
-		11:                        a.GovChangeOwner,
-		12:                        a.CheckState,
-		13:                        a.OnVotesUpdated,
+		4:                         a.ChangeInfo,
+		5:                         a.ImportData,
+		6:                         a.GetDatas,
+		7:                         a.OnStoreData,
+		8:                         a.Nominate,
+		9:                         a.OnNominated,
+		10:                        a.OnBlocked,
+		11:                        a.OnImplicated,
+		12:                        a.GovChangeOwner,
+		13:                        a.CheckState,
+		14:                        a.OnVotesUpdated,
 	}
 }
 
@@ -106,7 +107,6 @@ func (a Actor) ControlAddress(rt Runtime, _ *abi.EmptyValue) *addr.Address {
 	info, changed := checkAndGetExpertInfo(rt, &st)
 	if changed {
 		rt.StateTransaction(&st, func() {
-			info.ApplyNewOwnerEpoch = -1 // clear
 			err := st.SaveInfo(adt.AsStore(rt), info)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "faile to save new owner")
 		})
@@ -123,6 +123,7 @@ func checkAndGetExpertInfo(rt Runtime, st *State) (info *ExpertInfo, ownerChange
 	if info.ApplyNewOwnerEpoch > 0 && info.Owner != info.ApplyNewOwner &&
 		(rt.CurrEpoch()-info.ApplyNewOwnerEpoch) >= ActivateNewOwnerDelay {
 		info.Owner = info.ApplyNewOwner
+		info.ApplyNewOwnerEpoch = -1 // clear
 		return info, true
 	}
 	return info, false
@@ -149,12 +150,45 @@ func (a Actor) ChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValue {
 		info, _ := checkAndGetExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
 
-		info.Owner = resolvedNewOwner
 		info.ApplyNewOwnerEpoch = -1
+		info.Owner = resolvedNewOwner
 
 		err := st.SaveInfo(store, info)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change owner")
 	})
+	return nil
+}
+
+type ChangeInfoParams struct {
+	ApplicationHash string
+}
+
+func (a Actor) ChangeInfo(rt Runtime, params *ChangeInfoParams) *abi.EmptyValue {
+	var info *ExpertInfo
+	var st State
+	rt.StateTransaction(&st, func() {
+		store := adt.AsStore(rt)
+
+		info, _ = checkAndGetExpertInfo(rt, &st)
+		rt.ValidateImmediateCallerIs(info.Owner)
+
+		info.ApplicationHash = params.ApplicationHash
+
+		err := st.SaveInfo(store, info)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to change applicationHash")
+	})
+
+	if info.Type != builtin.ExpertFoundation {
+		builtin.RequireParam(rt, rt.ValueReceived().GreaterThanEqual(ExpertApplyCost), "fund for expert change hash not enough")
+		code := rt.Send(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, ExpertApplyCost, &builtin.Discard{})
+		builtin.RequireSuccess(rt, code, "failed to burn funds")
+
+		change := big.Sub(rt.ValueReceived(), ExpertApplyCost)
+		if !change.IsZero() {
+			code := rt.Send(rt.Caller(), builtin.MethodSend, nil, change, &builtin.Discard{})
+			builtin.RequireSuccess(rt, code, "failed to send payback funds")
+		}
+	}
 	return nil
 }
 
@@ -169,6 +203,7 @@ type ImportDataParams struct {
 }
 
 func (a Actor) ImportData(rt Runtime, params *BatchImportDataParams) *abi.EmptyValue {
+	var eInfo *ExpertInfo
 	var st State
 	store := adt.AsStore(rt)
 	rt.StateTransaction(&st, func() {
@@ -177,9 +212,14 @@ func (a Actor) ImportData(rt Runtime, params *BatchImportDataParams) *abi.EmptyV
 		info, ownerChanged := checkAndGetExpertInfo(rt, &st)
 		rt.ValidateImmediateCallerIs(info.Owner)
 		if ownerChanged {
-			info.ApplyNewOwnerEpoch = -1
 			err := st.SaveInfo(store, info)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "faile to apply new owner")
+		}
+		eInfo = info
+		epochDate := rt.CurrEpoch() / builtin.EpochsInDay
+		if epochDate > abi.ChainEpoch(st.EpochDate) {
+			st.EpochDate = uint64(epochDate)
+			st.DailyImportSize = 0
 		}
 
 		for _, data := range params.Datas {
@@ -194,13 +234,20 @@ func (a Actor) ImportData(rt Runtime, params *BatchImportDataParams) *abi.EmptyV
 			})
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to import data")
 			st.DataCount++
+			st.DailyImportSize += uint64(data.PieceSize)
 		}
+
 	})
 	cids := []cid.Cid{}
 	for _, data := range params.Datas {
 		cids = append(cids, data.PieceID)
 	}
-	builtin.NotifyExpertImport(rt, cids)
+	size := uint64(0)
+	// only normal expert need check daily import size
+	if eInfo.Type != builtin.ExpertFoundation {
+		size = st.DailyImportSize
+	}
+	builtin.NotifyExpertImport(rt, cids, size)
 	return nil
 }
 
@@ -229,7 +276,7 @@ func (a Actor) GetDatas(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDat
 	}
 }
 
-func (a Actor) StoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDatasReturn {
+func (a Actor) OnStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *GetDatasReturn {
 	rt.ValidateImmediateCallerIs(builtin.ExpertFundActorAddr)
 
 	pieceCIDs := make([]cid.Cid, 0, len(params.PieceCIDs))
@@ -275,7 +322,6 @@ func (a Actor) Nominate(rt Runtime, nominatedExpert *addr.Address) *abi.EmptyVal
 	rt.ValidateImmediateCallerIs(info.Owner)
 	if changed {
 		rt.StateTransaction(&st, func() {
-			info.ApplyNewOwnerEpoch = -1
 			err := st.SaveInfo(adt.AsStore(rt), info)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "faile to save expert info")
 		})
@@ -322,7 +368,7 @@ func (a Actor) OnBlocked(rt Runtime, _ *abi.EmptyValue) *OnBlockedReturn {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get expert info")
 
 		builtin.RequireParam(rt, info.Type != builtin.ExpertFoundation, "foundation expert cannot be blocked")
-		builtin.RequireParam(rt, st.ExpertState == ExpertStateQualified || st.ExpertState == ExpertStateUnqualified, "try to block expert with invalid state %s", st.ExpertState)
+		builtin.RequireParam(rt, st.ExpertState == ExpertStateRegistered || st.ExpertState == ExpertStateUnqualified || st.ExpertState == ExpertStateQualified, "try to block expert with invalid state %s", st.ExpertState)
 
 		st.ExpertState = ExpertStateBlocked
 		st.CurrentVotes = abi.NewTokenAmount(0)
@@ -367,7 +413,7 @@ func (a Actor) GovChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValu
 	builtin.ValidateCallerGranted(rt, rt.Caller(), builtin.MethodsExpert.GovChangeOwner)
 
 	builtin.RequireParam(rt, !newOwner.Empty(), "empty address")
-	builtin.RequireParam(rt, newOwner.Protocol() == addr.ID, "owner address must be an ID address")
+	resloved := resolveOwnerAddress(rt, *newOwner)
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -376,7 +422,7 @@ func (a Actor) GovChangeOwner(rt Runtime, newOwner *addr.Address) *abi.EmptyValu
 		info, err := st.GetInfo(store)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get expert info")
 
-		info.ApplyNewOwner = *newOwner
+		info.ApplyNewOwner = resloved
 		info.ApplyNewOwnerEpoch = rt.CurrEpoch()
 
 		err = st.SaveInfo(store, info)
