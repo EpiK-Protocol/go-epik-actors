@@ -13,7 +13,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{130}
+var lengthBufState = []byte{131}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -30,6 +30,12 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	if err := cbg.WriteCidBuf(scratch, w, t.CoinbaseVestings); err != nil {
 		return xerrors.Errorf("failed to write cid field t.CoinbaseVestings: %w", err)
+	}
+
+	// t.MinerCumulations (cid.Cid) (struct)
+
+	if err := cbg.WriteCidBuf(scratch, w, t.MinerCumulations); err != nil {
+		return xerrors.Errorf("failed to write cid field t.MinerCumulations: %w", err)
 	}
 
 	// t.LockedFunds (big.Int) (struct)
@@ -53,7 +59,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 2 {
+	if extra != 3 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -67,6 +73,18 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.CoinbaseVestings = c
+
+	}
+	// t.MinerCumulations (cid.Cid) (struct)
+
+	{
+
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.MinerCumulations: %w", err)
+		}
+
+		t.MinerCumulations = c
 
 	}
 	// t.LockedFunds (big.Int) (struct)

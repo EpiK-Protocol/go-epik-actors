@@ -53,7 +53,8 @@ type AddVestingFundsParams struct {
 
 func (a Actor) AddVestingFunds(rt Runtime, params *AddVestingFundsParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerType(builtin.StorageMinerActorCodeID)
-	builtin.RequireParam(rt, rt.ValueReceived().Equals(params.Amount), "received funds %s not match expected %s", rt.ValueReceived(), params.Amount)
+	builtin.RequireParam(rt, rt.ValueReceived().Equals(params.Amount), "received funds not equal to param: %s, %s", rt.ValueReceived(), params.Amount)
+	builtin.RequireParam(rt, params.Coinbase.Protocol() == address.ID, "coinbase must be an ID address")
 
 	var st State
 	rt.StateTransaction(&st, func() {
@@ -72,6 +73,9 @@ func (a Actor) AddVestingFunds(rt Runtime, params *AddVestingFundsParams) *abi.E
 
 		err = st.SaveVestingFunds(store, params.Coinbase, vf)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to save vestings")
+
+		err = st.AddMinerCumulation(store, rt.Caller(), params.Amount)
+		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add cumulation")
 	})
 
 	return nil

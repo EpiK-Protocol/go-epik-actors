@@ -12,17 +12,25 @@ import (
 
 type State struct {
 	CoinbaseVestings cid.Cid // Map, HAMT[Coinbase]VestingFund
+	MinerCumulations cid.Cid // Map, HAMT[minerID]TokenAmount
 	LockedFunds      abi.TokenAmount
 }
 
 func ConstructState(store adt.Store) (*State, error) {
-	emptyMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	emptyVestingMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create empty map: %w", err)
+	}
+
+	emptyCumMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty map: %w", err)
 	}
 
 	return &State{
-		CoinbaseVestings: emptyMapCid,
+		LockedFunds:      abi.NewTokenAmount(0),
+		CoinbaseVestings: emptyVestingMapCid,
+		MinerCumulations: emptyCumMapCid,
 	}, nil
 }
 
@@ -91,10 +99,57 @@ func (st *State) LoadVestingFunds(store adt.Store, coinbase address.Address) (*V
 		return nil, false, xerrors.Errorf("failed to load coinbase vestings: %w", err)
 	}
 
-	var vestingFunds VestingFunds
+	vestingFunds := VestingFunds{
+		UnlockedBalance: abi.NewTokenAmount(0),
+	}
 	found, err := vfs.Get(abi.AddrKey(coinbase), &vestingFunds)
 	if err != nil {
 		return nil, false, xerrors.Errorf("failed to get vesting funds of %s: %w", coinbase, err)
 	}
 	return &vestingFunds, found, nil
+}
+
+func (st *State) AddMinerCumulation(store adt.Store, miner address.Address, amount abi.TokenAmount) error {
+	if amount.LessThan(big.Zero()) {
+		return xerrors.Errorf("negative amount to be added: %s", miner)
+	}
+
+	mc, err := adt.AsMap(store, st.MinerCumulations, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return xerrors.Errorf("failed to load cumulations: %w", err)
+	}
+
+	var old abi.TokenAmount
+	found, err := mc.Get(abi.AddrKey(miner), &old)
+	if err != nil {
+		return xerrors.Errorf("failed to get cumulation of %s: %w", miner, err)
+	}
+	if !found {
+		old = amount
+	} else {
+		old = big.Add(old, amount)
+	}
+	err = mc.Put(abi.AddrKey(miner), &old)
+	if err != nil {
+		return xerrors.Errorf("failed to put cumulation of %s: %w", miner, err)
+	}
+	st.MinerCumulations, err = mc.Root()
+	if err != nil {
+		return xerrors.Errorf("failed to flush cumulation: %w", err)
+	}
+	return nil
+}
+
+func (st *State) GetMinerCumulation(store adt.Store, miner address.Address) (abi.TokenAmount, error) {
+	mc, err := adt.AsMap(store, st.MinerCumulations, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load cumulations: %w", err)
+	}
+
+	out := abi.NewTokenAmount(0)
+	_, err = mc.Get(abi.AddrKey(miner), &out)
+	if err != nil {
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to get cumulation of %s: %w", miner, err)
+	}
+	return out, nil
 }
