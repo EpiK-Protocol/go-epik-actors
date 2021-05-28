@@ -7,7 +7,6 @@ import (
 	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/cbor"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/go-state-types/exitcode"
@@ -29,16 +28,14 @@ type Runtime = runtime.Runtime
 func (a Actor) Exports() []interface{} {
 	return []interface{}{
 		builtin.MethodConstructor: a.Constructor,
-		2:                         a.AddBalance,
-		3:                         a.WithdrawBalance,
-		4:                         a.PublishStorageDeals,
-		5:                         a.VerifyDealsForActivation,
-		6:                         a.ActivateDeals,
-		7:                         a.OnMinerSectorsTerminate,
-		8:                         a.ComputeDataCommitment,
-		9:                         a.CronTick,
-		10:                        a.ResetQuotas,
-		11:                        a.SetInitialQuota,
+		2:                         a.PublishStorageDeals,
+		3:                         a.VerifyDealsForActivation,
+		4:                         a.ActivateDeals,
+		5:                         a.OnMinerSectorsTerminate,
+		6:                         a.ComputeDataCommitment,
+		7:                         a.CronTick,
+		8:                         a.ResetQuotas,
+		9:                         a.SetInitialQuota,
 	}
 }
 
@@ -69,74 +66,74 @@ func (a Actor) Constructor(rt Runtime, _ *abi.EmptyValue) *abi.EmptyValue {
 	return nil
 }
 
-type WithdrawBalanceParams struct {
-	ProviderOrClientAddress addr.Address
-	Amount                  abi.TokenAmount
-}
+// type WithdrawBalanceParams struct {
+// 	ProviderOrClientAddress addr.Address
+// 	Amount                  abi.TokenAmount
+// }
 
-// Attempt to withdraw the specified amount from the balance held in escrow.
-// If less than the specified amount is available, yields the entire available balance.
-func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.EmptyValue {
-	if params.Amount.LessThan(big.Zero()) {
-		rt.Abortf(exitcode.ErrIllegalArgument, "negative amount %v", params.Amount)
-	}
+// // Attempt to withdraw the specified amount from the balance held in escrow.
+// // If less than the specified amount is available, yields the entire available balance.
+// func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.EmptyValue {
+// 	if params.Amount.LessThan(big.Zero()) {
+// 		rt.Abortf(exitcode.ErrIllegalArgument, "negative amount %v", params.Amount)
+// 	}
 
-	nominal, recipient, approvedCallers := escrowAddress(rt, params.ProviderOrClientAddress)
-	// for providers -> only corresponding owner or worker can withdraw
-	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerIs(approvedCallers...)
+// 	nominal, recipient, approvedCallers := escrowAddress(rt, params.ProviderOrClientAddress)
+// 	// for providers -> only corresponding owner or worker can withdraw
+// 	// for clients -> only the client i.e the recipient can withdraw
+// 	rt.ValidateImmediateCallerIs(approvedCallers...)
 
-	amountExtracted := abi.NewTokenAmount(0)
-	var st State
-	rt.StateTransaction(&st, func() {
-		msm, err := st.mutator(adt.AsStore(rt)).withEscrowTable(WritePermission).
-			withLockedTable(WritePermission).build()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
+// 	amountExtracted := abi.NewTokenAmount(0)
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		msm, err := st.mutator(adt.AsStore(rt)).withEscrowTable(WritePermission).
+// 			withLockedTable(WritePermission).build()
+// 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
-		// The withdrawable amount might be slightly less than nominal
-		// depending on whether or not all relevant entries have been processed
-		// by cron
-		minBalance, err := msm.lockedTable.Get(nominal)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get locked balance")
+// 		// The withdrawable amount might be slightly less than nominal
+// 		// depending on whether or not all relevant entries have been processed
+// 		// by cron
+// 		minBalance, err := msm.lockedTable.Get(nominal)
+// 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get locked balance")
 
-		ex, err := msm.escrowTable.SubtractWithMinimum(nominal, params.Amount, minBalance)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract from escrow table")
+// 		ex, err := msm.escrowTable.SubtractWithMinimum(nominal, params.Amount, minBalance)
+// 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to subtract from escrow table")
 
-		err = msm.commitState()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
+// 		err = msm.commitState()
+// 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
 
-		amountExtracted = ex
-	})
+// 		amountExtracted = ex
+// 	})
 
-	code := rt.Send(recipient, builtin.MethodSend, nil, amountExtracted, &builtin.Discard{})
-	builtin.RequireSuccess(rt, code, "failed to send funds")
-	return nil
-}
+// 	code := rt.Send(recipient, builtin.MethodSend, nil, amountExtracted, &builtin.Discard{})
+// 	builtin.RequireSuccess(rt, code, "failed to send funds")
+// 	return nil
+// }
 
-// Deposits the received value into the balance held in escrow.
-func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *abi.EmptyValue {
-	msgValue := rt.ValueReceived()
-	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "balance to add must be greater than zero")
+// // Deposits the received value into the balance held in escrow.
+// func (a Actor) AddBalance(rt Runtime, providerOrClientAddress *addr.Address) *abi.EmptyValue {
+// 	msgValue := rt.ValueReceived()
+// 	builtin.RequireParam(rt, msgValue.GreaterThan(big.Zero()), "balance to add must be greater than zero")
 
-	// only signing parties can add balance for client AND provider.
-	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
+// 	// only signing parties can add balance for client AND provider.
+// 	rt.ValidateImmediateCallerType(builtin.CallerTypesSignable...)
 
-	nominal, _, _ := escrowAddress(rt, *providerOrClientAddress)
+// 	nominal, _, _ := escrowAddress(rt, *providerOrClientAddress)
 
-	var st State
-	rt.StateTransaction(&st, func() {
-		msm, err := st.mutator(adt.AsStore(rt)).withEscrowTable(WritePermission).
-			withLockedTable(WritePermission).build()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
+// 	var st State
+// 	rt.StateTransaction(&st, func() {
+// 		msm, err := st.mutator(adt.AsStore(rt)).withEscrowTable(WritePermission).
+// 			withLockedTable(WritePermission).build()
+// 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to load state")
 
-		err = msm.escrowTable.Add(nominal, msgValue)
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add balance to escrow table")
+// 		err = msm.escrowTable.Add(nominal, msgValue)
+// 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to add balance to escrow table")
 
-		err = msm.commitState()
-		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
-	})
-	return nil
-}
+// 		err = msm.commitState()
+// 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to flush state")
+// 	})
+// 	return nil
+// }
 
 type StorageDataRef struct {
 	RootCID cid.Cid `checked:"true"`
@@ -890,28 +887,28 @@ func validateDeal(rt Runtime, deal ClientDealProposal /* networkRawPower, networ
 // Helpers
 //
 
-// Resolves a provider or client address to the canonical form against which a balance should be held, and
-// the designated recipient address of withdrawals (which is the same, for simple account parties).
-func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, recipient addr.Address, approved []addr.Address) {
-	// Resolve the provided address to the canonical form against which the balance is held.
-	nominal, ok := rt.ResolveAddress(address)
-	if !ok {
-		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", address)
-	}
+// // Resolves a provider or client address to the canonical form against which a balance should be held, and
+// // the designated recipient address of withdrawals (which is the same, for simple account parties).
+// func escrowAddress(rt Runtime, address addr.Address) (nominal addr.Address, recipient addr.Address, approved []addr.Address) {
+// 	// Resolve the provided address to the canonical form against which the balance is held.
+// 	nominal, ok := rt.ResolveAddress(address)
+// 	if !ok {
+// 		rt.Abortf(exitcode.ErrIllegalArgument, "failed to resolve address %v", address)
+// 	}
 
-	codeID, ok := rt.GetActorCodeCID(nominal)
-	if !ok {
-		rt.Abortf(exitcode.ErrIllegalArgument, "no code for address %v", nominal)
-	}
+// 	codeID, ok := rt.GetActorCodeCID(nominal)
+// 	if !ok {
+// 		rt.Abortf(exitcode.ErrIllegalArgument, "no code for address %v", nominal)
+// 	}
 
-	if codeID.Equals(builtin.StorageMinerActorCodeID) {
-		// Storage miner actor entry; implied funds recipient is the associated owner address.
-		ownerAddr, workerAddr, _, _ := builtin.RequestMinerControlAddrs(rt, nominal)
-		return nominal, ownerAddr, []addr.Address{ownerAddr, workerAddr}
-	}
+// 	if codeID.Equals(builtin.StorageMinerActorCodeID) {
+// 		// Storage miner actor entry; implied funds recipient is the associated owner address.
+// 		ownerAddr, workerAddr, _, _ := builtin.RequestMinerControlAddrs(rt, nominal)
+// 		return nominal, ownerAddr, []addr.Address{ownerAddr, workerAddr}
+// 	}
 
-	return nominal, nominal, []addr.Address{nominal}
-}
+// 	return nominal, nominal, []addr.Address{nominal}
+// }
 
 func getDealProposal(proposals *DealArray, dealID abi.DealID) (*DealProposal, error) {
 	proposal, found, err := proposals.Get(dealID)

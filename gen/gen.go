@@ -219,7 +219,7 @@ func main() {
 		// actor state
 		market.State{},
 		// method params and returns
-		market.WithdrawBalanceParams{},
+		// market.WithdrawBalanceParams{},
 		market.StorageDataRef{},
 		market.PublishStorageDealsParams{},
 		market.PublishStorageDealsReturn{},

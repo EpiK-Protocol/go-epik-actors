@@ -11,7 +11,6 @@ import (
 
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
-	"github.com/filecoin-project/go-state-types/big"
 
 	"github.com/filecoin-project/specs-actors/v2/actors/builtin"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
@@ -41,9 +40,9 @@ type StateSummary struct {
 	Deals                map[abi.DealID]*DealSummary
 	PendingProposalCount uint64
 	DealStateCount       uint64
-	LockTableCount       uint64
-	DealOpEpochCount     uint64
-	DealOpCount          uint64
+	// LockTableCount       uint64
+	DealOpEpochCount uint64
+	DealOpCount      uint64
 
 	DealNotFound     uint64
 	Quotas           map[cid.Cid]uint64
@@ -58,11 +57,10 @@ func (ss *StateSummary) String() string {
 	DanglingQuotas: %v,
 	PendingProposalCount: %d,
 	DealStateCount: %d,
-	LockTableCount: %d,
 	DealOpEpochStats: %d,
 	DealOpCount: %d,
 	DealNotFound: %d,
-}`, ss.Deals, ss.Quotas, ss.DanglingQuotas, ss.PendingProposalCount, ss.DealStateCount, ss.LockTableCount, ss.DealOpEpochStats, ss.DealOpCount, ss.DealNotFound)
+}`, ss.Deals, ss.Quotas, ss.DanglingQuotas, ss.PendingProposalCount, ss.DealStateCount, ss.DealOpEpochStats, ss.DealOpCount, ss.DealNotFound)
 }
 
 // Checks internal invariants of market state.
@@ -201,47 +199,47 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 	// Escrow Table and Locked Table
 	//
 
-	lockTableCount := uint64(0)
-	escrowTable, err := adt.AsBalanceTable(store, st.EscrowTable)
-	acc.RequireNoError(err, "error loading escrow table")
-	lockTable, err := adt.AsBalanceTable(store, st.LockedTable)
-	acc.RequireNoError(err, "error loading locked table")
-	if escrowTable != nil && lockTable != nil {
-		var lockedAmount abi.TokenAmount
-		lockedTotal := abi.NewTokenAmount(0)
-		err = (*adt.Map)(lockTable).ForEach(&lockedAmount, func(key string) error {
-			addr, err := address.NewFromBytes([]byte(key))
-			if err != nil {
-				return err
-			}
-			lockedTotal = big.Add(lockedTotal, lockedAmount)
+	// lockTableCount := uint64(0)
+	// escrowTable, err := adt.AsBalanceTable(store, st.EscrowTable)
+	// acc.RequireNoError(err, "error loading escrow table")
+	// lockTable, err := adt.AsBalanceTable(store, st.LockedTable)
+	// acc.RequireNoError(err, "error loading locked table")
+	// if escrowTable != nil && lockTable != nil {
+	// 	var lockedAmount abi.TokenAmount
+	// 	lockedTotal := abi.NewTokenAmount(0)
+	// 	err = (*adt.Map)(lockTable).ForEach(&lockedAmount, func(key string) error {
+	// 		addr, err := address.NewFromBytes([]byte(key))
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		lockedTotal = big.Add(lockedTotal, lockedAmount)
 
-			// every entry in locked table should have a corresponding entry in escrow table that is at least as high
-			escrowAmount, err := escrowTable.Get(addr)
-			if err != nil {
-				return err
-			}
-			acc.Require(escrowAmount.GreaterThanEqual(lockedAmount),
-				"locked funds for %s, %s, greater than escrow amount, %s", addr, lockedAmount, escrowAmount)
+	// 		// every entry in locked table should have a corresponding entry in escrow table that is at least as high
+	// 		escrowAmount, err := escrowTable.Get(addr)
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		acc.Require(escrowAmount.GreaterThanEqual(lockedAmount),
+	// 			"locked funds for %s, %s, greater than escrow amount, %s", addr, lockedAmount, escrowAmount)
 
-			lockTableCount++
-			return nil
-		})
-		acc.RequireNoError(err, "error iterating locked table")
+	// 		lockTableCount++
+	// 		return nil
+	// 	})
+	// 	acc.RequireNoError(err, "error iterating locked table")
 
-		// // lockTable total should be sum of client and provider locked plus client storage fee
-		// expectedLockTotal := big.Sum(st.TotalProviderLockedCollateral, st.TotalClientLockedCollateral, st.TotalClientStorageFee)
-		// acc.Require(lockedTotal.Equals(expectedLockTotal),
-		// 	"locked total, %s, does not sum to provider locked, %s, client locked, %s, and client storage fee, %s",
-		// 	lockedTotal, st.TotalProviderLockedCollateral, st.TotalClientLockedCollateral, st.TotalClientStorageFee)
+	// 	// // lockTable total should be sum of client and provider locked plus client storage fee
+	// 	// expectedLockTotal := big.Sum(st.TotalProviderLockedCollateral, st.TotalClientLockedCollateral, st.TotalClientStorageFee)
+	// 	// acc.Require(lockedTotal.Equals(expectedLockTotal),
+	// 	// 	"locked total, %s, does not sum to provider locked, %s, client locked, %s, and client storage fee, %s",
+	// 	// 	lockedTotal, st.TotalProviderLockedCollateral, st.TotalClientLockedCollateral, st.TotalClientStorageFee)
 
-		// assert escrow <= actor balance
-		// lockTable item <= escrow item and escrowTotal <= balance implies lockTable total <= balance
-		escrowTotal, err := escrowTable.Total()
-		acc.RequireNoError(err, "error calculating escrow total")
-		acc.Require(escrowTotal.LessThanEqual(balance), "escrow total, %v, greater than actor balance, %v", escrowTotal, balance)
-		// acc.Require(escrowTotal.GreaterThanEqual(totalProposalCollateral), "escrow total, %v, less than sum of proposal collateral, %v", escrowTotal, totalProposalCollateral)
-	}
+	// 	// assert escrow <= actor balance
+	// 	// lockTable item <= escrow item and escrowTotal <= balance implies lockTable total <= balance
+	// 	escrowTotal, err := escrowTable.Total()
+	// 	acc.RequireNoError(err, "error calculating escrow total")
+	// 	acc.Require(escrowTotal.LessThanEqual(balance), "escrow total, %v, greater than actor balance, %v", escrowTotal, balance)
+	// 	// acc.Require(escrowTotal.GreaterThanEqual(totalProposalCollateral), "escrow total, %v, less than sum of proposal collateral, %v", escrowTotal, totalProposalCollateral)
+	// }
 
 	//
 	// Deal Ops by Epoch
@@ -320,9 +318,9 @@ func CheckStateInvariants(st *State, store adt.Store, balance abi.TokenAmount, c
 		Deals:                proposalStats,
 		PendingProposalCount: pendingProposalCount,
 		DealStateCount:       dealStateCount,
-		LockTableCount:       lockTableCount,
-		DealOpEpochCount:     dealOpEpochCount,
-		DealOpCount:          dealOpCount,
+		// LockTableCount:       lockTableCount,
+		DealOpEpochCount: dealOpEpochCount,
+		DealOpCount:      dealOpCount,
 
 		DealNotFound:     dealNotFound,
 		Quotas:           quotaStats,

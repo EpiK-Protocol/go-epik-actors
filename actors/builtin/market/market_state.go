@@ -19,14 +19,14 @@ const epochUndefined = abi.ChainEpoch(-1)
 // activate deal (miner)
 // end deal (miner terminate, expire(no activation))
 
-// BalanceLockingReason is the reason behind locking an amount.
-type BalanceLockingReason int
+// // BalanceLockingReason is the reason behind locking an amount.
+// type BalanceLockingReason int
 
-/*const (
-	ClientCollateral BalanceLockingReason = iota
-	ClientStorageFee
-	ProviderCollateral
-) */
+// const (
+// 	ClientCollateral BalanceLockingReason = iota
+// 	ClientStorageFee
+// 	ProviderCollateral
+// )
 
 // Bitwidth of AMTs determined empirically from mutation patterns and projections of mainnet data.
 const ProposalsAmtBitwidth = 5
@@ -48,13 +48,13 @@ type State struct {
 
 	DataIndexesByEpoch cid.Cid // IndexMultimap, HAMT[epoch]HAMT[provider]AMT[DataIndex]
 
-	// Total amount held in escrow, indexed by actor address (including both locked and unlocked amounts).
-	EscrowTable cid.Cid // BalanceTable
+	// // Total amount held in escrow, indexed by actor address (including both locked and unlocked amounts).
+	// EscrowTable cid.Cid // BalanceTable
 
-	// Amount locked, indexed by actor address.
-	// Note: the amounts in this table do not affect the overall amount in escrow:
-	// only the _portion_ of the total escrow amount that is locked.
-	LockedTable cid.Cid // BalanceTable
+	// // Amount locked, indexed by actor address.
+	// // Note: the amounts in this table do not affect the overall amount in escrow:
+	// // only the _portion_ of the total escrow amount that is locked.
+	// LockedTable cid.Cid // BalanceTable
 
 	NextID abi.DealID
 
@@ -89,10 +89,10 @@ func ConstructState(store adt.Store) (*State, error) {
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create empty multiset: %w", err)
 	}
-	emptyBalanceTableCid, err := adt.StoreEmptyMap(store, adt.BalanceTableBitwidth)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to create empty balance table: %w", err)
-	}
+	// emptyBalanceTableCid, err := adt.StoreEmptyMap(store, adt.BalanceTableBitwidth)
+	// if err != nil {
+	// 	return nil, xerrors.Errorf("failed to create empty balance table: %w", err)
+	// }
 
 	emptyQuotasMapCid, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 	if err != nil {
@@ -111,11 +111,11 @@ func ConstructState(store adt.Store) (*State, error) {
 		Proposals:        emptyProposalsArrayCid,
 		States:           emptyStatesArrayCid,
 		PendingProposals: emptyPendingProposalsMapCid,
-		EscrowTable:      emptyBalanceTableCid,
-		LockedTable:      emptyBalanceTableCid,
-		NextID:           abi.DealID(0),
-		DealOpsByEpoch:   emptyDealOpsHamtCid,
-		LastCron:         abi.ChainEpoch(-1),
+		// EscrowTable:      emptyBalanceTableCid,
+		// LockedTable:      emptyBalanceTableCid,
+		NextID:         abi.DealID(0),
+		DealOpsByEpoch: emptyDealOpsHamtCid,
+		LastCron:       abi.ChainEpoch(-1),
 
 		/* TotalClientLockedCollateral:   abi.NewTokenAmount(0),
 		TotalProviderLockedCollateral: abi.NewTokenAmount(0),
@@ -308,8 +308,8 @@ type marketStateMutation struct {
 	statePermit MarketStateMutationPermission
 	dealStates  *DealMetaArray
 
-	escrowPermit MarketStateMutationPermission
-	escrowTable  *adt.BalanceTable
+	// escrowPermit MarketStateMutationPermission
+	// escrowTable  *adt.BalanceTable
 
 	pendingPermit MarketStateMutationPermission
 	pendingDeals  *adt.Map
@@ -320,8 +320,8 @@ type marketStateMutation struct {
 	dpePermit    MarketStateMutationPermission
 	dealsByEpoch *SetMultimap
 
-	lockedPermit MarketStateMutationPermission
-	lockedTable  *adt.BalanceTable
+	// lockedPermit MarketStateMutationPermission
+	// lockedTable  *adt.BalanceTable
 
 	quotaPermit MarketStateMutationPermission
 	quotas      *adt.Map
@@ -353,24 +353,24 @@ func (m *marketStateMutation) build() (*marketStateMutation, error) {
 		m.dealStates = states
 	}
 
-	if m.lockedPermit != Invalid {
-		lt, err := adt.AsBalanceTable(m.store, m.st.LockedTable)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to load locked table: %w", err)
-		}
-		m.lockedTable = lt
-		/* m.totalClientLockedCollateral = m.st.TotalClientLockedCollateral.Copy()
-		m.totalClientStorageFee = m.st.TotalClientStorageFee.Copy()
-		m.totalProviderLockedCollateral = m.st.TotalProviderLockedCollateral.Copy() */
-	}
+	// if m.lockedPermit != Invalid {
+	// 	lt, err := adt.AsBalanceTable(m.store, m.st.LockedTable)
+	// 	if err != nil {
+	// 		return nil, xerrors.Errorf("failed to load locked table: %w", err)
+	// 	}
+	// 	m.lockedTable = lt
+	// 	m.totalClientLockedCollateral = m.st.TotalClientLockedCollateral.Copy()
+	// 	m.totalClientStorageFee = m.st.TotalClientStorageFee.Copy()
+	// 	m.totalProviderLockedCollateral = m.st.TotalProviderLockedCollateral.Copy()
+	// }
 
-	if m.escrowPermit != Invalid {
-		et, err := adt.AsBalanceTable(m.store, m.st.EscrowTable)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to load escrow table: %w", err)
-		}
-		m.escrowTable = et
-	}
+	// if m.escrowPermit != Invalid {
+	// 	et, err := adt.AsBalanceTable(m.store, m.st.EscrowTable)
+	// 	if err != nil {
+	// 		return nil, xerrors.Errorf("failed to load escrow table: %w", err)
+	// 	}
+	// 	m.escrowTable = et
+	// }
 
 	if m.pendingPermit != Invalid {
 		pending, err := adt.AsMap(m.store, m.st.PendingProposals, builtin.DefaultHamtBitwidth)
@@ -427,15 +427,15 @@ func (m *marketStateMutation) withDealStates(permit MarketStateMutationPermissio
 	return m
 }
 
-func (m *marketStateMutation) withEscrowTable(permit MarketStateMutationPermission) *marketStateMutation {
-	m.escrowPermit = permit
-	return m
-}
+// func (m *marketStateMutation) withEscrowTable(permit MarketStateMutationPermission) *marketStateMutation {
+// 	m.escrowPermit = permit
+// 	return m
+// }
 
-func (m *marketStateMutation) withLockedTable(permit MarketStateMutationPermission) *marketStateMutation {
-	m.lockedPermit = permit
-	return m
-}
+// func (m *marketStateMutation) withLockedTable(permit MarketStateMutationPermission) *marketStateMutation {
+// 	m.lockedPermit = permit
+// 	return m
+// }
 
 func (m *marketStateMutation) withPendingProposals(permit MarketStateMutationPermission) *marketStateMutation {
 	m.pendingPermit = permit
@@ -476,20 +476,20 @@ func (m *marketStateMutation) commitState() error {
 		}
 	}
 
-	if m.lockedPermit == WritePermission {
-		if m.st.LockedTable, err = m.lockedTable.Root(); err != nil {
-			return xerrors.Errorf("failed to flush locked table: %w", err)
-		}
-		/* m.st.TotalClientLockedCollateral = m.totalClientLockedCollateral.Copy()
-		m.st.TotalProviderLockedCollateral = m.totalProviderLockedCollateral.Copy()
-		m.st.TotalClientStorageFee = m.totalClientStorageFee.Copy() */
-	}
+	// if m.lockedPermit == WritePermission {
+	// 	if m.st.LockedTable, err = m.lockedTable.Root(); err != nil {
+	// 		return xerrors.Errorf("failed to flush locked table: %w", err)
+	// 	}
+	// 	m.st.TotalClientLockedCollateral = m.totalClientLockedCollateral.Copy()
+	// 	m.st.TotalProviderLockedCollateral = m.totalProviderLockedCollateral.Copy()
+	// 	m.st.TotalClientStorageFee = m.totalClientStorageFee.Copy()
+	// }
 
-	if m.escrowPermit == WritePermission {
-		if m.st.EscrowTable, err = m.escrowTable.Root(); err != nil {
-			return xerrors.Errorf("failed to flush escrow table: %w", err)
-		}
-	}
+	// if m.escrowPermit == WritePermission {
+	// 	if m.st.EscrowTable, err = m.escrowTable.Root(); err != nil {
+	// 		return xerrors.Errorf("failed to flush escrow table: %w", err)
+	// 	}
+	// }
 
 	if m.pendingPermit == WritePermission {
 		if m.st.PendingProposals, err = m.pendingDeals.Root(); err != nil {

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -63,15 +64,15 @@ func TestRemoveAllError(t *testing.T) {
 }
 
 func TestMarketActor(t *testing.T) {
-	owner := tutil.NewIDAddr(t, 101)
-	provider := tutil.NewIDAddr(t, 102)
-	worker := tutil.NewIDAddr(t, 103)
-	client := tutil.NewIDAddr(t, 104)
-	expert := tutil.NewIDAddr(t, 105)
-	coinbase := tutil.NewIDAddr(t, 106)
-	minerAddrs := &minerAddrs{owner, worker, coinbase, provider, expert, nil}
+	// owner := tutil.NewIDAddr(t, 101)
+	// provider := tutil.NewIDAddr(t, 102)
+	// worker := tutil.NewIDAddr(t, 103)
+	// client := tutil.NewIDAddr(t, 104)
+	// expert := tutil.NewIDAddr(t, 105)
+	// coinbase := tutil.NewIDAddr(t, 106)
+	// minerAddrs := &minerAddrs{owner, worker, coinbase, provider, expert, nil}
 
-	var st market.State
+	// var st market.State
 
 	t.Run("simple construction", func(t *testing.T) {
 		actor := market.Actor{}
@@ -89,8 +90,8 @@ func TestMarketActor(t *testing.T) {
 
 		store := adt.AsStore(rt)
 
-		emptyBalanceTable, err := adt.StoreEmptyMap(store, adt.BalanceTableBitwidth)
-		assert.NoError(t, err)
+		// emptyBalanceTable, err := adt.StoreEmptyMap(store, adt.BalanceTableBitwidth)
+		// assert.NoError(t, err)
 
 		emptyMap, err := adt.StoreEmptyMap(store, builtin.DefaultHamtBitwidth)
 		assert.NoError(t, err)
@@ -110,319 +111,319 @@ func TestMarketActor(t *testing.T) {
 		assert.Equal(t, emptyProposalsArrayCid, state.Proposals)
 		assert.Equal(t, emptyStatesArrayCid, state.States)
 		assert.Equal(t, emptyMap, state.PendingProposals)
-		assert.Equal(t, emptyBalanceTable, state.EscrowTable)
-		assert.Equal(t, emptyBalanceTable, state.LockedTable)
+		// assert.Equal(t, emptyBalanceTable, state.EscrowTable)
+		// assert.Equal(t, emptyBalanceTable, state.LockedTable)
 		assert.Equal(t, abi.DealID(0), state.NextID)
 		assert.Equal(t, emptyMultiMap, state.DealOpsByEpoch)
 		assert.Equal(t, emptyMap, state.Quotas)
 		assert.Equal(t, abi.ChainEpoch(-1), state.LastCron)
 	})
 
-	t.Run("AddBalance", func(t *testing.T) {
-		t.Run("adds to provider escrow funds", func(t *testing.T) {
-			testCases := []struct {
-				delta int64
-				total int64
-			}{
-				{10, 10},
-				{20, 30},
-				{40, 70},
-			}
-
-			// Test adding provider funds from both worker and owner address
-			for _, callerAddr := range []address.Address{owner, worker} {
-				rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-
-				for _, tc := range testCases {
-					rt.SetCaller(callerAddr, builtin.AccountActorCodeID)
-					rt.SetReceived(abi.NewTokenAmount(tc.delta))
-					rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-					expectGetControlAddresses(rt, provider, owner, worker, coinbase)
-
-					rt.Call(actor.AddBalance, &provider)
-
-					rt.Verify()
-
-					rt.GetState(&st)
-					assert.Equal(t, abi.NewTokenAmount(tc.total), actor.getEscrowBalance(rt, provider))
-
-					actor.checkState(rt)
-				}
-			}
-		})
-
-		t.Run("fails unless called by an account actor", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-
-			rt.SetReceived(abi.NewTokenAmount(10))
-			rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-
-			rt.SetCaller(provider, builtin.StorageMinerActorCodeID)
-			rt.ExpectAbort(exitcode.SysErrForbidden, func() {
-				rt.Call(actor.AddBalance, &provider)
-			})
-
-			rt.Verify()
-
-			actor.checkState(rt)
-		})
-
-		t.Run("adds to non-provider escrow funds", func(t *testing.T) {
-			testCases := []struct {
-				delta int64
-				total int64
-			}{
-				{10, 10},
-				{20, 30},
-				{40, 70},
-			}
-
-			// Test adding non-provider funds from both worker and client addresses
-			for _, callerAddr := range []address.Address{client, worker} {
-				rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-
-				for _, tc := range testCases {
-					rt.SetCaller(callerAddr, builtin.AccountActorCodeID)
-					rt.SetReceived(abi.NewTokenAmount(tc.delta))
-					rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-
-					rt.Call(actor.AddBalance, &callerAddr)
-
-					rt.Verify()
-
-					rt.GetState(&st)
-					assert.Equal(t, abi.NewTokenAmount(tc.total), actor.getEscrowBalance(rt, callerAddr))
-
-					actor.checkState(rt)
-				}
-			}
-		})
-
-		t.Run("fail when balance is zero", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-
-			rt.SetCaller(tutil.NewIDAddr(t, 101), builtin.AccountActorCodeID)
-			rt.SetReceived(big.Zero())
-
-			rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-				rt.Call(actor.AddBalance, &provider)
-			})
-			rt.Verify()
-
-			actor.checkState(rt)
-		})
-	})
-
-	t.Run("WithdrawBalance", func(t *testing.T) {
-		startEpoch := abi.ChainEpoch(10)
-		// endEpoch := startEpoch + 200*builtin.EpochsInDay
-		publishEpoch := abi.ChainEpoch(5)
-
-		t.Run("fails with a negative withdraw amount", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// t.Run("AddBalance", func(t *testing.T) {
+	// 	t.Run("adds to provider escrow funds", func(t *testing.T) {
+	// 		testCases := []struct {
+	// 			delta int64
+	// 			total int64
+	// 		}{
+	// 			{10, 10},
+	// 			{20, 30},
+	// 			{40, 70},
+	// 		}
+
+	// 		// Test adding provider funds from both worker and owner address
+	// 		for _, callerAddr := range []address.Address{owner, worker} {
+	// 			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+
+	// 			for _, tc := range testCases {
+	// 				rt.SetCaller(callerAddr, builtin.AccountActorCodeID)
+	// 				rt.SetReceived(abi.NewTokenAmount(tc.delta))
+	// 				rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+	// 				expectGetControlAddresses(rt, provider, owner, worker, coinbase)
+
+	// 				rt.Call(actor.AddBalance, &provider)
+
+	// 				rt.Verify()
+
+	// 				rt.GetState(&st)
+	// 				assert.Equal(t, abi.NewTokenAmount(tc.total), actor.getEscrowBalance(rt, provider))
+
+	// 				actor.checkState(rt)
+	// 			}
+	// 		}
+	// 	})
+
+	// 	t.Run("fails unless called by an account actor", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+
+	// 		rt.SetReceived(abi.NewTokenAmount(10))
+	// 		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+
+	// 		rt.SetCaller(provider, builtin.StorageMinerActorCodeID)
+	// 		rt.ExpectAbort(exitcode.SysErrForbidden, func() {
+	// 			rt.Call(actor.AddBalance, &provider)
+	// 		})
+
+	// 		rt.Verify()
+
+	// 		actor.checkState(rt)
+	// 	})
+
+	// 	t.Run("adds to non-provider escrow funds", func(t *testing.T) {
+	// 		testCases := []struct {
+	// 			delta int64
+	// 			total int64
+	// 		}{
+	// 			{10, 10},
+	// 			{20, 30},
+	// 			{40, 70},
+	// 		}
+
+	// 		// Test adding non-provider funds from both worker and client addresses
+	// 		for _, callerAddr := range []address.Address{client, worker} {
+	// 			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+
+	// 			for _, tc := range testCases {
+	// 				rt.SetCaller(callerAddr, builtin.AccountActorCodeID)
+	// 				rt.SetReceived(abi.NewTokenAmount(tc.delta))
+	// 				rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+
+	// 				rt.Call(actor.AddBalance, &callerAddr)
+
+	// 				rt.Verify()
+
+	// 				rt.GetState(&st)
+	// 				assert.Equal(t, abi.NewTokenAmount(tc.total), actor.getEscrowBalance(rt, callerAddr))
+
+	// 				actor.checkState(rt)
+	// 			}
+	// 		}
+	// 	})
+
+	// 	t.Run("fail when balance is zero", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+
+	// 		rt.SetCaller(tutil.NewIDAddr(t, 101), builtin.AccountActorCodeID)
+	// 		rt.SetReceived(big.Zero())
+
+	// 		rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+	// 			rt.Call(actor.AddBalance, &provider)
+	// 		})
+	// 		rt.Verify()
+
+	// 		actor.checkState(rt)
+	// 	})
+	// })
+
+	// t.Run("WithdrawBalance", func(t *testing.T) {
+	// 	startEpoch := abi.ChainEpoch(10)
+	// 	// endEpoch := startEpoch + 200*builtin.EpochsInDay
+	// 	publishEpoch := abi.ChainEpoch(5)
+
+	// 	t.Run("fails with a negative withdraw amount", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
 
-			params := market.WithdrawBalanceParams{
-				ProviderOrClientAddress: provider,
-				Amount:                  abi.NewTokenAmount(-1),
-			}
+	// 		params := market.WithdrawBalanceParams{
+	// 			ProviderOrClientAddress: provider,
+	// 			Amount:                  abi.NewTokenAmount(-1),
+	// 		}
 
-			rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
-				rt.Call(actor.WithdrawBalance, &params)
-			})
+	// 		rt.ExpectAbort(exitcode.ErrIllegalArgument, func() {
+	// 			rt.Call(actor.WithdrawBalance, &params)
+	// 		})
 
-			rt.Verify()
-			actor.checkState(rt)
-		})
+	// 		rt.Verify()
+	// 		actor.checkState(rt)
+	// 	})
 
-		t.Run("fails if withdraw from non provider funds is not initiated by the recipient", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20))
+	// 	t.Run("fails if withdraw from non provider funds is not initiated by the recipient", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// 		actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20))
 
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, client))
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, client))
 
-			rt.ExpectValidateCallerAddr(client)
-			params := market.WithdrawBalanceParams{
-				ProviderOrClientAddress: client,
-				Amount:                  abi.NewTokenAmount(1),
-			}
+	// 		rt.ExpectValidateCallerAddr(client)
+	// 		params := market.WithdrawBalanceParams{
+	// 			ProviderOrClientAddress: client,
+	// 			Amount:                  abi.NewTokenAmount(1),
+	// 		}
 
-			// caller is not the recipient
-			rt.SetCaller(tutil.NewIDAddr(t, 909), builtin.AccountActorCodeID)
-			rt.ExpectAbort(exitcode.SysErrForbidden, func() {
-				rt.Call(actor.WithdrawBalance, &params)
-			})
-			rt.Verify()
+	// 		// caller is not the recipient
+	// 		rt.SetCaller(tutil.NewIDAddr(t, 909), builtin.AccountActorCodeID)
+	// 		rt.ExpectAbort(exitcode.SysErrForbidden, func() {
+	// 			rt.Call(actor.WithdrawBalance, &params)
+	// 		})
+	// 		rt.Verify()
 
-			// verify there was no withdrawal
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, client))
+	// 		// verify there was no withdrawal
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, client))
 
-			actor.checkState(rt)
-		})
+	// 		actor.checkState(rt)
+	// 	})
 
-		t.Run("fails if withdraw from provider funds is not initiated by the owner or worker", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			actor.addProviderFunds(rt, abi.NewTokenAmount(20), minerAddrs)
+	// 	t.Run("fails if withdraw from provider funds is not initiated by the owner or worker", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// 		actor.addProviderFunds(rt, abi.NewTokenAmount(20), minerAddrs)
 
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
 
-			// only signing parties can add balance for client AND provider.
-			rt.ExpectValidateCallerAddr(owner, worker)
-			params := market.WithdrawBalanceParams{
-				ProviderOrClientAddress: provider,
-				Amount:                  abi.NewTokenAmount(1),
-			}
+	// 		// only signing parties can add balance for client AND provider.
+	// 		rt.ExpectValidateCallerAddr(owner, worker)
+	// 		params := market.WithdrawBalanceParams{
+	// 			ProviderOrClientAddress: provider,
+	// 			Amount:                  abi.NewTokenAmount(1),
+	// 		}
 
-			// caller is not owner or worker
-			rt.SetCaller(tutil.NewIDAddr(t, 909), builtin.AccountActorCodeID)
-			expectGetControlAddresses(rt, provider, owner, worker, coinbase)
+	// 		// caller is not owner or worker
+	// 		rt.SetCaller(tutil.NewIDAddr(t, 909), builtin.AccountActorCodeID)
+	// 		expectGetControlAddresses(rt, provider, owner, worker, coinbase)
 
-			rt.ExpectAbort(exitcode.SysErrForbidden, func() {
-				rt.Call(actor.WithdrawBalance, &params)
-			})
-			rt.Verify()
-
-			// verify there was no withdrawal
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
-
-			actor.checkState(rt)
-		})
+	// 		rt.ExpectAbort(exitcode.SysErrForbidden, func() {
+	// 			rt.Call(actor.WithdrawBalance, &params)
+	// 		})
+	// 		rt.Verify()
+
+	// 		// verify there was no withdrawal
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
+
+	// 		actor.checkState(rt)
+	// 	})
 
-		t.Run("withdraws from provider escrow funds and sends to owner", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// 	t.Run("withdraws from provider escrow funds and sends to owner", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
 
-			actor.addProviderFunds(rt, abi.NewTokenAmount(20), minerAddrs)
-
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
+	// 		actor.addProviderFunds(rt, abi.NewTokenAmount(20), minerAddrs)
+
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
 
-			// worker calls WithdrawBalance, balance is transferred to owner
-			withdrawAmount := abi.NewTokenAmount(1)
-			actor.withdrawProviderBalance(rt, withdrawAmount, withdrawAmount, minerAddrs)
+	// 		// worker calls WithdrawBalance, balance is transferred to owner
+	// 		withdrawAmount := abi.NewTokenAmount(1)
+	// 		actor.withdrawProviderBalance(rt, withdrawAmount, withdrawAmount, minerAddrs)
 
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(19), actor.getEscrowBalance(rt, provider))
-
-			actor.checkState(rt)
-		})
-
-		t.Run("withdraws from non-provider escrow funds", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20))
-
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, client))
-
-			withdrawAmount := abi.NewTokenAmount(1)
-			actor.withdrawClientBalance(rt, client, withdrawAmount, withdrawAmount)
-
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(19), actor.getEscrowBalance(rt, client))
-
-			actor.checkState(rt)
-		})
-
-		t.Run("client withdrawing more than escrow balance limits to available funds", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20))
-
-			// withdraw amount greater than escrow balance
-			withdrawAmount := abi.NewTokenAmount(25)
-			expectedAmount := abi.NewTokenAmount(20)
-			actor.withdrawClientBalance(rt, client, withdrawAmount, expectedAmount)
-
-			actor.assertAccountBalance(rt, client, big.Zero(), big.Zero())
-
-			actor.checkState(rt)
-		})
-
-		t.Run("worker withdrawing more than escrow balance limits to available funds", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			actor.addProviderFunds(rt, abi.NewTokenAmount(20), minerAddrs)
-
-			rt.GetState(&st)
-			assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
-
-			// withdraw amount greater than escrow balance
-			withdrawAmount := abi.NewTokenAmount(25)
-			actualWithdrawn := abi.NewTokenAmount(20)
-			actor.withdrawProviderBalance(rt, withdrawAmount, actualWithdrawn, minerAddrs)
-
-			actor.assertAccountBalance(rt, provider, big.Zero(), big.Zero())
-
-			actor.checkState(rt)
-		})
-
-		t.Run("balance after withdrawal must ALWAYS be greater than or equal to locked amount", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-			rt.SetAddressActorType(expert, builtin.ExpertActorCodeID)
-
-			// publish the deal so that client AND provider collateral is locked
-			rt.SetEpoch(publishEpoch)
-			dealId := actor.generateAndPublishDealWithFunds(rt, client, minerAddrs, startEpoch, startEpoch, big.Zero(), big.Zero())
-			deal := actor.getDealProposal(rt, dealId)
-			rt.GetState(&st)
-			require.Equal(t, deal.StartEpoch, startEpoch)
-			/* require.Equal(t, deal.ProviderCollateral, actor.getEscrowBalance(rt, provider))
-			require.Equal(t, deal.ClientBalanceRequirement(), actor.getEscrowBalance(rt, client)) */
-
-			withDrawAmt := abi.NewTokenAmount(1)
-			withDrawableAmt := abi.NewTokenAmount(0)
-			// client cannot withdraw any funds since all it's balance is locked
-			actor.withdrawClientBalance(rt, client, withDrawAmt, withDrawableAmt)
-			//  provider cannot withdraw any funds since all it's balance is locked
-			actor.withdrawProviderBalance(rt, withDrawAmt, withDrawableAmt, minerAddrs)
-
-			// add some more funds to the provider & ensure withdrawal is limited by the locked funds
-			withDrawAmt = abi.NewTokenAmount(30)
-			withDrawableAmt = abi.NewTokenAmount(25)
-			actor.addProviderFunds(rt, withDrawableAmt, minerAddrs)
-			actor.withdrawProviderBalance(rt, withDrawAmt, withDrawableAmt, minerAddrs)
-
-			// add some more funds to the client & ensure withdrawal is limited by the locked funds
-			actor.addParticipantFunds(rt, client, withDrawableAmt)
-			actor.withdrawClientBalance(rt, client, withDrawAmt, withDrawableAmt)
-
-			actor.checkState(rt)
-		})
-
-		t.Run("worker balance after withdrawal must account for slashed funds", func(t *testing.T) {
-			rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-
-			// publish deal
-			rt.SetEpoch(publishEpoch)
-			dealID := actor.generateAndPublishDealWithFunds(rt, client, minerAddrs, startEpoch, startEpoch, big.Zero(), big.Zero())
-
-			// activate the deal
-			actor.activateDeals(rt /* endEpoch+1, */, provider, publishEpoch, dealID)
-			st := actor.getDealState(rt, dealID)
-			require.EqualValues(t, publishEpoch, st.SectorStartEpoch)
-
-			// slash the deal
-			newEpoch := publishEpoch + 1
-			rt.SetEpoch(newEpoch)
-			actor.terminateDeals(rt, provider, dealID)
-			st = actor.getDealState(rt, dealID)
-			require.EqualValues(t, publishEpoch+1, st.SlashEpoch)
-
-			// provider cannot withdraw any funds since all it's balance is locked
-			withDrawAmt := abi.NewTokenAmount(1)
-			actualWithdrawn := abi.NewTokenAmount(0)
-			actor.withdrawProviderBalance(rt, withDrawAmt, actualWithdrawn, minerAddrs)
-
-			// add some more funds to the provider & ensure withdrawal is limited by the locked funds
-			actor.addProviderFunds(rt, abi.NewTokenAmount(25), minerAddrs)
-			withDrawAmt = abi.NewTokenAmount(30)
-			actualWithdrawn = abi.NewTokenAmount(25)
-
-			actor.withdrawProviderBalance(rt, withDrawAmt, actualWithdrawn, minerAddrs)
-
-			actor.checkState(rt)
-		})
-	})
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(19), actor.getEscrowBalance(rt, provider))
+
+	// 		actor.checkState(rt)
+	// 	})
+
+	// 	t.Run("withdraws from non-provider escrow funds", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// 		actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20))
+
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, client))
+
+	// 		withdrawAmount := abi.NewTokenAmount(1)
+	// 		actor.withdrawClientBalance(rt, client, withdrawAmount, withdrawAmount)
+
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(19), actor.getEscrowBalance(rt, client))
+
+	// 		actor.checkState(rt)
+	// 	})
+
+	// 	t.Run("client withdrawing more than escrow balance limits to available funds", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// 		actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20))
+
+	// 		// withdraw amount greater than escrow balance
+	// 		withdrawAmount := abi.NewTokenAmount(25)
+	// 		expectedAmount := abi.NewTokenAmount(20)
+	// 		actor.withdrawClientBalance(rt, client, withdrawAmount, expectedAmount)
+
+	// 		actor.assertAccountBalance(rt, client, big.Zero(), big.Zero())
+
+	// 		actor.checkState(rt)
+	// 	})
+
+	// 	t.Run("worker withdrawing more than escrow balance limits to available funds", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// 		actor.addProviderFunds(rt, abi.NewTokenAmount(20), minerAddrs)
+
+	// 		rt.GetState(&st)
+	// 		assert.Equal(t, abi.NewTokenAmount(20), actor.getEscrowBalance(rt, provider))
+
+	// 		// withdraw amount greater than escrow balance
+	// 		withdrawAmount := abi.NewTokenAmount(25)
+	// 		actualWithdrawn := abi.NewTokenAmount(20)
+	// 		actor.withdrawProviderBalance(rt, withdrawAmount, actualWithdrawn, minerAddrs)
+
+	// 		actor.assertAccountBalance(rt, provider, big.Zero(), big.Zero())
+
+	// 		actor.checkState(rt)
+	// 	})
+
+	// 	t.Run("balance after withdrawal must ALWAYS be greater than or equal to locked amount", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+	// 		rt.SetAddressActorType(expert, builtin.ExpertActorCodeID)
+
+	// 		// publish the deal so that client AND provider collateral is locked
+	// 		rt.SetEpoch(publishEpoch)
+	// 		dealId := actor.generateAndPublishDealWithFunds(rt, client, minerAddrs, startEpoch, startEpoch, big.Zero(), big.Zero())
+	// 		deal := actor.getDealProposal(rt, dealId)
+	// 		rt.GetState(&st)
+	// 		require.Equal(t, deal.StartEpoch, startEpoch)
+	// 		/* require.Equal(t, deal.ProviderCollateral, actor.getEscrowBalance(rt, provider))
+	// 		require.Equal(t, deal.ClientBalanceRequirement(), actor.getEscrowBalance(rt, client)) */
+
+	// 		withDrawAmt := abi.NewTokenAmount(1)
+	// 		withDrawableAmt := abi.NewTokenAmount(0)
+	// 		// client cannot withdraw any funds since all it's balance is locked
+	// 		actor.withdrawClientBalance(rt, client, withDrawAmt, withDrawableAmt)
+	// 		//  provider cannot withdraw any funds since all it's balance is locked
+	// 		actor.withdrawProviderBalance(rt, withDrawAmt, withDrawableAmt, minerAddrs)
+
+	// 		// add some more funds to the provider & ensure withdrawal is limited by the locked funds
+	// 		withDrawAmt = abi.NewTokenAmount(30)
+	// 		withDrawableAmt = abi.NewTokenAmount(25)
+	// 		actor.addProviderFunds(rt, withDrawableAmt, minerAddrs)
+	// 		actor.withdrawProviderBalance(rt, withDrawAmt, withDrawableAmt, minerAddrs)
+
+	// 		// add some more funds to the client & ensure withdrawal is limited by the locked funds
+	// 		actor.addParticipantFunds(rt, client, withDrawableAmt)
+	// 		actor.withdrawClientBalance(rt, client, withDrawAmt, withDrawableAmt)
+
+	// 		actor.checkState(rt)
+	// 	})
+
+	// 	t.Run("worker balance after withdrawal must account for slashed funds", func(t *testing.T) {
+	// 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+
+	// 		// publish deal
+	// 		rt.SetEpoch(publishEpoch)
+	// 		dealID := actor.generateAndPublishDealWithFunds(rt, client, minerAddrs, startEpoch, startEpoch, big.Zero(), big.Zero())
+
+	// 		// activate the deal
+	// 		actor.activateDeals(rt /* endEpoch+1, */, provider, publishEpoch, dealID)
+	// 		st := actor.getDealState(rt, dealID)
+	// 		require.EqualValues(t, publishEpoch, st.SectorStartEpoch)
+
+	// 		// slash the deal
+	// 		newEpoch := publishEpoch + 1
+	// 		rt.SetEpoch(newEpoch)
+	// 		actor.terminateDeals(rt, provider, dealID)
+	// 		st = actor.getDealState(rt, dealID)
+	// 		require.EqualValues(t, publishEpoch+1, st.SlashEpoch)
+
+	// 		// provider cannot withdraw any funds since all it's balance is locked
+	// 		withDrawAmt := abi.NewTokenAmount(1)
+	// 		actualWithdrawn := abi.NewTokenAmount(0)
+	// 		actor.withdrawProviderBalance(rt, withDrawAmt, actualWithdrawn, minerAddrs)
+
+	// 		// add some more funds to the provider & ensure withdrawal is limited by the locked funds
+	// 		actor.addProviderFunds(rt, abi.NewTokenAmount(25), minerAddrs)
+	// 		withDrawAmt = abi.NewTokenAmount(30)
+	// 		actualWithdrawn = abi.NewTokenAmount(25)
+
+	// 		actor.withdrawProviderBalance(rt, withDrawAmt, actualWithdrawn, minerAddrs)
+
+	// 		actor.checkState(rt)
+	// 	})
+	// })
 }
 
 func TestPublishStorageDeals(t *testing.T) {
@@ -479,18 +480,18 @@ func TestPublishStorageDeals(t *testing.T) {
 		// add funds for cient using it's BLS address -> will be resolved and persisted
 		actor.addParticipantFunds(rt, clientBls, deal.ClientBalanceRequirement())
 		require.EqualValues(t, deal.ClientBalanceRequirement(), actor.getEscrowBalance(rt, clientResolved)) */
-		require.EqualValues(t, big.Zero(), actor.getEscrowBalance(rt, clientResolved))
+		// require.EqualValues(t, big.Zero(), actor.getEscrowBalance(rt, clientResolved))
 
-		// add funds for provider using it's BLS address -> will be resolved and persisted
-		rt.SetReceived(big.NewInt(10))
-		rt.SetCaller(mAddr.owner, builtin.AccountActorCodeID)
-		rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
-		expectGetControlAddresses(rt, providerResolved, mAddr.owner, mAddr.worker, mAddr.coinbase)
-		rt.Call(actor.AddBalance, &mAddr.provider)
-		rt.Verify()
-		/* rt.SetBalance(big.Add(rt.Balance(), deal.ProviderCollateral))
-		require.EqualValues(t, deal.ProviderCollateral, actor.getEscrowBalance(rt, providerResolved)) */
-		require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, providerResolved))
+		// // add funds for provider using it's BLS address -> will be resolved and persisted
+		// rt.SetReceived(big.NewInt(10))
+		// rt.SetCaller(mAddr.owner, builtin.AccountActorCodeID)
+		// rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+		// expectGetControlAddresses(rt, providerResolved, mAddr.owner, mAddr.worker, mAddr.coinbase)
+		// rt.Call(actor.AddBalance, &mAddr.provider)
+		// rt.Verify()
+		// rt.SetBalance(big.Add(rt.Balance(), deal.ProviderCollateral))
+		// require.EqualValues(t, deal.ProviderCollateral, actor.getEscrowBalance(rt, providerResolved))
+		// require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, providerResolved))
 
 		// publish deal using the BLS addresses
 		rt.SetCaller(mAddr.worker, builtin.AccountActorCodeID)
@@ -595,6 +596,24 @@ func TestPublishStorageDeals(t *testing.T) {
 		actor.checkState(rt)
 	})
 
+	t.Run("publish duplicate deal", func(t *testing.T) {
+		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
+		client := tutil.NewIDAddr(t, 900)
+
+		rt.SetEpoch(10)
+		deal := actor.generateRandDealAndAddFunds(rt, client, mAddr, startEpoch)
+		rt.SetCaller(worker, builtin.AccountActorCodeID)
+		dealIds := actor.publishDeals(rt, mAddr, publishDealReq{deal: deal})
+		fmt.Println(dealIds)
+
+		rt.SetCaller(worker, builtin.AccountActorCodeID)
+		rt.ExpectAbortContainsMessage(exitcode.ErrIllegalArgument, fmt.Sprintf("cannot publish duplicate pieces %s", deal.PieceCID), func() {
+			actor.publishDeals(rt, mAddr, publishDealReq{deal: deal})
+		})
+
+		actor.checkState(rt)
+	})
+
 	t.Run("publish multiple deals for different clients and ensure balances are correct", func(t *testing.T) {
 		rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
 		client1 := tutil.NewIDAddr(t, 900)
@@ -619,14 +638,14 @@ func TestPublishStorageDeals(t *testing.T) {
 		client1Locked := actor.getLockedBalance(rt, client1)
 		client2Locked := actor.getLockedBalance(rt, client2)
 		client3Locked := actor.getLockedBalance(rt, client3) */
-		require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, client1))
-		require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, client1))
-		require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, client2))
-		require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, client2))
-		require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, client3))
-		require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, client3))
-		require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, provider))
-		require.EqualValues(t, big.NewInt(30), actor.getEscrowBalance(rt, provider))
+		// require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, client1))
+		// require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, client1))
+		// require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, client2))
+		// require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, client2))
+		// require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, client3))
+		// require.EqualValues(t, big.NewInt(10), actor.getEscrowBalance(rt, client3))
+		// require.EqualValues(t, big.Zero(), actor.getLockedBalance(rt, provider))
+		// require.EqualValues(t, big.NewInt(30), actor.getEscrowBalance(rt, provider))
 
 		/* // assert locked funds dealStates
 		rt.GetState(&st)
@@ -642,7 +661,7 @@ func TestPublishStorageDeals(t *testing.T) {
 		rt.SetCaller(worker, builtin.AccountActorCodeID)
 		actor.publishDeals(rt, mAddr, publishDealReq{deal: deal4}, publishDealReq{deal: deal5})
 
-		require.EqualValues(t, big.NewInt(30), actor.getEscrowBalance(rt, client3))
+		// require.EqualValues(t, big.NewInt(30), actor.getEscrowBalance(rt, client3))
 		/* // assert locked balances for clients and provider
 		rt.GetState(&st)
 		providerLocked = big.Sum(providerLocked, deal4.ProviderCollateral, deal5.ProviderCollateral)
@@ -695,8 +714,8 @@ func TestPublishStorageDeals(t *testing.T) {
 		totalStorageFee = big.Add(totalStorageFee, big.Add(deal6.TotalStorageFee(), deal7.TotalStorageFee()))
 		require.EqualValues(t, totalStorageFee, st.TotalClientStorageFee) */
 
-		require.EqualValues(t, big.NewInt(20), actor.getEscrowBalance(rt, provider2))
-		require.EqualValues(t, big.NewInt(30), actor.getEscrowBalance(rt, client1))
+		// require.EqualValues(t, big.NewInt(20), actor.getEscrowBalance(rt, provider2))
+		// require.EqualValues(t, big.NewInt(30), actor.getEscrowBalance(rt, client1))
 
 		actor.checkState(rt)
 	})
@@ -1591,9 +1610,10 @@ func TestCronTick(t *testing.T) {
 		// move the current epoch to startEpoch
 		current := startEpoch
 		rt.SetEpoch(current)
-		pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, current, dealId)
-		require.EqualValues(t, big.Zero(), pay)
-		require.EqualValues(t, big.Zero(), slashed)
+		// pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, current, dealId)
+		// require.EqualValues(t, big.Zero(), pay)
+		// require.EqualValues(t, big.Zero(), slashed)
+		actor.cronTick(rt)
 
 		// deal proposal and state should NOT be deleted
 		require.NotNil(t, actor.getDealProposal(rt, dealId))
@@ -1711,10 +1731,11 @@ func TestRandomCronEpochDuringPublish(t *testing.T) {
 
 		// first cron tick at process epoch will make payment and schedule the deal for next epoch
 		rt.SetEpoch(processEpoch)
-		pay, _ := actor.cronTickAndAssertBalances(rt, client, provider, processEpoch, dealId)
-		/* duration := big.Sub(big.NewInt(int64(processEpoch)), big.NewInt(int64(startEpoch)))
-		require.EqualValues(t, big.Mul(duration, d.StoragePricePerEpoch), pay) */
-		require.EqualValues(t, big.Zero(), pay)
+		// pay, _ := actor.cronTickAndAssertBalances(rt, client, provider, processEpoch, dealId)
+		// /* duration := big.Sub(big.NewInt(int64(processEpoch)), big.NewInt(int64(startEpoch)))
+		// require.EqualValues(t, big.Mul(duration, d.StoragePricePerEpoch), pay) */
+		// require.EqualValues(t, big.Zero(), pay)
+		actor.cronTick(rt)
 
 		/* // payment at next epoch
 		current := processEpoch + market.DealUpdatesInterval
@@ -1930,17 +1951,17 @@ func TestCronTickTimedoutDeals(t *testing.T) {
 		dealId := actor.generateAndPublishDeal(rt, client, mAddrs, startEpoch /* endEpoch, */, startEpoch)
 		d := actor.getDealProposal(rt, dealId)
 
-		cEscrow := actor.getEscrowBalance(rt, client)
+		// cEscrow := actor.getEscrowBalance(rt, client)
 
 		// do a cron tick for it -> should time out and get slashed
 		rt.SetEpoch(startEpoch)
 		// rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, d.ProviderCollateral, nil, exitcode.Ok)
 		actor.cronTick(rt)
 
-		require.Equal(t, cEscrow, actor.getEscrowBalance(rt, client))
-		require.Equal(t, big.Zero(), actor.getLockedBalance(rt, client))
+		// require.Equal(t, cEscrow, actor.getEscrowBalance(rt, client))
+		// require.Equal(t, big.Zero(), actor.getLockedBalance(rt, client))
 
-		actor.assertAccountBalance(rt, provider, big.NewInt(10), big.Zero())
+		// actor.assertAccountBalance(rt, provider, big.NewInt(10), big.Zero())
 
 		actor.assertDealDeleted(rt, dealId, d)
 
@@ -2031,7 +2052,7 @@ func TestCronTickTimedoutDeals(t *testing.T) {
 		// a second cron tick for the same epoch should not change anything
 		actor.cronTickNoChange(rt, client, provider)
 
-		actor.assertAccountBalance(rt, provider, big.NewInt(10*3), big.Zero())
+		// actor.assertAccountBalance(rt, provider, big.NewInt(10*3), big.Zero())
 		actor.assertDealDeleted(rt, dealIds[0], &deal1)
 		actor.assertDealDeleted(rt, dealIds[1], &deal2)
 		actor.assertDealDeleted(rt, dealIds[2], &deal3)
@@ -2126,21 +2147,22 @@ func TestCronTickDealSlashing(t *testing.T) {
 				//  cron tick
 				rt.SetEpoch(tc.cronTickEpoch)
 
-				pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, tc.cronTickEpoch, dealId)
-				require.EqualValues(t, big.Zero(), pay)
-				// require.EqualValues(t, d.ProviderCollateral, slashed)
-				require.EqualValues(t, big.Zero(), slashed)
+				// pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, tc.cronTickEpoch, dealId)
+				// require.EqualValues(t, big.Zero(), pay)
+				// // require.EqualValues(t, d.ProviderCollateral, slashed)
+				// require.EqualValues(t, big.Zero(), slashed)
+				actor.cronTick(rt)
 				actor.assertDealDeleted(rt, dealId, d)
 
 				// // if there has been no payment, provider will have zero balance and hence should be slashed
 				// if tc.payment.Equals(big.Zero()) {
-				actor.assertAccountBalance(rt, provider, big.NewInt(10), big.Zero())
+				// actor.assertAccountBalance(rt, provider, big.NewInt(10), big.Zero())
 				// client balances should not change
-				cLocked := actor.getLockedBalance(rt, client)
-				cEscrow := actor.getEscrowBalance(rt, client)
+				// cLocked := actor.getLockedBalance(rt, client)
+				// cEscrow := actor.getEscrowBalance(rt, client)
 				actor.cronTick(rt)
-				require.EqualValues(t, cEscrow, actor.getEscrowBalance(rt, client))
-				require.EqualValues(t, cLocked, actor.getLockedBalance(rt, client))
+				// require.EqualValues(t, cEscrow, actor.getEscrowBalance(rt, client))
+				// require.EqualValues(t, cLocked, actor.getLockedBalance(rt, client))
 				// } else {
 				// 	// running cron tick again dosen't do anything
 				// 	actor.cronTickNoChange(rt, client, provider)
@@ -2168,11 +2190,12 @@ func TestCronTickDealSlashing(t *testing.T) {
 		// on the next cron tick, it will be processed as expired
 		current = endEpoch + 300
 		rt.SetEpoch(current)
-		pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, current, dealId)
-		/* duration := big.NewInt(int64(endEpoch - startEpoch)) // end - start
-		require.EqualValues(t, big.Mul(duration, d.StoragePricePerEpoch), pay) */
-		require.EqualValues(t, big.Zero(), pay)
-		require.EqualValues(t, big.Zero(), slashed)
+		// pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, current, dealId)
+		// /* duration := big.NewInt(int64(endEpoch - startEpoch)) // end - start
+		// require.EqualValues(t, big.Mul(duration, d.StoragePricePerEpoch), pay) */
+		// require.EqualValues(t, big.Zero(), pay)
+		// require.EqualValues(t, big.Zero(), slashed)
+		actor.cronTick(rt)
 
 		// deal should be deleted as it should have expired
 		actor.assertDealDeleted(rt, dealId, d)
@@ -2189,9 +2212,10 @@ func TestCronTickDealSlashing(t *testing.T) {
 		// move the current epoch to startEpoch so next cron epoch will be start + Interval
 		current := startEpoch
 		rt.SetEpoch(current)
-		pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, current, dealId)
-		require.EqualValues(t, big.Zero(), pay)
-		require.EqualValues(t, big.Zero(), slashed)
+		// pay, slashed := actor.cronTickAndAssertBalances(rt, client, provider, current, dealId)
+		// require.EqualValues(t, big.Zero(), pay)
+		// require.EqualValues(t, big.Zero(), slashed)
+		actor.cronTick(rt)
 
 		// set slash epoch of deal
 		slashEpoch := current + 10
@@ -2200,13 +2224,15 @@ func TestCronTickDealSlashing(t *testing.T) {
 
 		current2 := current + 10 + market.DealTerminateLatency + abi.ChainEpoch(dealId) - 1
 		rt.SetEpoch(current2)
-		actor.cronTickAndAssertBalances(rt, client, provider, current2, dealId)
+		// actor.cronTickAndAssertBalances(rt, client, provider, current2, dealId)
+		actor.cronTick(rt)
 		actor.getDealState(rt, dealId)
 
 		// deal should be deleted as it should have expired
 		current3 := current2 + 1
 		rt.SetEpoch(current3)
-		actor.cronTickAndAssertBalances(rt, client, provider, current3, dealId)
+		// actor.cronTickAndAssertBalances(rt, client, provider, current3, dealId)
+		actor.cronTick(rt)
 		actor.assertDealDeleted(rt, dealId, d)
 
 		actor.checkState(rt)
@@ -2358,15 +2384,15 @@ func TestMarketActorDeals(t *testing.T) {
 	coinbase := tutil.NewIDAddr(t, 106)
 	minerAddrs := &minerAddrs{owner, worker, coinbase, provider, expertAddr, nil}
 
-	var st market.State
+	// var st market.State
 
 	// Test adding provider funds from both worker and owner address
 	rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-	actor.addProviderFunds(rt, abi.NewTokenAmount(20000000), minerAddrs)
-	rt.GetState(&st)
-	assert.Equal(t, abi.NewTokenAmount(20000000), actor.getEscrowBalance(rt, provider))
+	// actor.addProviderFunds(rt, abi.NewTokenAmount(20000000), minerAddrs)
+	// rt.GetState(&st)
+	// assert.Equal(t, abi.NewTokenAmount(20000000), actor.getEscrowBalance(rt, provider))
 
-	actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20000000))
+	// actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20000000))
 
 	dealProposal := generateDealProposal(client, provider, abi.ChainEpoch(1) /* , abi.ChainEpoch(200*builtin.EpochsInDay) */)
 	params := &market.PublishStorageDealsParams{Deals: []market.ClientDealProposal{{Proposal: dealProposal, DataRef: market.StorageDataRef{Expert: expertAddr.String()}}}}
@@ -2434,15 +2460,15 @@ func TestMaxDealLabelSize(t *testing.T) {
 	coinbase := tutil.NewIDAddr(t, 106)
 	minerAddrs := &minerAddrs{owner, worker, coinbase, provider, expertAddr, nil}
 
-	var st market.State
+	// var st market.State
 
 	// Test adding provider funds from both worker and owner address
 	rt, actor := basicMarketSetup(t, owner, provider, worker, client, coinbase)
-	actor.addProviderFunds(rt, abi.NewTokenAmount(20000000), minerAddrs)
-	rt.GetState(&st)
-	assert.Equal(t, abi.NewTokenAmount(20000000), actor.getEscrowBalance(rt, provider))
+	// actor.addProviderFunds(rt, abi.NewTokenAmount(20000000), minerAddrs)
+	// rt.GetState(&st)
+	// assert.Equal(t, abi.NewTokenAmount(20000000), actor.getEscrowBalance(rt, provider))
 
-	actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20000000))
+	// actor.addParticipantFunds(rt, client, abi.NewTokenAmount(20000000))
 
 	dealProposal := generateDealProposal(client, provider, abi.ChainEpoch(1) /* , abi.ChainEpoch(200*builtin.EpochsInDay) */)
 	dealProposal.Label = string(make([]byte, market.DealMaxLabelSize))
@@ -2948,146 +2974,146 @@ type minerAddrs struct {
 	control  []address.Address
 }
 
-// addProviderFunds is a helper method to setup provider market funds
-func (h *marketActorTestHarness) addProviderFunds(rt *mock.Runtime, amount abi.TokenAmount, minerAddrs *minerAddrs) {
-	rt.SetReceived(amount)
-	rt.SetAddressActorType(minerAddrs.provider, builtin.StorageMinerActorCodeID)
-	rt.SetCaller(minerAddrs.owner, builtin.AccountActorCodeID)
-	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+// // addProviderFunds is a helper method to setup provider market funds
+// func (h *marketActorTestHarness) addProviderFunds(rt *mock.Runtime, amount abi.TokenAmount, minerAddrs *minerAddrs) {
+// 	rt.SetReceived(amount)
+// 	rt.SetAddressActorType(minerAddrs.provider, builtin.StorageMinerActorCodeID)
+// 	rt.SetCaller(minerAddrs.owner, builtin.AccountActorCodeID)
+// 	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
 
-	expectGetControlAddresses(rt, minerAddrs.provider, minerAddrs.owner, minerAddrs.worker, minerAddrs.coinbase)
+// 	expectGetControlAddresses(rt, minerAddrs.provider, minerAddrs.owner, minerAddrs.worker, minerAddrs.coinbase)
 
-	rt.Call(h.AddBalance, &minerAddrs.provider)
+// 	rt.Call(h.AddBalance, &minerAddrs.provider)
 
-	rt.Verify()
+// 	rt.Verify()
 
-	rt.SetBalance(big.Add(rt.Balance(), amount))
-}
+// 	rt.SetBalance(big.Add(rt.Balance(), amount))
+// }
 
-// addParticipantFunds is a helper method to setup non-provider storage market participant funds
-func (h *marketActorTestHarness) addParticipantFunds(rt *mock.Runtime, addr address.Address, amount abi.TokenAmount) {
-	rt.SetReceived(amount)
-	rt.SetCaller(addr, builtin.AccountActorCodeID)
-	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
+// // addParticipantFunds is a helper method to setup non-provider storage market participant funds
+// func (h *marketActorTestHarness) addParticipantFunds(rt *mock.Runtime, addr address.Address, amount abi.TokenAmount) {
+// 	rt.SetReceived(amount)
+// 	rt.SetCaller(addr, builtin.AccountActorCodeID)
+// 	rt.ExpectValidateCallerType(builtin.CallerTypesSignable...)
 
-	rt.Call(h.AddBalance, &addr)
+// 	rt.Call(h.AddBalance, &addr)
 
-	rt.Verify()
+// 	rt.Verify()
 
-	rt.SetBalance(big.Add(rt.Balance(), amount))
-}
+// 	rt.SetBalance(big.Add(rt.Balance(), amount))
+// }
 
-func (h *marketActorTestHarness) withdrawProviderBalance(rt *mock.Runtime, withDrawAmt, expectedSend abi.TokenAmount, miner *minerAddrs) {
-	rt.SetCaller(miner.worker, builtin.AccountActorCodeID)
-	rt.ExpectValidateCallerAddr(miner.owner, miner.worker)
-	expectGetControlAddresses(rt, miner.provider, miner.owner, miner.worker, miner.coinbase)
+// func (h *marketActorTestHarness) withdrawProviderBalance(rt *mock.Runtime, withDrawAmt, expectedSend abi.TokenAmount, miner *minerAddrs) {
+// 	rt.SetCaller(miner.worker, builtin.AccountActorCodeID)
+// 	rt.ExpectValidateCallerAddr(miner.owner, miner.worker)
+// 	expectGetControlAddresses(rt, miner.provider, miner.owner, miner.worker, miner.coinbase)
 
-	params := market.WithdrawBalanceParams{
-		ProviderOrClientAddress: miner.provider,
-		Amount:                  withDrawAmt,
-	}
+// 	params := market.WithdrawBalanceParams{
+// 		ProviderOrClientAddress: miner.provider,
+// 		Amount:                  withDrawAmt,
+// 	}
 
-	rt.ExpectSend(miner.owner, builtin.MethodSend, nil, expectedSend, nil, exitcode.Ok)
-	rt.Call(h.WithdrawBalance, &params)
-	rt.Verify()
-}
+// 	rt.ExpectSend(miner.owner, builtin.MethodSend, nil, expectedSend, nil, exitcode.Ok)
+// 	rt.Call(h.WithdrawBalance, &params)
+// 	rt.Verify()
+// }
 
-func (h *marketActorTestHarness) withdrawClientBalance(rt *mock.Runtime, client address.Address, withDrawAmt, expectedSend abi.TokenAmount) {
-	rt.SetCaller(client, builtin.AccountActorCodeID)
-	rt.ExpectSend(client, builtin.MethodSend, nil, expectedSend, nil, exitcode.Ok)
-	rt.ExpectValidateCallerAddr(client)
+// func (h *marketActorTestHarness) withdrawClientBalance(rt *mock.Runtime, client address.Address, withDrawAmt, expectedSend abi.TokenAmount) {
+// 	rt.SetCaller(client, builtin.AccountActorCodeID)
+// 	rt.ExpectSend(client, builtin.MethodSend, nil, expectedSend, nil, exitcode.Ok)
+// 	rt.ExpectValidateCallerAddr(client)
 
-	params := market.WithdrawBalanceParams{
-		ProviderOrClientAddress: client,
-		Amount:                  withDrawAmt,
-	}
+// 	params := market.WithdrawBalanceParams{
+// 		ProviderOrClientAddress: client,
+// 		Amount:                  withDrawAmt,
+// 	}
 
-	rt.Call(h.WithdrawBalance, &params)
-	rt.Verify()
-}
+// 	rt.Call(h.WithdrawBalance, &params)
+// 	rt.Verify()
+// }
 
 func (h *marketActorTestHarness) cronTickNoChange(rt *mock.Runtime, client, provider address.Address) {
 	var st market.State
 	rt.GetState(&st)
 	epochCid := st.DealOpsByEpoch
 
-	// fetch current client and provider escrow balances
-	cLocked := h.getLockedBalance(rt, client)
-	cEscrow := h.getEscrowBalance(rt, client)
-	pLocked := h.getLockedBalance(rt, provider)
-	pEscrow := h.getEscrowBalance(rt, provider)
+	// // fetch current client and provider escrow balances
+	// cLocked := h.getLockedBalance(rt, client)
+	// cEscrow := h.getEscrowBalance(rt, client)
+	// pLocked := h.getLockedBalance(rt, provider)
+	// pEscrow := h.getEscrowBalance(rt, provider)
 
 	h.cronTick(rt)
 
 	rt.GetState(&st)
 	require.True(h.t, epochCid.Equals(st.DealOpsByEpoch))
 
-	require.EqualValues(h.t, cEscrow, h.getEscrowBalance(rt, client))
-	require.EqualValues(h.t, cLocked, h.getLockedBalance(rt, client))
-	require.EqualValues(h.t, pEscrow, h.getEscrowBalance(rt, provider))
-	require.EqualValues(h.t, pLocked, h.getLockedBalance(rt, provider))
+	// require.EqualValues(h.t, cEscrow, h.getEscrowBalance(rt, client))
+	// require.EqualValues(h.t, cLocked, h.getLockedBalance(rt, client))
+	// require.EqualValues(h.t, pEscrow, h.getEscrowBalance(rt, provider))
+	// require.EqualValues(h.t, pLocked, h.getLockedBalance(rt, provider))
 }
 
-// if this is the first crontick for the deal, it's next tick will be scheduled at `desiredNextEpoch`
-// if this is not the first crontick, the `desiredNextEpoch` param is ignored.
-func (h *marketActorTestHarness) cronTickAndAssertBalances(rt *mock.Runtime, client, provider address.Address,
-	currentEpoch abi.ChainEpoch, dealId abi.DealID) (payment abi.TokenAmount, amountSlashed abi.TokenAmount) {
-	// fetch current client and provider escrow balances
-	cLocked := h.getLockedBalance(rt, client)
-	cEscrow := h.getEscrowBalance(rt, client)
-	pLocked := h.getLockedBalance(rt, provider)
-	pEscrow := h.getEscrowBalance(rt, provider)
-	amountSlashed = big.Zero()
+// // if this is the first crontick for the deal, it's next tick will be scheduled at `desiredNextEpoch`
+// // if this is not the first crontick, the `desiredNextEpoch` param is ignored.
+// func (h *marketActorTestHarness) cronTickAndAssertBalances(rt *mock.Runtime, client, provider address.Address,
+// 	currentEpoch abi.ChainEpoch, dealId abi.DealID) (payment abi.TokenAmount, amountSlashed abi.TokenAmount) {
+// 	// fetch current client and provider escrow balances
+// 	cLocked := h.getLockedBalance(rt, client)
+// 	cEscrow := h.getEscrowBalance(rt, client)
+// 	pLocked := h.getLockedBalance(rt, provider)
+// 	pEscrow := h.getEscrowBalance(rt, provider)
+// 	amountSlashed = big.Zero()
 
-	s := h.getDealState(rt, dealId)
-	/* d := h.getDealProposal(rt, dealId)
+// 	s := h.getDealState(rt, dealId)
+// 	/* d := h.getDealProposal(rt, dealId)
 
-	// end epoch for payment calc
-	paymentEnd := d.EndEpoch
-	if s.SlashEpoch != -1 {
-		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, d.ProviderCollateral, nil, exitcode.Ok)
-		amountSlashed = d.ProviderCollateral
+// 	// end epoch for payment calc
+// 	paymentEnd := d.EndEpoch
+// 	if s.SlashEpoch != -1 {
+// 		rt.ExpectSend(builtin.BurntFundsActorAddr, builtin.MethodSend, nil, d.ProviderCollateral, nil, exitcode.Ok)
+// 		amountSlashed = d.ProviderCollateral
 
-		if s.SlashEpoch < d.StartEpoch {
-			paymentEnd = d.StartEpoch
-		} else {
-			paymentEnd = s.SlashEpoch
-		}
-	} else if currentEpoch < paymentEnd {
-		paymentEnd = currentEpoch
-	}
+// 		if s.SlashEpoch < d.StartEpoch {
+// 			paymentEnd = d.StartEpoch
+// 		} else {
+// 			paymentEnd = s.SlashEpoch
+// 		}
+// 	} else if currentEpoch < paymentEnd {
+// 		paymentEnd = currentEpoch
+// 	}
 
-	// start epoch for payment calc
-	paymentStart := d.StartEpoch
-	if s.LastUpdatedEpoch != -1 {
-		paymentStart = s.LastUpdatedEpoch
-	}
-	duration := paymentEnd - paymentStart
-	payment = big.Mul(big.NewInt(int64(duration)), d.StoragePricePerEpoch) */
-	payment = big.Zero()
+// 	// start epoch for payment calc
+// 	paymentStart := d.StartEpoch
+// 	if s.LastUpdatedEpoch != -1 {
+// 		paymentStart = s.LastUpdatedEpoch
+// 	}
+// 	duration := paymentEnd - paymentStart
+// 	payment = big.Mul(big.NewInt(int64(duration)), d.StoragePricePerEpoch) */
+// 	payment = big.Zero()
 
-	// expected updated amounts
-	updatedClientEscrow := big.Sub(cEscrow, payment)
-	updatedProviderEscrow := big.Add(pEscrow, payment)
-	updatedProviderEscrow = big.Sub(updatedProviderEscrow, amountSlashed)
-	updatedClientLocked := big.Sub(cLocked, payment)
-	updatedProviderLocked := pLocked
-	/* // if the deal has expired or been slashed, locked amount will be zero for provider and client.
-	isDealExpired := paymentEnd == d.EndEpoch */
-	if /* isDealExpired || */ s.SlashEpoch != -1 {
-		updatedClientLocked = big.Zero()
-		updatedProviderLocked = big.Zero()
-	}
+// 	// expected updated amounts
+// 	updatedClientEscrow := big.Sub(cEscrow, payment)
+// 	updatedProviderEscrow := big.Add(pEscrow, payment)
+// 	updatedProviderEscrow = big.Sub(updatedProviderEscrow, amountSlashed)
+// 	updatedClientLocked := big.Sub(cLocked, payment)
+// 	updatedProviderLocked := pLocked
+// 	/* // if the deal has expired or been slashed, locked amount will be zero for provider and client.
+// 	isDealExpired := paymentEnd == d.EndEpoch */
+// 	if /* isDealExpired || */ s.SlashEpoch != -1 {
+// 		updatedClientLocked = big.Zero()
+// 		updatedProviderLocked = big.Zero()
+// 	}
 
-	h.cronTick(rt)
+// 	h.cronTick(rt)
 
-	require.EqualValues(h.t, updatedClientEscrow, h.getEscrowBalance(rt, client))
-	require.EqualValues(h.t, updatedClientLocked, h.getLockedBalance(rt, client))
-	require.Equal(h.t, updatedProviderLocked, h.getLockedBalance(rt, provider))
-	require.Equal(h.t, updatedProviderEscrow.Int64(), h.getEscrowBalance(rt, provider).Int64())
+// 	require.EqualValues(h.t, updatedClientEscrow, h.getEscrowBalance(rt, client))
+// 	require.EqualValues(h.t, updatedClientLocked, h.getLockedBalance(rt, client))
+// 	require.Equal(h.t, updatedProviderLocked, h.getLockedBalance(rt, provider))
+// 	require.Equal(h.t, updatedProviderEscrow.Int64(), h.getEscrowBalance(rt, provider).Int64())
 
-	return
-}
+// 	return
+// }
 
 func (h *marketActorTestHarness) cronTick(rt *mock.Runtime) {
 	rt.ExpectValidateCallerAddr(builtin.CronActorAddr)
@@ -3240,49 +3266,49 @@ func (h *marketActorTestHarness) getDealProposal(rt *mock.Runtime, dealID abi.De
 	return d
 }
 
-func (h *marketActorTestHarness) assertAccountBalance(rt *mock.Runtime, addr address.Address, escrow, locked abi.TokenAmount) {
-	var st market.State
-	rt.GetState(&st)
+// func (h *marketActorTestHarness) assertAccountBalance(rt *mock.Runtime, addr address.Address, escrow, locked abi.TokenAmount) {
+// 	var st market.State
+// 	rt.GetState(&st)
 
-	et, err := adt.AsBalanceTable(adt.AsStore(rt), st.EscrowTable)
-	require.NoError(h.t, err)
+// 	et, err := adt.AsBalanceTable(adt.AsStore(rt), st.EscrowTable)
+// 	require.NoError(h.t, err)
 
-	b, err := et.Get(addr)
-	require.NoError(h.t, err)
-	require.Equal(h.t, escrow, b)
+// 	b, err := et.Get(addr)
+// 	require.NoError(h.t, err)
+// 	require.Equal(h.t, escrow, b)
 
-	lt, err := adt.AsBalanceTable(adt.AsStore(rt), st.LockedTable)
-	require.NoError(h.t, err)
-	b, err = lt.Get(addr)
-	require.NoError(h.t, err)
-	require.Equal(h.t, locked, b)
-}
+// 	lt, err := adt.AsBalanceTable(adt.AsStore(rt), st.LockedTable)
+// 	require.NoError(h.t, err)
+// 	b, err = lt.Get(addr)
+// 	require.NoError(h.t, err)
+// 	require.Equal(h.t, locked, b)
+// }
 
-func (h *marketActorTestHarness) getEscrowBalance(rt *mock.Runtime, addr address.Address) abi.TokenAmount {
-	var st market.State
-	rt.GetState(&st)
+// func (h *marketActorTestHarness) getEscrowBalance(rt *mock.Runtime, addr address.Address) abi.TokenAmount {
+// 	var st market.State
+// 	rt.GetState(&st)
 
-	et, err := adt.AsBalanceTable(adt.AsStore(rt), st.EscrowTable)
-	require.NoError(h.t, err)
+// 	et, err := adt.AsBalanceTable(adt.AsStore(rt), st.EscrowTable)
+// 	require.NoError(h.t, err)
 
-	bal, err := et.Get(addr)
-	require.NoError(h.t, err)
+// 	bal, err := et.Get(addr)
+// 	require.NoError(h.t, err)
 
-	return bal
-}
+// 	return bal
+// }
 
-func (h *marketActorTestHarness) getLockedBalance(rt *mock.Runtime, addr address.Address) abi.TokenAmount {
-	var st market.State
-	rt.GetState(&st)
+// func (h *marketActorTestHarness) getLockedBalance(rt *mock.Runtime, addr address.Address) abi.TokenAmount {
+// 	var st market.State
+// 	rt.GetState(&st)
 
-	lt, err := adt.AsBalanceTable(adt.AsStore(rt), st.LockedTable)
-	require.NoError(h.t, err)
+// 	lt, err := adt.AsBalanceTable(adt.AsStore(rt), st.LockedTable)
+// 	require.NoError(h.t, err)
 
-	bal, err := lt.Get(addr)
-	require.NoError(h.t, err)
+// 	bal, err := lt.Get(addr)
+// 	require.NoError(h.t, err)
 
-	return bal
-}
+// 	return bal
+// }
 
 func (h *marketActorTestHarness) getDealState(rt *mock.Runtime, dealID abi.DealID) *market.DealState {
 	var st market.State
@@ -3473,12 +3499,12 @@ func (h *marketActorTestHarness) generateAndPublishDealWithFunds(rt *mock.Runtim
 	clientFunds, providerFunds abi.TokenAmount) abi.DealID {
 	rt.SetCaller(minerAddrs.worker, builtin.AccountActorCodeID)
 	deal := generateDealProposal(client, minerAddrs.provider, startEpoch)
-	if !providerFunds.IsZero() {
-		h.addProviderFunds(rt, providerFunds, minerAddrs)
-	}
-	if !clientFunds.IsZero() {
-		h.addParticipantFunds(rt, client, clientFunds)
-	}
+	// if !providerFunds.IsZero() {
+	// 	h.addProviderFunds(rt, providerFunds, minerAddrs)
+	// }
+	// if !clientFunds.IsZero() {
+	// 	h.addParticipantFunds(rt, client, clientFunds)
+	// }
 	dealIds := h.publishDeals(rt, minerAddrs, publishDealReq{deal: deal, requiredProcessEpoch: requiredProcessEpoch})
 	return dealIds[0]
 }
@@ -3506,8 +3532,9 @@ func (h *marketActorTestHarness) generateAndPublishRandDealWithLabel(rt *mock.Ru
 func (h *marketActorTestHarness) generateDealAndAddFunds(rt *mock.Runtime, client address.Address, minerAddrs *minerAddrs,
 	startEpoch abi.ChainEpoch) market.DealProposal {
 	deal4 := generateDealProposal(client, minerAddrs.provider, startEpoch)
-	h.addProviderFunds(rt, big.NewInt(10), minerAddrs)
-	h.addParticipantFunds(rt, client, big.NewInt(10))
+	rt.SetAddressActorType(minerAddrs.provider, builtin.StorageMinerActorCodeID)
+	// h.addProviderFunds(rt, big.NewInt(10), minerAddrs)
+	// h.addParticipantFunds(rt, client, big.NewInt(10))
 
 	return deal4
 }
@@ -3519,8 +3546,9 @@ func (h *marketActorTestHarness) generateRandDealAndAddFunds(rt *mock.Runtime, c
 	pieceCid := tutil.MakeCID(string(buf[:]), &market.PieceCIDPrefix)
 	pieceSize := abi.PaddedPieceSize(2048)
 	deal := market.DealProposal{PieceCID: pieceCid, PieceSize: pieceSize, Client: client, Provider: minerAddrs.provider, Label: "label", StartEpoch: startEpoch}
-	h.addProviderFunds(rt, big.NewInt(10), minerAddrs)
-	h.addParticipantFunds(rt, client, big.NewInt(10))
+	rt.SetAddressActorType(minerAddrs.provider, builtin.StorageMinerActorCodeID)
+	// h.addProviderFunds(rt, big.NewInt(10), minerAddrs)
+	// h.addParticipantFunds(rt, client, big.NewInt(10))
 
 	return deal
 }
@@ -3529,8 +3557,9 @@ func (h *marketActorTestHarness) generateDealWithCollateralAndAddFunds(rt *mock.
 	minerAddrs *minerAddrs, providerFunds, clientFunds abi.TokenAmount, startEpoch /* , endEpoch */ abi.ChainEpoch) market.DealProposal {
 	deal := generateDealProposalWithCollateral(client, minerAddrs.provider, /* providerCollateral, clientCollateral, */
 		startEpoch /* , endEpoch */)
-	h.addProviderFunds(rt, providerFunds, minerAddrs)
-	h.addParticipantFunds(rt, client, clientFunds)
+	rt.SetAddressActorType(minerAddrs.provider, builtin.StorageMinerActorCodeID)
+	// h.addProviderFunds(rt, providerFunds, minerAddrs)
+	// h.addParticipantFunds(rt, client, clientFunds)
 
 	return deal
 }

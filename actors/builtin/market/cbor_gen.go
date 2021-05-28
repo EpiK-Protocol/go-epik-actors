@@ -15,7 +15,7 @@ import (
 
 var _ = xerrors.Errorf
 
-var lengthBufState = []byte{140}
+var lengthBufState = []byte{138}
 
 func (t *State) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -62,18 +62,6 @@ func (t *State) MarshalCBOR(w io.Writer) error {
 
 	if err := cbg.WriteCidBuf(scratch, w, t.DataIndexesByEpoch); err != nil {
 		return xerrors.Errorf("failed to write cid field t.DataIndexesByEpoch: %w", err)
-	}
-
-	// t.EscrowTable (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.EscrowTable); err != nil {
-		return xerrors.Errorf("failed to write cid field t.EscrowTable: %w", err)
-	}
-
-	// t.LockedTable (cid.Cid) (struct)
-
-	if err := cbg.WriteCidBuf(scratch, w, t.LockedTable); err != nil {
-		return xerrors.Errorf("failed to write cid field t.LockedTable: %w", err)
 	}
 
 	// t.NextID (abi.DealID) (uint64)
@@ -126,7 +114,7 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 12 {
+	if extra != 10 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
@@ -200,30 +188,6 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.DataIndexesByEpoch = c
-
-	}
-	// t.EscrowTable (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.EscrowTable: %w", err)
-		}
-
-		t.EscrowTable = c
-
-	}
-	// t.LockedTable (cid.Cid) (struct)
-
-	{
-
-		c, err := cbg.ReadCid(br)
-		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.LockedTable: %w", err)
-		}
-
-		t.LockedTable = c
 
 	}
 	// t.NextID (abi.DealID) (uint64)
@@ -301,68 +265,6 @@ func (t *State) UnmarshalCBOR(r io.Reader) error {
 		}
 
 		t.InitialQuota = int64(extraI)
-	}
-	return nil
-}
-
-var lengthBufWithdrawBalanceParams = []byte{130}
-
-func (t *WithdrawBalanceParams) MarshalCBOR(w io.Writer) error {
-	if t == nil {
-		_, err := w.Write(cbg.CborNull)
-		return err
-	}
-	if _, err := w.Write(lengthBufWithdrawBalanceParams); err != nil {
-		return err
-	}
-
-	// t.ProviderOrClientAddress (address.Address) (struct)
-	if err := t.ProviderOrClientAddress.MarshalCBOR(w); err != nil {
-		return err
-	}
-
-	// t.Amount (big.Int) (struct)
-	if err := t.Amount.MarshalCBOR(w); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (t *WithdrawBalanceParams) UnmarshalCBOR(r io.Reader) error {
-	*t = WithdrawBalanceParams{}
-
-	br := cbg.GetPeeker(r)
-	scratch := make([]byte, 8)
-
-	maj, extra, err := cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-	if maj != cbg.MajArray {
-		return fmt.Errorf("cbor input should be of type array")
-	}
-
-	if extra != 2 {
-		return fmt.Errorf("cbor input had wrong number of fields")
-	}
-
-	// t.ProviderOrClientAddress (address.Address) (struct)
-
-	{
-
-		if err := t.ProviderOrClientAddress.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.ProviderOrClientAddress: %w", err)
-		}
-
-	}
-	// t.Amount (big.Int) (struct)
-
-	{
-
-		if err := t.Amount.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.Amount: %w", err)
-		}
-
 	}
 	return nil
 }

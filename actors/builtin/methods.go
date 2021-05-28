@@ -60,8 +60,6 @@ var MethodsPaych = struct {
 
 var MethodsMarket = struct {
 	Constructor              abi.MethodNum
-	AddBalance               abi.MethodNum
-	WithdrawBalance          abi.MethodNum
 	PublishStorageDeals      abi.MethodNum
 	VerifyDealsForActivation abi.MethodNum
 	ActivateDeals            abi.MethodNum
@@ -70,7 +68,7 @@ var MethodsMarket = struct {
 	CronTick                 abi.MethodNum
 	ResetQuotas              abi.MethodNum
 	SetInitialQuota          abi.MethodNum
-}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}
+}{MethodConstructor, 2, 3, 4, 5, 6, 7, 8, 9}
 
 var MethodsPower = struct {
 	Constructor              abi.MethodNum
