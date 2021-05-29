@@ -264,8 +264,8 @@ func (t *WithdrawBalanceParams) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.ProviderOrClientAddress (address.Address) (struct)
-	if err := t.ProviderOrClientAddress.MarshalCBOR(w); err != nil {
+	// t.Target (address.Address) (struct)
+	if err := t.Target.MarshalCBOR(w); err != nil {
 		return err
 	}
 
@@ -294,12 +294,12 @@ func (t *WithdrawBalanceParams) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.ProviderOrClientAddress (address.Address) (struct)
+	// t.Target (address.Address) (struct)
 
 	{
 
-		if err := t.ProviderOrClientAddress.UnmarshalCBOR(br); err != nil {
-			return xerrors.Errorf("unmarshaling t.ProviderOrClientAddress: %w", err)
+		if err := t.Target.UnmarshalCBOR(br); err != nil {
+			return xerrors.Errorf("unmarshaling t.Target: %w", err)
 		}
 
 	}
@@ -421,7 +421,7 @@ func (t *RetrievalDataParams) UnmarshalCBOR(r io.Reader) error {
 	return nil
 }
 
-var lengthBufRetrievalState = []byte{134}
+var lengthBufRetrievalState = []byte{133}
 
 func (t *RetrievalState) MarshalCBOR(w io.Writer) error {
 	if t == nil {
@@ -434,24 +434,10 @@ func (t *RetrievalState) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Pledges (cid.Cid) (struct)
+	// t.Miners (cid.Cid) (struct)
 
-	if err := cbg.WriteCidBuf(scratch, w, t.Pledges); err != nil {
-		return xerrors.Errorf("failed to write cid field t.Pledges: %w", err)
-	}
-
-	// t.Miners ([]address.Address) (slice)
-	if len(t.Miners) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.Miners was too long")
-	}
-
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Miners))); err != nil {
-		return err
-	}
-	for _, v := range t.Miners {
-		if err := v.MarshalCBOR(w); err != nil {
-			return err
-		}
+	if err := cbg.WriteCidBuf(scratch, w, t.Miners); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Miners: %w", err)
 	}
 
 	// t.Datas (cid.Cid) (struct)
@@ -471,9 +457,9 @@ func (t *RetrievalState) MarshalCBOR(w io.Writer) error {
 		return err
 	}
 
-	// t.DateSize (abi.PaddedPieceSize) (uint64)
+	// t.DailyDataSize (abi.PaddedPieceSize) (uint64)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DateSize)); err != nil {
+	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajUnsignedInt, uint64(t.DailyDataSize)); err != nil {
 		return err
 	}
 
@@ -494,51 +480,22 @@ func (t *RetrievalState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input should be of type array")
 	}
 
-	if extra != 6 {
+	if extra != 5 {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Pledges (cid.Cid) (struct)
+	// t.Miners (cid.Cid) (struct)
 
 	{
 
 		c, err := cbg.ReadCid(br)
 		if err != nil {
-			return xerrors.Errorf("failed to read cid field t.Pledges: %w", err)
+			return xerrors.Errorf("failed to read cid field t.Miners: %w", err)
 		}
 
-		t.Pledges = c
+		t.Miners = c
 
 	}
-	// t.Miners ([]address.Address) (slice)
-
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
-
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.Miners: array too large (%d)", extra)
-	}
-
-	if maj != cbg.MajArray {
-		return fmt.Errorf("expected cbor array")
-	}
-
-	if extra > 0 {
-		t.Miners = make([]address.Address, extra)
-	}
-
-	for i := 0; i < int(extra); i++ {
-
-		var v address.Address
-		if err := v.UnmarshalCBOR(br); err != nil {
-			return err
-		}
-
-		t.Miners[i] = v
-	}
-
 	// t.Datas (cid.Cid) (struct)
 
 	{
@@ -574,7 +531,7 @@ func (t *RetrievalState) UnmarshalCBOR(r io.Reader) error {
 		t.EpochDate = uint64(extra)
 
 	}
-	// t.DateSize (abi.PaddedPieceSize) (uint64)
+	// t.DailyDataSize (abi.PaddedPieceSize) (uint64)
 
 	{
 
@@ -585,7 +542,7 @@ func (t *RetrievalState) UnmarshalCBOR(r io.Reader) error {
 		if maj != cbg.MajUnsignedInt {
 			return fmt.Errorf("wrong type for uint64 field")
 		}
-		t.DateSize = abi.PaddedPieceSize(extra)
+		t.DailyDataSize = abi.PaddedPieceSize(extra)
 
 	}
 	return nil
@@ -746,18 +703,10 @@ func (t *PledgeState) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Targets ([]address.Address) (slice)
-	if len(t.Targets) > cbg.MaxLength {
-		return xerrors.Errorf("Slice value in field t.Targets was too long")
-	}
+	// t.Targets (cid.Cid) (struct)
 
-	if err := cbg.WriteMajorTypeHeaderBuf(scratch, w, cbg.MajArray, uint64(len(t.Targets))); err != nil {
-		return err
-	}
-	for _, v := range t.Targets {
-		if err := v.MarshalCBOR(w); err != nil {
-			return err
-		}
+	if err := cbg.WriteCidBuf(scratch, w, t.Targets); err != nil {
+		return xerrors.Errorf("failed to write cid field t.Targets: %w", err)
 	}
 
 	// t.Amount (big.Int) (struct)
@@ -785,35 +734,18 @@ func (t *PledgeState) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Targets ([]address.Address) (slice)
+	// t.Targets (cid.Cid) (struct)
 
-	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
-	if err != nil {
-		return err
-	}
+	{
 
-	if extra > cbg.MaxLength {
-		return fmt.Errorf("t.Targets: array too large (%d)", extra)
-	}
-
-	if maj != cbg.MajArray {
-		return fmt.Errorf("expected cbor array")
-	}
-
-	if extra > 0 {
-		t.Targets = make([]address.Address, extra)
-	}
-
-	for i := 0; i < int(extra); i++ {
-
-		var v address.Address
-		if err := v.UnmarshalCBOR(br); err != nil {
-			return err
+		c, err := cbg.ReadCid(br)
+		if err != nil {
+			return xerrors.Errorf("failed to read cid field t.Targets: %w", err)
 		}
 
-		t.Targets[i] = v
-	}
+		t.Targets = c
 
+	}
 	// t.Amount (big.Int) (struct)
 
 	{

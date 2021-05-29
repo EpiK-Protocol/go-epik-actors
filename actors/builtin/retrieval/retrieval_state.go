@@ -36,12 +36,11 @@ type State struct {
 
 // RetrievalState state
 type RetrievalState struct {
-	Pledges   cid.Cid // Map, HAMT[Address]abi.TokenAmount
-	Miners    []addr.Address
-	Datas     cid.Cid         // Map, HAMT[PayloadId]RetrievalData
-	Amount    abi.TokenAmount // total pledge amount
-	EpochDate uint64
-	DateSize  abi.PaddedPieceSize // date retrieval size
+	Miners        cid.Cid         // Map, HAMT[Address]abi.TokenAmount
+	Datas         cid.Cid         // Map, HAMT[PayloadId]RetrievalData
+	Amount        abi.TokenAmount // total pledge amount
+	EpochDate     uint64
+	DailyDataSize abi.PaddedPieceSize // date retrieval size
 }
 
 // RetrievalData record retrieval data statistics
@@ -55,7 +54,7 @@ type RetrievalData struct {
 
 // PledgeState record pledge state
 type PledgeState struct {
-	Targets []addr.Address
+	Targets cid.Cid // Map, HAMT[Address]abi.TokenAmount
 	Amount  abi.TokenAmount
 }
 
@@ -103,24 +102,34 @@ func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Addre
 		return xerrors.Errorf("failed to get pledger info:%v", err)
 	}
 
+	tAmount := amount
+	var tmap *adt.Map
 	if found {
-		tfound := false
-		for _, t := range pledge.Targets {
-			if t == target {
-				tfound = true
-				break
-			}
+		tmap, err = adt.AsMap(store, pledge.Targets, builtin.DefaultHamtBitwidth)
+		if err != nil {
+			return xerrors.Errorf("failed to load pledge target:%v", err)
 		}
-		if !tfound {
-			pledge.Targets = append(pledge.Targets, target)
+		var outAmount abi.TokenAmount
+		tfound, err := tmap.Get(abi.AddrKey(target), &outAmount)
+		if err != nil {
+			return err
 		}
-		pledge.Amount = big.Add(pledge.Amount, amount)
+		if tfound {
+			tAmount = big.Add(amount, outAmount)
+		}
 	} else {
-		pledge = PledgeState{
-			Targets: []addr.Address{target},
-			Amount:  amount,
+		tmap, err = adt.MakeEmptyMap(store, builtin.DefaultHamtBitwidth)
+		if err != nil {
+			return xerrors.Errorf("failed to create empty map: %w", err)
 		}
 	}
+	if err := tmap.Put(abi.AddrKey(target), &tAmount); err != nil {
+		return err
+	}
+	if pledge.Targets, err = tmap.Root(); err != nil {
+		return err
+	}
+	pledge.Amount = big.Add(pledge.Amount, amount)
 
 	if err = pledgesMap.Put(abi.AddrKey(pledger), &pledge); err != nil {
 		return err
@@ -146,36 +155,14 @@ func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Addre
 			return xerrors.Errorf("failed to create empty map: %w", err)
 		}
 		state = RetrievalState{
-			Pledges:   emptyMapCid,
-			Miners:    []addr.Address{},
-			Datas:     emptyMapCid,
-			Amount:    abi.NewTokenAmount(0),
-			EpochDate: 0,
-			DateSize:  abi.PaddedPieceSize(0),
+			Miners:        emptyMapCid,
+			Datas:         emptyMapCid,
+			Amount:        abi.NewTokenAmount(0),
+			EpochDate:     0,
+			DailyDataSize: abi.PaddedPieceSize(0),
 		}
 	}
 	state.Amount = big.Add(state.Amount, amount)
-	sdmap, err := adt.AsMap(store, state.Pledges, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return err
-	}
-	var dAmount abi.TokenAmount
-	found, err = sdmap.Get(abi.AddrKey(pledger), &dAmount)
-	if err != nil {
-		return err
-	}
-	if found {
-		dAmount = big.Add(dAmount, amount)
-	} else {
-		dAmount = amount
-	}
-
-	if err = sdmap.Put(abi.AddrKey(pledger), &dAmount); err != nil {
-		return err
-	}
-	if state.Pledges, err = sdmap.Root(); err != nil {
-		return err
-	}
 	if err = stateMap.Put(abi.AddrKey(target), &state); err != nil {
 		return err
 	}
@@ -189,90 +176,85 @@ func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Addre
 }
 
 // ApplyForWithdraw apply for withdraw amount
-func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, pledger addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
+func (st *State) ApplyForWithdraw(store adt.Store, curEpoch abi.ChainEpoch, pledger addr.Address, target addr.Address, amount abi.TokenAmount) (exitcode.ExitCode, error) {
 	if amount.LessThanEqual(big.Zero()) {
 		return exitcode.ErrIllegalState, xerrors.Errorf("invalid amount %v of funds to apply", amount)
 	}
 
+	// update pledges
 	pledgesMap, err := adt.AsMap(store, st.Pledges, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, err
 	}
 
-	var pledges PledgeState
-	found, err := pledgesMap.Get(abi.AddrKey(pledger), &pledges)
+	var pState PledgeState
+	found, err := pledgesMap.Get(abi.AddrKey(pledger), &pState)
 	if err != nil {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load pledges map: %w", err)
 	}
 	if !found {
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to find pledge with addr:%s", pledger)
 	}
-	if amount.GreaterThan(pledges.Amount) {
-		return exitcode.ErrIllegalState, xerrors.Errorf("pledge is less than apply amount:%v, pledge:%v", amount, pledges.Amount)
+	if pState.Amount.LessThan(amount) {
+		return exitcode.ErrIllegalState, xerrors.Errorf("pledge is less than apply amount:%v, pledge:%v", amount, pState.Amount)
 	}
+	pState.Amount = big.Sub(pState.Amount, amount)
 
-	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
+	tmap, err := adt.AsMap(store, pState.Targets, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load pledger target map: %w", err)
+	}
+	var outAmount abi.TokenAmount
+	found, err = tmap.Get(abi.AddrKey(target), &outAmount)
 	if err != nil {
 		return exitcode.ErrIllegalState, err
 	}
-
-	total := abi.NewTokenAmount(0)
-	i := 0
-	for ; i < len(pledges.Targets); i++ {
-		target := pledges.Targets[i]
-		var state RetrievalState
-		found, err := stateMap.Get(abi.AddrKey(target), &state)
-		if err != nil {
+	if !found {
+		return exitcode.ErrIllegalState, xerrors.Errorf("failed to get pledge target state: %v", target)
+	}
+	if outAmount.LessThan(amount) {
+		return exitcode.ErrIllegalState, xerrors.Errorf("failed to apply withdraw with pledge amount:%v less than amount: %v", outAmount, amount)
+	}
+	left := big.Sub(outAmount, amount)
+	if left.GreaterThan(big.Zero()) {
+		if err = tmap.Put(abi.AddrKey(target), &left); err != nil {
 			return exitcode.ErrIllegalState, err
 		}
-		if !found {
-			return exitcode.ErrIllegalState, xerrors.Errorf("failed to get retrieval state: %v", target)
-		}
-		dmap, err := adt.AsMap(store, state.Pledges, builtin.DefaultHamtBitwidth)
-		if err != nil {
+	} else {
+		if _, err := tmap.TryDelete(abi.AddrKey(target)); err != nil {
 			return exitcode.ErrIllegalState, err
-		}
-		var outAmount abi.TokenAmount
-		found, err = dmap.Get(abi.AddrKey(pledger), &outAmount)
-		if err != nil {
-			return exitcode.ErrIllegalState, err
-		}
-		if !found {
-			return exitcode.ErrIllegalState, xerrors.Errorf("failed to get retrieval state pledge: %v", target)
-		}
-
-		left := abi.NewTokenAmount(0)
-		if big.Add(total, outAmount).LessThan(amount) {
-			total = big.Add(total, outAmount)
-		} else {
-			left = big.Sub(big.Add(total, outAmount), amount)
-			total = amount
-		}
-		if err = dmap.Put(abi.AddrKey(pledger), &left); err != nil {
-			return exitcode.ErrIllegalState, err
-		}
-		if state.Pledges, err = dmap.Root(); err != nil {
-			return exitcode.ErrIllegalState, err
-		}
-		state.Amount = big.Sub(state.Amount, big.Sub(outAmount, left))
-
-		if err = stateMap.Put(abi.AddrKey(target), &state); err != nil {
-			return exitcode.ErrIllegalState, err
-		}
-		if left.GreaterThan(big.Zero()) {
-			break
 		}
 	}
-
-	pledges.Amount = big.Sub(pledges.Amount, amount)
-	pledges.Targets = pledges.Targets[i:]
-	if err = pledgesMap.Put(abi.AddrKey(pledger), &pledges); err != nil {
+	if pState.Targets, err = tmap.Root(); err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	if err = pledgesMap.Put(abi.AddrKey(pledger), &pState); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
 	if st.Pledges, err = pledgesMap.Root(); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
 
+	// update retrieve state
+	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	var state RetrievalState
+	found, err = stateMap.Get(abi.AddrKey(target), &state)
+	if err != nil {
+		return exitcode.ErrIllegalState, err
+	}
+	if !found {
+		return exitcode.ErrIllegalState, xerrors.Errorf("failed to get retrieval state: %v", target)
+	}
+	if state.Amount.LessThan(amount) {
+		return exitcode.ErrIllegalState, xerrors.Errorf("apply amount less than state pledge: %v amount:%v", target, state.Amount)
+	}
+	state.Amount = big.Sub(state.Amount, amount)
+	if err = stateMap.Put(abi.AddrKey(target), &state); err != nil {
+		return exitcode.ErrIllegalState, err
+	}
 	if st.RetrievalStates, err = stateMap.Root(); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
@@ -330,7 +312,15 @@ func (st *State) Withdraw(store adt.Store, curEpoch abi.ChainEpoch, pledger addr
 		return exitcode.ErrForbidden, xerrors.Errorf("failed to withdraw at %d: %s", out.ApplyEpoch, amount)
 	}
 	out.Amount = big.Sub(out.Amount, amount)
-	lockedMap.Put(abi.AddrKey(pledger), &out)
+	if out.Amount.GreaterThan(big.Zero()) {
+		if err := lockedMap.Put(abi.AddrKey(pledger), &out); err != nil {
+			return exitcode.ErrIllegalState, err
+		}
+	} else {
+		if _, err := lockedMap.TryDelete(abi.AddrKey(pledger)); err != nil {
+			return exitcode.ErrIllegalState, err
+		}
+	}
 	if st.LockedTable, err = lockedMap.Root(); err != nil {
 		return exitcode.ErrIllegalState, err
 	}
@@ -356,32 +346,45 @@ func (st *State) RetrievalData(store adt.Store, curEpoch abi.ChainEpoch, fromAdd
 		return exitcode.ErrIllegalState, xerrors.Errorf("failed to load retrieval state: %v", fromAddr)
 	}
 
-	if minerCheck {
-		match := false
-		for _, miner := range state.Miners {
-			if miner == data.Provider {
-				match = true
-				break
-			}
-		}
-		if !match {
-			return exitcode.ErrIllegalState, xerrors.Errorf("failed to match miner with pledger: %v, miner:%v", fromAddr, data.Provider)
-		}
-	}
-
 	if curEpochDay > state.EpochDate {
-		state.DateSize = 0
+		state.DailyDataSize = 0
 		state.EpochDate = curEpochDay
 	}
 
-	required := big.Mul(big.NewInt(int64(data.PieceSize+state.DateSize)), builtin.TokenPrecision)
+	required := big.Mul(big.NewInt(int64(data.PieceSize+state.DailyDataSize)), builtin.TokenPrecision)
 	required = big.Div(required, big.NewInt(RetrievalSizePerEPK))
 	if big.Sub(state.Amount, required).LessThan(big.Zero()) {
 		return exitcode.ErrInsufficientFunds, xerrors.Errorf("not enough balance to statistics for addr %s: escrow balance %s < required %s", fromAddr, state.Amount, required)
 	}
 
-	state.DateSize = state.DateSize + data.PieceSize
+	state.DailyDataSize = state.DailyDataSize + data.PieceSize
 
+	// check if miner bind target
+	if minerCheck {
+		mmap, err := adt.AsMap(store, state.Miners, builtin.DefaultHamtBitwidth)
+		if err != nil {
+			return exitcode.ErrIllegalState, err
+		}
+		var mRetrieve abi.TokenAmount
+		match, err := mmap.Get(abi.AddrKey(data.Provider), &mRetrieve)
+		if err != nil {
+			return exitcode.ErrIllegalState, err
+		}
+		if !match {
+			return exitcode.ErrIllegalState, xerrors.Errorf("failed to match miner with pledger: %v, miner:%v", fromAddr, data.Provider)
+		}
+		required := big.Mul(big.NewInt(int64(data.PieceSize)), builtin.TokenPrecision)
+		required = big.Div(required, big.NewInt(RetrievalSizePerEPK))
+		mRetrieve = big.Add(mRetrieve, required)
+		if err = mmap.Put(abi.AddrKey(data.Provider), &mRetrieve); err != nil {
+			return exitcode.ErrIllegalState, err
+		}
+		if state.Miners, err = mmap.Root(); err != nil {
+			return exitcode.ErrIllegalState, err
+		}
+	}
+
+	// update retrieve data
 	dataMap, err := adt.AsMap(store, state.Datas, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return exitcode.ErrIllegalState, err
@@ -441,10 +444,10 @@ func (st *State) ConfirmData(store adt.Store, curEpoch abi.ChainEpoch, fromAddr 
 
 	curEpochDay := curEpoch / RetrievalStateDuration
 	if (out.Epoch/RetrievalStateDuration) >= curEpochDay && out.PieceSize > data.PieceSize {
-		if state.DateSize+data.PieceSize > out.PieceSize {
-			state.DateSize = state.DateSize + data.PieceSize - out.PieceSize
+		if state.DailyDataSize+data.PieceSize > out.PieceSize {
+			state.DailyDataSize = state.DailyDataSize + data.PieceSize - out.PieceSize
 		} else {
-			state.DateSize = 0
+			state.DailyDataSize = 0
 		}
 	}
 	if err = dataMap.Put(adt.StringKey(data.PayloadId), &data); err != nil {
@@ -482,64 +485,66 @@ func (st *State) StateInfo(store adt.Store, fromAddr addr.Address) (*RetrievalSt
 }
 
 // DayExpend balance for address
-func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, fromAddr addr.Address) (abi.TokenAmount, error) {
+func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, target addr.Address) (abi.TokenAmount, error) {
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return abi.NewTokenAmount(0), xerrors.Errorf("failed to load retrieval state: %w", err)
 	}
 
 	var state RetrievalState
-	found, err := stateMap.Get(abi.AddrKey(fromAddr), &state)
+	found, err := stateMap.Get(abi.AddrKey(target), &state)
 	if err != nil {
 		return abi.NewTokenAmount(0), err
 	}
 	if !found {
-		return abi.NewTokenAmount(0), xerrors.Errorf("failed to find retrieval state: %v", fromAddr)
+		return abi.NewTokenAmount(0), xerrors.Errorf("failed to find retrieval state: %v", target)
 	}
-	expend := big.Mul(big.NewInt(int64(state.DateSize)), builtin.TokenPrecision)
+	expend := big.Mul(big.NewInt(int64(state.DailyDataSize)), builtin.TokenPrecision)
 	expend = big.Div(expend, big.NewInt(RetrievalSizePerEPK))
 	return expend, nil
 }
 
 // LockedState locked state for address
-func (st *State) LockedState(store adt.Store, fromAddr addr.Address) (*LockedState, error) {
+func (st *State) LockedState(store adt.Store, pledger addr.Address) (*LockedState, error) {
 	lockedMap, err := adt.AsMap(store, st.LockedTable, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return nil, err
 	}
 	var out LockedState
-	_, err = lockedMap.Get(abi.AddrKey(fromAddr), &out)
+	_, err = lockedMap.Get(abi.AddrKey(pledger), &out)
 	return &out, nil
 }
 
 // BindMiners bind miners
-func (st *State) BindMiners(store adt.Store, fromAddr addr.Address, miners []addr.Address) error {
+func (st *State) BindMiners(store adt.Store, target addr.Address, miners []addr.Address) error {
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return xerrors.Errorf("failed to load retrieval state: %w", err)
 	}
 
 	var state RetrievalState
-	found, err := stateMap.Get(abi.AddrKey(fromAddr), &state)
+	found, err := stateMap.Get(abi.AddrKey(target), &state)
 	if err != nil {
 		return err
 	}
 	if !found {
-		return xerrors.Errorf("failed to find retrieval state: %v", fromAddr)
+		return xerrors.Errorf("failed to find retrieval state: %v", target)
 	}
-	for _, bind := range miners {
-		found := false
-		for _, miner := range state.Miners {
-			if bind == miner {
-				found = true
-				break
-			}
-		}
-		if !found {
-			state.Miners = append(state.Miners, bind)
+
+	mmap, err := adt.AsMap(store, state.Miners, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return err
+	}
+	for _, miner := range miners {
+		mRetrieve := abi.NewTokenAmount(0)
+		if _, err := mmap.PutIfAbsent(abi.AddrKey(miner), &mRetrieve); err != nil {
+			return err
 		}
 	}
-	if err = stateMap.Put(abi.AddrKey(fromAddr), &state); err != nil {
+	if state.Miners, err = mmap.Root(); err != nil {
+		return err
+	}
+	if err = stateMap.Put(abi.AddrKey(target), &state); err != nil {
 		return err
 	}
 	if st.RetrievalStates, err = stateMap.Root(); err != nil {
@@ -550,34 +555,33 @@ func (st *State) BindMiners(store adt.Store, fromAddr addr.Address, miners []add
 }
 
 // UnbindMiners unbind miners
-func (st *State) UnbindMiners(store adt.Store, fromAddr addr.Address, miners []addr.Address) error {
+func (st *State) UnbindMiners(store adt.Store, target addr.Address, miners []addr.Address) error {
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
 	if err != nil {
 		return xerrors.Errorf("failed to load retrieval state: %w", err)
 	}
 
 	var state RetrievalState
-	found, err := stateMap.Get(abi.AddrKey(fromAddr), &state)
+	found, err := stateMap.Get(abi.AddrKey(target), &state)
 	if err != nil {
 		return err
 	}
 	if !found {
-		return xerrors.Errorf("failed to find retrieval state: %v", fromAddr)
+		return xerrors.Errorf("failed to find retrieval state: %v", target)
 	}
-	for _, bind := range miners {
-		found := false
-		for index, miner := range state.Miners {
-			if bind == miner {
-				found = true
-				state.Miners = append(state.Miners[:index], state.Miners[index+1:]...)
-				break
-			}
-		}
-		if !found {
-			return xerrors.Errorf("failed to find retrieval miner: %v", bind)
+	mmap, err := adt.AsMap(store, state.Miners, builtin.DefaultHamtBitwidth)
+	if err != nil {
+		return err
+	}
+	for _, miner := range miners {
+		if _, err := mmap.TryDelete(abi.AddrKey(miner)); err != nil {
+			return err
 		}
 	}
-	if err = stateMap.Put(abi.AddrKey(fromAddr), &state); err != nil {
+	if state.Miners, err = mmap.Root(); err != nil {
+		return err
+	}
+	if err = stateMap.Put(abi.AddrKey(target), &state); err != nil {
 		return err
 	}
 	if st.RetrievalStates, err = stateMap.Root(); err != nil {

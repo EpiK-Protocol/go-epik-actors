@@ -82,6 +82,9 @@ func (a Actor) Pledge(rt Runtime, params *PledgeParams) *abi.EmptyValue {
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to pledge")
 
 		if len(params.Miners) > 0 {
+			if pledger != nominal {
+				rt.Abortf(exitcode.ErrIllegalArgument, "failed to bind miners for different pledger:%s and target: %s", rt.Caller(), params.Address)
+			}
 			err = st.BindMiners(adt.AsStore(rt), nominal, params.Miners)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to bind miners")
 		}
@@ -95,8 +98,8 @@ func (a Actor) Pledge(rt Runtime, params *PledgeParams) *abi.EmptyValue {
 }
 
 type WithdrawBalanceParams struct {
-	ProviderOrClientAddress addr.Address
-	Amount                  abi.TokenAmount
+	Target addr.Address
+	Amount abi.TokenAmount
 }
 
 // Attempt to withdraw the specified amount from the balance held in escrow.
@@ -106,14 +109,13 @@ func (a Actor) ApplyForWithdraw(rt Runtime, params *WithdrawBalanceParams) *abi.
 		rt.Abortf(exitcode.ErrIllegalArgument, "invalid amount %v", params.Amount)
 	}
 
-	nominal, _, approvedCallers, _ := escrowAddress(rt, params.ProviderOrClientAddress)
-	// for providers -> only corresponding owner or worker can withdraw
-	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerIs(approvedCallers...)
+	pledger, _, _, _ := escrowAddress(rt, rt.Caller())
+	target, _, _, _ := escrowAddress(rt, params.Target)
+	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		code, err := st.ApplyForWithdraw(adt.AsStore(rt), rt.CurrEpoch(), nominal, params.Amount)
+		code, err := st.ApplyForWithdraw(adt.AsStore(rt), rt.CurrEpoch(), pledger, target, params.Amount)
 		builtin.RequireNoErr(rt, err, code, "failed to apply withdraw")
 	})
 	return nil
@@ -121,22 +123,20 @@ func (a Actor) ApplyForWithdraw(rt Runtime, params *WithdrawBalanceParams) *abi.
 
 // Attempt to withdraw the specified amount from the balance held in escrow.
 // If less than the specified amount is available, yields the entire available balance.
-func (a Actor) WithdrawBalance(rt Runtime, params *WithdrawBalanceParams) *abi.EmptyValue {
-	if params.Amount.LessThanEqual(big.Zero()) {
-		rt.Abortf(exitcode.ErrIllegalArgument, "invalid amount %v", params.Amount)
+func (a Actor) WithdrawBalance(rt Runtime, amount *abi.TokenAmount) *abi.EmptyValue {
+	if amount.LessThanEqual(big.Zero()) {
+		rt.Abortf(exitcode.ErrIllegalArgument, "invalid amount %v", amount)
 	}
 
-	nominal, _, approvedCallers, _ := escrowAddress(rt, params.ProviderOrClientAddress)
-	// for providers -> only corresponding owner or worker can withdraw
-	// for clients -> only the client i.e the recipient can withdraw
-	rt.ValidateImmediateCallerIs(approvedCallers...)
+	nominal, _, _, _ := escrowAddress(rt, rt.Caller())
+	rt.ValidateImmediateCallerAcceptAny()
 
 	var st State
 	rt.StateTransaction(&st, func() {
-		code, err := st.Withdraw(adt.AsStore(rt), rt.CurrEpoch(), nominal, params.Amount)
+		code, err := st.Withdraw(adt.AsStore(rt), rt.CurrEpoch(), nominal, *amount)
 		builtin.RequireNoErr(rt, err, code, "failed to withdraw")
 	})
-	code := rt.Send(params.ProviderOrClientAddress, builtin.MethodSend, nil, params.Amount, &builtin.Discard{})
+	code := rt.Send(rt.Caller(), builtin.MethodSend, nil, *amount, &builtin.Discard{})
 	builtin.RequireSuccess(rt, code, "failed to send withdraw amount")
 	return nil
 }

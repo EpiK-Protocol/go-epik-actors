@@ -90,8 +90,8 @@ func TestActorPledge(t *testing.T) {
 		})
 
 		actor.applyForWithdraw(rt, client, &retrieval.WithdrawBalanceParams{
-			ProviderOrClientAddress: client,
-			Amount:                  amount,
+			Target: client,
+			Amount: amount,
 		})
 	})
 }
