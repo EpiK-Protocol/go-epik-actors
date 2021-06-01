@@ -214,11 +214,10 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 		builtin.RequireSuccess(rt, code, "failed to store data of %s", expertAddr)
 		builtin.RequireState(rt, !out.ExpertBlocked, "expert blocked %s", expertAddr)
 
-		rt.Log(rtt.WARN, "expertfund BatchStoreData 3, expert blocked %s, %t", expertAddr, out.ExpertBlocked)
-
 		onchainInfos = append(onchainInfos, out.Infos...)
 
 		expertToInfo[expertAddr], err = st.GetExpert(store, expertAddr)
+		rt.Log(rtt.WARN, "expertfund BatchStoreData 3, expert blocked %s, %t, err: %v", expertAddr, out.ExpertBlocked, err)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get expert info")
 	}
 
