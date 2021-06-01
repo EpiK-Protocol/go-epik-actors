@@ -414,6 +414,16 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 	// calc unlocked amounts
 	var amount abi.TokenAmount
 	errEpoch := int64(0)
+
+	vestingFund.ForEach(&amount, func(k string) error {
+		epoch, err := abi.ParseIntKey(k)
+		if err != nil {
+			return xerrors.Errorf("failed to parse vestingFund key: %w", err)
+		}
+		fmt.Println("updateVestingFunds just iterate ", epoch, amount)
+		return nil
+	})
+
 	err = vestingFund.ForEach(&amount, func(k string) error {
 		epoch, err := abi.ParseIntKey(k)
 		if err != nil {
