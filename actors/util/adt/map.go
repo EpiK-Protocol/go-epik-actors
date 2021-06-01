@@ -136,8 +136,7 @@ func (m *Map) Delete(k abi.Keyer) error {
 		fmt.Println("Delete: ")
 		return xerrors.Errorf("failed to delete key %v in node %v: %v", k.Key(), m.root, err)
 	} else if !found {
-		fmt.Println("Delete not found ", k.Key())
-		return xerrors.Errorf("no such key %v to delete in node %v", k.Key())
+		return xerrors.Errorf("no such key to delete in node")
 	}
 	return nil
 }

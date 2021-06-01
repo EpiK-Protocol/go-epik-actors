@@ -437,7 +437,7 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 			if err != nil {
 				errEpoch = epoch
 				fmt.Println("updateVestingFunds 8, epoch: ", epoch)
-				return err
+				return xerrors.Errorf("failed to delete vesting funds at %d: %v", epoch, err)
 			}
 		}
 		return nil
