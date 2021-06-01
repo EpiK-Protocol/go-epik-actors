@@ -244,8 +244,8 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	if len(expertDepositSize) > 0 {
 		rt.StateTransaction(&st, func() {
 			err := st.Deposit(rt, expertDepositSize)
-			fmt.Println("expertfund BatchStoreData, deposit: ", expertDepositSize, err == nil)
-			fmt.Println("expertfund BatchStoreData, deposit error: ", err)
+			fmt.Println("expertfund BatchStoreData, deposit: ", expertDepositSize, err == nil, len(err.Error()))
+			fmt.Println("expertfund BatchStoreData, deposit error: ", err.Error())
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
 		})
 	}
