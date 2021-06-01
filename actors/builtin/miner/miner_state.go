@@ -1008,6 +1008,8 @@ func (st *State) RepayDebts(store adt.Store, available abi.TokenAmount) (toCoinb
 
 	// first pay to reporters
 	errStop := xerrors.New("stop")
+	toDelete := make(map[addr.Address]struct{})
+	toUpdate := make(map[addr.Address]abi.TokenAmount)
 	var debt abi.TokenAmount
 	err = reporterDebts.ForEach(&debt, func(k string) error {
 		reporter, err := address.NewFromBytes([]byte(k))
@@ -1025,13 +1027,24 @@ func (st *State) RepayDebts(store adt.Store, available abi.TokenAmount) (toCoinb
 
 		debt = big.Sub(debt, actual)
 		if debt.IsZero() {
-			return reporterDebts.Delete(abi.AddrKey(reporter))
+			toDelete[reporter] = struct{}{}
 		} else {
-			return reporterDebts.Put(abi.AddrKey(reporter), &debt)
+			toUpdate[reporter] = debt.Copy()
 		}
+		return nil
 	})
 	if err != nil && err != errStop {
 		return big.Zero(), big.Zero(), nil, xerrors.Errorf("failed to iterate reporter debts: %w", err)
+	}
+	for reporter := range toDelete {
+		if err := reporterDebts.Delete(abi.AddrKey(reporter)); err != nil {
+			return big.Zero(), big.Zero(), nil, err
+		}
+	}
+	for reporter, debt := range toUpdate {
+		if err := reporterDebts.Put(abi.AddrKey(reporter), &debt); err != nil {
+			return big.Zero(), big.Zero(), nil, err
+		}
 	}
 
 	// pay to burn
