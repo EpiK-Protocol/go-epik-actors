@@ -159,7 +159,7 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 	// update Pool
 	pool, err := st.UpdatePool(rt)
 	if err != nil {
-		fmt.Println("UpdatePool error: ", err)
+		fmt.Println("Deposit 1 ")
 		return err
 	}
 
@@ -168,14 +168,15 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 		// update ExpertInfo
 		expertInfo, err := st.GetExpert(store, expertAddr)
 		if err != nil {
-			fmt.Println("GetExpert error: ", err)
+			fmt.Println("Deposit 2 ")
 			return err
 		}
 		if !expertInfo.Active {
+			fmt.Println("Deposit 3")
 			return xerrors.Errorf("inactive expert cannot deposit: %s", expertAddr)
 		}
 		if err := st.updateVestingFunds(rt, pool, expertInfo); err != nil {
-			fmt.Println("updateVestingFunds error: ", err)
+			fmt.Println("Deposit 4 ")
 			return err
 		}
 
@@ -187,7 +188,7 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 			AccumulatedMultiplier)
 		err = st.SetExpert(store, expertAddr, expertInfo, false)
 		if err != nil {
-			fmt.Println("SetExpert error: ", err)
+			fmt.Println("Deposit 5 ")
 			return err
 		}
 
@@ -196,7 +197,7 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 
 	err = st.SavePool(store, pool)
 	if err != nil {
-		fmt.Println("SavePool error: ", err)
+		fmt.Println("Deposit 6 ")
 	}
 	return err
 }
