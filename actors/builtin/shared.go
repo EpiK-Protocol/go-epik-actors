@@ -76,7 +76,7 @@ func RequireNoErr(rt runtime.Runtime, err error, defaultExitCode exitcode.ExitCo
 		newMsg := msg + ": %s"
 		newArgs := append(args, err)
 		code := exitcode.Unwrap(err, defaultExitCode)
-		fmt.Println(string(debug.Stack()))
+		fmt.Println("err: ", err, ", stack: ", string(debug.Stack()))
 		rt.Abortf(code, newMsg, newArgs...)
 	}
 }
