@@ -423,7 +423,7 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 			unlocked = big.Add(unlocked, amount)
 			err = vestingFund.Delete(abi.IntKey(epoch))
 			if err != nil {
-				fmt.Println("updateVestingFunds 8")
+				fmt.Println("updateVestingFunds 8 ", err)
 				return err
 			}
 		}

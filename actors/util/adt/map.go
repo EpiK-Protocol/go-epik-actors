@@ -3,6 +3,7 @@ package adt
 import (
 	"bytes"
 	"crypto/sha256"
+	"fmt"
 
 	hamt "github.com/filecoin-project/go-hamt-ipld/v3"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -132,8 +133,10 @@ func (m *Map) TryDelete(k abi.Keyer) (bool, error) {
 // Removes the value at `k` from the hamt store, expecting it to exist.
 func (m *Map) Delete(k abi.Keyer) error {
 	if found, err := m.root.Delete(m.store.Context(), k.Key()); err != nil {
+		fmt.Println("Delete: ")
 		return xerrors.Errorf("failed to delete key %v in node %v: %v", k.Key(), m.root, err)
 	} else if !found {
+		fmt.Println("Delete not found ")
 		return xerrors.Errorf("no such key %v to delete in node %v", k.Key(), m.root)
 	}
 	return nil
