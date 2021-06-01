@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"runtime/debug"
 
 	addr "github.com/filecoin-project/go-address"
 	address "github.com/filecoin-project/go-address"
@@ -76,7 +75,6 @@ func RequireNoErr(rt runtime.Runtime, err error, defaultExitCode exitcode.ExitCo
 		newMsg := msg + ": %s"
 		newArgs := append(args, err)
 		code := exitcode.Unwrap(err, defaultExitCode)
-		fmt.Println("err: ", err, ", stack: ", string(debug.Stack()))
 		rt.Abortf(code, newMsg, newArgs...)
 	}
 }

@@ -413,23 +413,30 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 	unlocked := abi.NewTokenAmount(0)
 	// calc unlocked amounts
 	var amount abi.TokenAmount
+	errEpoch := int64(0)
 	err = vestingFund.ForEach(&amount, func(k string) error {
 		epoch, err := abi.ParseIntKey(k)
 		if err != nil {
 			fmt.Println("updateVestingFunds 7")
 			return xerrors.Errorf("failed to parse vestingFund key: %w", err)
 		}
+		fmt.Println("updateVestingFunds iterate ", epoch, amount)
 		if abi.ChainEpoch(epoch)+RewardVestingDelay < currEpoch {
 			unlocked = big.Add(unlocked, amount)
 			err = vestingFund.Delete(abi.IntKey(epoch))
 			if err != nil {
-				fmt.Println("updateVestingFunds 8 ", err)
+				errEpoch = epoch
+				fmt.Println("updateVestingFunds 8, epoch: ", epoch)
 				return err
 			}
 		}
 		return nil
 	})
 	if err != nil {
+		if errEpoch != 0 {
+			found, err := vestingFund.Get(abi.IntKey(errEpoch), &amount)
+			fmt.Println("updateVestingFunds 5, ", found, err, amount)
+		}
 		fmt.Println("updateVestingFunds 5")
 		return xerrors.Errorf("failed to iterate vestingFund: %w", err)
 	}
