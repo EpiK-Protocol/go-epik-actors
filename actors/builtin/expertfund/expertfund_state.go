@@ -398,6 +398,7 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 	unlocked := abi.NewTokenAmount(0)
 	// calc unlocked amounts
 	var amount abi.TokenAmount
+	toDelEpochs := make(map[int64]struct{})
 	err = vestingFund.ForEach(&amount, func(k string) error {
 		epoch, err := abi.ParseIntKey(k)
 		if err != nil {
@@ -405,13 +406,19 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 		}
 		if abi.ChainEpoch(epoch)+RewardVestingDelay < currEpoch {
 			unlocked = big.Add(unlocked, amount)
-			return vestingFund.Delete(abi.IntKey(epoch))
+			toDelEpochs[epoch] = struct{}{}
 		}
 		return nil
 	})
 	if err != nil {
 		return xerrors.Errorf("failed to iterate vestingFund: %w", err)
 	}
+	for epoch := range toDelEpochs {
+		if err := vestingFund.Delete(abi.IntKey(epoch)); err != nil {
+			return xerrors.Errorf("failed to delete epoch %d in vestingFund: %w", epoch, err)
+		}
+	}
+
 	out.VestingFunds, err = vestingFund.Root()
 	if err != nil {
 		return xerrors.Errorf("failed to flush VestingFunds: %w", err)

@@ -134,7 +134,7 @@ func (m *Map) Delete(k abi.Keyer) error {
 	if found, err := m.root.Delete(m.store.Context(), k.Key()); err != nil {
 		return xerrors.Errorf("failed to delete key %v in node %v: %v", k.Key(), m.root, err)
 	} else if !found {
-		return xerrors.Errorf("no such key %v to delete in node %v", k.Key(), m.root)
+		return xerrors.Errorf("no such key to delete")
 	}
 	return nil
 }
