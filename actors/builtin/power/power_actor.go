@@ -429,15 +429,22 @@ func (a Actor) processBatchProofVerifies(rt Runtime) {
 
 			miners = append(miners, a)
 
+			var dealArrs [][]abi.DealID
+			var sectorArrs []abi.SectorNumber
+
 			var infos []proof.SealVerifyInfo
 			var svi proof.SealVerifyInfo
 			err = arr.ForEach(&svi, func(i int64) error {
 				infos = append(infos, svi)
+				dealArrs = append(dealArrs, svi.DealIDs)
+				sectorArrs = append(sectorArrs, svi.SectorID.Number)
 				return nil
 			})
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to iterate over proof verify array for miner %s", a)
 
 			verifies[a] = infos
+
+			rt.Log(rtt.WARN, "processBatchProofVerifies1 miner %s, sectors %v, deals %v", a, sectorArrs, dealArrs)
 			return nil
 		})
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to iterate proof batch")
@@ -473,6 +480,7 @@ func (a Actor) processBatchProofVerifies(rt Runtime) {
 		}
 
 		if len(successful) > 0 {
+			rt.Log(rtt.WARN, "processBatchProofVerifies2 miner %s, sectors %v", m, successful)
 			// The exit code is explicitly ignored
 			_ = rt.Send(
 				m,
