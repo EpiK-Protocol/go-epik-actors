@@ -15,6 +15,8 @@ import (
 	initact "github.com/filecoin-project/specs-actors/v2/actors/builtin/init"
 	"github.com/filecoin-project/specs-actors/v2/actors/runtime"
 	"github.com/filecoin-project/specs-actors/v2/actors/util/adt"
+
+	rtt "github.com/filecoin-project/go-state-types/rt"
 )
 
 type Actor struct{}
@@ -178,6 +180,8 @@ func (a Actor) BatchCheckData(rt Runtime, params *BatchCheckDataParams) *abi.Emp
 func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *abi.EmptyValue {
 	rt.ValidateImmediateCallerIs(builtin.StorageMarketActorAddr)
 
+	rt.Log(rtt.WARN, "expertfund BatchStoreData %v", params.PieceCIDs)
+
 	if len(params.PieceCIDs) == 0 {
 		return nil
 	}
@@ -195,6 +199,8 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to get data infos")
 	builtin.RequireParam(rt, len(pieceToExpert) == len(pieceCIDs), "duplicate piece")
 
+	rt.Log(rtt.WARN, "expertfund BatchStoreData 2")
+
 	expertToPieces := make(map[address.Address][]builtin.CheckedCID)
 	for piece, expertAddr := range pieceToExpert {
 		expertToPieces[expertAddr] = append(expertToPieces[expertAddr], builtin.CheckedCID{CID: piece})
@@ -207,6 +213,8 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 		code := rt.Send(expertAddr, builtin.MethodsExpert.StoreData, &builtin.BatchPieceCIDParams{PieceCIDs: pieces}, abi.NewTokenAmount(0), &out)
 		builtin.RequireSuccess(rt, code, "failed to store data of %s", expertAddr)
 		builtin.RequireState(rt, !out.ExpertBlocked, "expert blocked %s", expertAddr)
+
+		rt.Log(rtt.WARN, "expertfund BatchStoreData 3, expert blocked %s, %t", expertAddr, out.ExpertBlocked)
 
 		onchainInfos = append(onchainInfos, out.Infos...)
 
@@ -223,6 +231,8 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 			eInfo, ok := expertToInfo[expertAddr]
 			builtin.RequireState(rt, ok, "expert of piece %s not found", info.PieceID)
 
+			rt.Log(rtt.WARN, "expertfund BatchStoreData 4, piece %s, expert %s, active %t", pieceID, expertAddr, eInfo.Active)
+
 			if !eInfo.Active {
 				continue
 			}
@@ -233,6 +243,7 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	if len(expertDepositSize) > 0 {
 		rt.StateTransaction(&st, func() {
 			err := st.Deposit(rt, expertDepositSize)
+			rt.Log(rtt.WARN, "expertfund BatchStoreData, deposit error: %v", err)
 			builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to deposit")
 		})
 	}
