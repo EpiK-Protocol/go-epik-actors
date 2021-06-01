@@ -225,6 +225,7 @@ func (a Actor) BatchStoreData(rt Runtime, params *builtin.BatchPieceCIDParams) *
 	expertDepositSize := make(map[address.Address]abi.PaddedPieceSize)
 	for _, info := range onchainInfos {
 		pieceID, err := cid.Parse(info.PieceID)
+		rt.Log(rtt.WARN, "expertfund BatchStoreData parse piece %s, err: %v", info.PieceID, err)
 		builtin.RequireNoErr(rt, err, exitcode.ErrIllegalState, "failed to parse info pieceID")
 		if info.Redundancy == pieceToThreshold[pieceID] {
 			expertAddr := pieceToExpert[pieceID]
