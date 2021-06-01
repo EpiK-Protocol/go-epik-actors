@@ -1,6 +1,8 @@
 package expertfund
 
 import (
+	"fmt"
+
 	"github.com/filecoin-project/go-address"
 	addr "github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/abi"
@@ -157,6 +159,7 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 	// update Pool
 	pool, err := st.UpdatePool(rt)
 	if err != nil {
+		fmt.Println("UpdatePool error: ", err)
 		return err
 	}
 
@@ -165,12 +168,14 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 		// update ExpertInfo
 		expertInfo, err := st.GetExpert(store, expertAddr)
 		if err != nil {
+			fmt.Println("GetExpert error: ", err)
 			return err
 		}
 		if !expertInfo.Active {
 			return xerrors.Errorf("inactive expert cannot deposit: %s", expertAddr)
 		}
 		if err := st.updateVestingFunds(rt, pool, expertInfo); err != nil {
+			fmt.Println("updateVestingFunds error: ", err)
 			return err
 		}
 
@@ -182,13 +187,18 @@ func (st *State) Deposit(rt Runtime, expertToSize map[addr.Address]abi.PaddedPie
 			AccumulatedMultiplier)
 		err = st.SetExpert(store, expertAddr, expertInfo, false)
 		if err != nil {
+			fmt.Println("SetExpert error: ", err)
 			return err
 		}
 
 		pool.CurrentTotalDataSize += deltaSize
 	}
 
-	return st.SavePool(store, pool)
+	err = st.SavePool(store, pool)
+	if err != nil {
+		fmt.Println("SavePool error: ", err)
+	}
+	return err
 }
 
 func (st *State) PendingReward(rt Runtime, expertAddr address.Address) (abi.TokenAmount, error) {
