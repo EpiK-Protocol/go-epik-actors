@@ -734,6 +734,8 @@ func (a Actor) PreCommitSector(rt Runtime, params *PreCommitSectorParams) *abi.E
 
 	rewardStats := requestCurrentEpochBlockReward(rt)
 	pwrTotal := requestCurrentTotalPower(rt) */
+	rt.Log(rtt.INFO, "precommit debug log: miner %s, sector %d, deals %v", rt.Receiver(), params.SectorNumber, params.DealIDs)
+
 	dealWeights := requestDealWeights(rt, []market.SectorDeals{
 		{
 			DealIDs: params.DealIDs,
