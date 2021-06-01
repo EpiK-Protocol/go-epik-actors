@@ -377,6 +377,7 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 		pending = big.Mul(big.NewIntUnsigned(uint64(out.DataSize)), pool.AccPerShare)
 		pending = big.Div(pending, AccumulatedMultiplier)
 		if pending.LessThan(out.RewardDebt) {
+			fmt.Println("updateVestingFunds 1")
 			return xerrors.Errorf("debt greater than pending: %s, %s", out.RewardDebt, pending)
 		}
 		pending = big.Sub(pending, out.RewardDebt)
@@ -385,6 +386,7 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 
 	vestingFund, err := adt.AsMap(adt.AsStore(rt), out.VestingFunds, builtin.DefaultHamtBitwidth)
 	if err != nil {
+		fmt.Println("updateVestingFunds 2")
 		return xerrors.Errorf("failed to load VestingFunds: %w", err)
 	}
 
@@ -396,12 +398,14 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 		var old abi.TokenAmount
 		found, err := vestingFund.Get(k, &old)
 		if err != nil {
+			fmt.Println("updateVestingFunds 3")
 			return xerrors.Errorf("failed to get old vesting at epoch %d: %w", currEpoch, err)
 		}
 		if found {
 			pending = big.Add(pending, old)
 		}
 		if err := vestingFund.Put(k, &pending); err != nil {
+			fmt.Println("updateVestingFunds 4")
 			return xerrors.Errorf("failed to put new vesting at epoch %d: %w", currEpoch, err)
 		}
 	}
@@ -412,19 +416,26 @@ func (st *State) updateVestingFunds(rt Runtime, pool *PoolInfo, out *ExpertInfo)
 	err = vestingFund.ForEach(&amount, func(k string) error {
 		epoch, err := abi.ParseIntKey(k)
 		if err != nil {
+			fmt.Println("updateVestingFunds 7")
 			return xerrors.Errorf("failed to parse vestingFund key: %w", err)
 		}
 		if abi.ChainEpoch(epoch)+RewardVestingDelay < currEpoch {
 			unlocked = big.Add(unlocked, amount)
-			return vestingFund.Delete(abi.IntKey(epoch))
+			err = vestingFund.Delete(abi.IntKey(epoch))
+			if err != nil {
+				fmt.Println("updateVestingFunds 8")
+				return err
+			}
 		}
 		return nil
 	})
 	if err != nil {
+		fmt.Println("updateVestingFunds 5")
 		return xerrors.Errorf("failed to iterate vestingFund: %w", err)
 	}
 	out.VestingFunds, err = vestingFund.Root()
 	if err != nil {
+		fmt.Println("updateVestingFunds 6")
 		return xerrors.Errorf("failed to flush VestingFunds: %w", err)
 	}
 
