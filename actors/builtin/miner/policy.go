@@ -151,7 +151,7 @@ var MaxPreCommitRandomnessLookback = builtin.EpochsInDay + ChainFinality // PARA
 // Number of epochs between publishing a sector pre-commitment and when the challenge for interactive PoRep is drawn.
 // This (1) prevents a miner predicting a challenge before staking their pre-commit deposit, and
 // (2) prevents a miner attempting a long fork in the past to insert a pre-commitment after seeing the challenge.
-var PreCommitChallengeDelay = abi.ChainEpoch(10) // PARAM_SPEC
+var PreCommitChallengeDelay = abi.ChainEpoch(150) // PARAM_SPEC
 
 // Lookback from the deadline's challenge window opening from which to sample chain randomness for the WindowPoSt challenge seed.
 // This means that deadline windows can be non-overlapping (which make the programming simpler) without requiring a
