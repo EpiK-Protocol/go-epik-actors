@@ -420,7 +420,7 @@ func (st *State) updateVestingFunds(store adt.Store, currEpoch abi.ChainEpoch, p
 	}
 	for epoch := range toDelEpochs {
 		if err := vestingFund.Delete(abi.IntKey(epoch)); err != nil {
-			return xerrors.Errorf("failed to delete epoch %d in vestingFund: %w", epoch, err)
+			return abi.NewTokenAmount(0), xerrors.Errorf("failed to delete epoch %d in vestingFund: %w", epoch, err)
 		}
 	}
 
