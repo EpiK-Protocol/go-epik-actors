@@ -122,6 +122,9 @@ func (st *State) Pledge(store adt.Store, pledger addr.Address, target addr.Addre
 		if err != nil {
 			return xerrors.Errorf("failed to create empty map: %w", err)
 		}
+		pledge = PledgeState{
+			Amount: abi.NewTokenAmount(0),
+		}
 	}
 	if err := tmap.Put(abi.AddrKey(target), &tAmount); err != nil {
 		return err

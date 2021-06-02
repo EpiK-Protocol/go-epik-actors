@@ -39,7 +39,7 @@ func TestPledge(t *testing.T) {
 		err := harness.s.Pledge(harness.store, pledger, target, amount)
 		assert.NoError(t, err, "pledge failed")
 
-		code, err := harness.s.ApplyForWithdraw(harness.store, 1, pledger, amount)
+		code, err := harness.s.ApplyForWithdraw(harness.store, 1, pledger, target, amount)
 		assert.NoError(t, err, "pledge apply withdraw failed")
 		require.True(t, code == exitcode.Ok)
 
@@ -55,7 +55,7 @@ func TestPledge(t *testing.T) {
 		err := harness.s.Pledge(harness.store, pledger, target, amount)
 		assert.NoError(t, err, "pledge failed")
 
-		code, err := harness.s.ApplyForWithdraw(harness.store, 1, pledger, big.Add(amount, amount))
+		code, err := harness.s.ApplyForWithdraw(harness.store, 1, pledger, target, big.Add(amount, amount))
 		assert.Error(t, err, "pledge apply withdraw failed")
 		require.True(t, code == exitcode.ErrIllegalState)
 
@@ -75,7 +75,7 @@ func TestPledge(t *testing.T) {
 		err = harness.s.Pledge(harness.store, pledger, target2, amount2)
 		assert.NoError(t, err, "pledge failed")
 
-		code, err := harness.s.ApplyForWithdraw(harness.store, 1, pledger, big.Add(amount1, amount2))
+		code, err := harness.s.ApplyForWithdraw(harness.store, 1, pledger, target2, amount2)
 		assert.NoError(t, err, "pledge apply withdraw failed")
 		require.True(t, code == exitcode.Ok)
 	})

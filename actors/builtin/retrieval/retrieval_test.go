@@ -70,7 +70,7 @@ func TestActorPledge(t *testing.T) {
 
 		amount := big.Mul(big.NewInt(2), builtin.TokenPrecision)
 		actor.pledge(rt, client, amount, &retrieval.PledgeParams{
-			Address: target,
+			Address: client,
 			Miners:  []address.Address{miner},
 		})
 	})
@@ -85,7 +85,7 @@ func TestActorPledge(t *testing.T) {
 
 		amount := big.Mul(big.NewInt(2), builtin.TokenPrecision)
 		actor.pledge(rt, client, amount, &retrieval.PledgeParams{
-			Address: target,
+			Address: client,
 			Miners:  []address.Address{miner},
 		})
 
@@ -248,7 +248,7 @@ func (h *actorHarness) pledge(rt *mock.Runtime, pledger address.Address, amount 
 
 func (h *actorHarness) applyForWithdraw(rt *mock.Runtime, pledger address.Address, params *retrieval.WithdrawBalanceParams) {
 	rt.SetCaller(pledger, builtin.AccountActorCodeID)
-	rt.ExpectValidateCallerAddr(pledger)
+	rt.ExpectValidateCallerAny()
 
 	rt.Call(h.ApplyForWithdraw, params)
 	rt.Verify()
