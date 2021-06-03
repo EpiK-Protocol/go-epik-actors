@@ -507,17 +507,6 @@ func (st *State) DayExpend(store adt.Store, epoch abi.ChainEpoch, target addr.Ad
 	return expend, nil
 }
 
-// LockedState locked state for address
-func (st *State) LockedState(store adt.Store, pledger addr.Address) (*LockedState, error) {
-	lockedMap, err := adt.AsMap(store, st.LockedTable, builtin.DefaultHamtBitwidth)
-	if err != nil {
-		return nil, err
-	}
-	var out LockedState
-	_, err = lockedMap.Get(abi.AddrKey(pledger), &out)
-	return &out, nil
-}
-
 // BindMiners bind miners
 func (st *State) BindMiners(store adt.Store, target addr.Address, miners []addr.Address) error {
 	stateMap, err := adt.AsMap(store, st.RetrievalStates, builtin.DefaultHamtBitwidth)
