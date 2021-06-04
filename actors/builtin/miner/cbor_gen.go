@@ -735,7 +735,7 @@ func (t *Deadlines) MarshalCBOR(w io.Writer) error {
 
 	scratch := make([]byte, 9)
 
-	// t.Due ([336]cid.Cid) (array)
+	// t.Due ([48]cid.Cid) (array)
 	if len(t.Due) > cbg.MaxLength {
 		return xerrors.Errorf("Slice value in field t.Due was too long")
 	}
@@ -769,7 +769,7 @@ func (t *Deadlines) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("cbor input had wrong number of fields")
 	}
 
-	// t.Due ([336]cid.Cid) (array)
+	// t.Due ([48]cid.Cid) (array)
 
 	maj, extra, err = cbg.CborReadHeaderBuf(br, scratch)
 	if err != nil {
@@ -784,11 +784,11 @@ func (t *Deadlines) UnmarshalCBOR(r io.Reader) error {
 		return fmt.Errorf("expected cbor array")
 	}
 
-	if extra != 336 {
-		return fmt.Errorf("expected array to have 336 elements")
+	if extra != 48 {
+		return fmt.Errorf("expected array to have 48 elements")
 	}
 
-	t.Due = [336]cid.Cid{}
+	t.Due = [48]cid.Cid{}
 
 	for i := 0; i < int(extra); i++ {
 
