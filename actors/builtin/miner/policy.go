@@ -15,7 +15,7 @@ import (
 // The period over which a miner's active sectors are expected to be proven via WindowPoSt.
 // This guarantees that (1) user data is proven weekly, (2) user data is stored for 24h by a rational miner
 // (due to Window PoSt cost assumption).
-var WPoStProvingPeriod = abi.ChainEpoch(1 * builtin.EpochsInDay) // 7 * 24 hours PARAM_SPEC
+var WPoStProvingPeriod = abi.ChainEpoch(7 * builtin.EpochsInDay) // 7 * 24 hours PARAM_SPEC
 
 // The period between the opening and the closing of a WindowPoSt deadline in which the miner is expected to
 // provide a Window PoSt proof.
@@ -28,7 +28,7 @@ var WPoStDisputeWindow = 2 * ChainFinality // PARAM_SPEC
 
 // The number of non-overlapping PoSt deadlines in a proving period.
 // This spreads a miner's Window PoSt work across a proving period.
-const WPoStPeriodDeadlines = uint64(48) // PARAM_SPEC
+const WPoStPeriodDeadlines = uint64(336) // PARAM_SPEC
 
 // MaxPartitionsPerDeadline is the maximum number of partitions that will be assigned to a deadline.
 // For a minimum storage of upto 15Tib, we need 3_000 partitions per deadline.
